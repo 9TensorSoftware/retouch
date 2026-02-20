@@ -1,6 +1,10 @@
 <p align="center">
   <br />
-  <img src=".github/retouch-logo-dark.svg" width="240" alt="Rétouch" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/retouch-logo-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset=".github/retouch-logo-light.svg" />
+    <img src=".github/retouch-logo-light.svg" width="240" alt="Rétouch" />
+  </picture>
   <br />
 </p>
 
