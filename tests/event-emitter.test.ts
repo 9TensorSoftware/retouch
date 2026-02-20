@@ -9,7 +9,7 @@ describe("EventEmitter", () => {
   let emitter: EventEmitter<TestEvents>;
 
   beforeEach(() => {
-    emitter = new EventEmitter();
+    emitter = new EventEmitter<TestEvents>();
   });
 
   it("calls listeners on emit", () => {

@@ -32,11 +32,15 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
       value: adj[key],
     }) as HTMLInputElement;
 
-    input.addEventListener("input", () => {
-      adj[key] = Number(input.value);
-      valueEl.textContent = formatValue(adj[key], key);
-      options.onChange({ ...adj });
-    }, { signal });
+    input.addEventListener(
+      "input",
+      () => {
+        adj[key] = Number(input.value);
+        valueEl.textContent = formatValue(adj[key], key);
+        options.onChange({ ...adj });
+      },
+      { signal },
+    );
 
     return h(
       "div",

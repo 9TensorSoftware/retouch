@@ -40,16 +40,25 @@ export function createGallery(options: GalleryOptions): ViewHandle {
   };
 
   // Add more button
-  const addMoreBtn = h("button", {
-    class: "rt-btn",
-    onClick: () => input.click(),
-  }, createPlusIcon(), "Add more");
+  const addMoreBtn = h(
+    "button",
+    {
+      class: "rt-btn",
+      onClick: () => input.click(),
+    },
+    createPlusIcon(),
+    "Add more",
+  );
 
   // Done button
-  const doneBtn = h("button", {
-    class: "rt-btn rt-btn--accent",
-    onClick: () => options.onDone(),
-  }, "Done");
+  const doneBtn = h(
+    "button",
+    {
+      class: "rt-btn rt-btn--accent",
+      onClick: () => options.onDone(),
+    },
+    "Done",
+  );
 
   // Grid
   const grid = h("div", { class: "rt-gallery__grid" });
@@ -123,16 +132,24 @@ function createGridItem(
     overlay,
   );
 
-  editBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    options.onEdit(entry.id);
-  }, { signal });
+  editBtn.addEventListener(
+    "click",
+    (e) => {
+      e.stopPropagation();
+      options.onEdit(entry.id);
+    },
+    { signal },
+  );
 
-  removeBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    item.remove();
-    options.onRemove(entry.id);
-  }, { signal });
+  removeBtn.addEventListener(
+    "click",
+    (e) => {
+      e.stopPropagation();
+      item.remove();
+      options.onRemove(entry.id);
+    },
+    { signal },
+  );
 
   return item;
 }

@@ -13,15 +13,16 @@ describe("Retouch", () => {
     container.remove();
   });
 
-  it("mounts a canvas to the target element", () => {
+  it("mounts to the target element", () => {
     const editor = new Retouch({ target: container });
-    expect(container.querySelector("canvas")).not.toBeNull();
-    expect(editor.state).toBe("mounted");
+    expect(container.querySelector(".rt-root")).not.toBeNull();
+    expect(editor.state).toBe("dropzone");
+    editor.destroy();
   });
 
   it("accepts a CSS selector string as target", () => {
     const editor = new Retouch({ target: "#test-editor" });
-    expect(editor.state).toBe("mounted");
+    expect(editor.state).toBe("dropzone");
     editor.destroy();
   });
 
@@ -29,24 +30,16 @@ describe("Retouch", () => {
     expect(() => new Retouch({ target: "#nonexistent" })).toThrow("Target element not found");
   });
 
-  it("creates a canvas with default dimensions", () => {
+  it("starts in dropzone state", () => {
     const editor = new Retouch({ target: container });
-    const canvas = editor.canvasElement;
-    expect(canvas.width).toBe(800);
-    expect(canvas.height).toBe(600);
+    expect(editor.state).toBe("dropzone");
+    editor.destroy();
   });
 
-  it("creates a canvas with custom dimensions", () => {
-    const editor = new Retouch({ target: container, width: 1024, height: 768 });
-    const canvas = editor.canvasElement;
-    expect(canvas.width).toBe(1024);
-    expect(canvas.height).toBe(768);
-  });
-
-  it("removes the canvas on destroy", () => {
+  it("cleans up on destroy", () => {
     const editor = new Retouch({ target: container });
     editor.destroy();
-    expect(container.querySelector("canvas")).toBeNull();
+    expect(container.querySelector(".rt-root")).toBeNull();
     expect(editor.state).toBe("destroyed");
   });
 
@@ -55,5 +48,11 @@ describe("Retouch", () => {
     editor.destroy();
     editor.destroy();
     expect(editor.state).toBe("destroyed");
+  });
+
+  it("renders the dropzone view", () => {
+    const editor = new Retouch({ target: container });
+    expect(container.querySelector(".rt-dropzone")).not.toBeNull();
+    editor.destroy();
   });
 });

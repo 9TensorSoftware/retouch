@@ -39,13 +39,17 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     });
     btn.innerHTML = `${tool.icon}<span>${tool.label}</span>`;
 
-    btn.addEventListener("click", () => {
-      if (active === tool.id) return;
-      buttons.get(active)?.classList.remove("rt-toolbar__btn--active");
-      btn.classList.add("rt-toolbar__btn--active");
-      active = tool.id;
-      options.onToolChange(tool.id);
-    }, { signal });
+    btn.addEventListener(
+      "click",
+      () => {
+        if (active === tool.id) return;
+        buttons.get(active)?.classList.remove("rt-toolbar__btn--active");
+        btn.classList.add("rt-toolbar__btn--active");
+        active = tool.id;
+        options.onToolChange(tool.id);
+      },
+      { signal },
+    );
 
     buttons.set(tool.id, btn);
     root.appendChild(btn);

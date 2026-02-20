@@ -3,6 +3,9 @@ import { EventEmitter } from "./event-emitter";
 import { StateMachine } from "./state-machine";
 import { injectStyles } from "./styles";
 import type { AppState, ImageEntry, RetouchEventMap, RetouchOptions, ViewHandle } from "./types";
+import { createDropZone } from "./ui/drop-zone";
+import { createEditor } from "./ui/editor/editor";
+import { createGallery } from "./ui/gallery";
 import { h } from "./ui/h";
 import { exportImage, processFiles, revokeThumbnailUrl } from "./utils/image";
 
@@ -20,15 +23,14 @@ export class Retouch {
   private readonly images = new Map<string, ImageEntry>();
   private readonly sm: StateMachine<AppState>;
   private readonly emitter = new EventEmitter<RetouchEventMap>();
-  private readonly options: Required<
-    Pick<RetouchOptions, "maxFiles" | "acceptedTypes">
-  > & { onDone?: RetouchOptions["onDone"] };
+  private readonly options: Required<Pick<RetouchOptions, "maxFiles" | "acceptedTypes">> & {
+    onDone?: RetouchOptions["onDone"];
+  };
 
   private currentView: ViewHandle | null = null;
   private editingImageId: string | null = null;
 
   constructor(options: RetouchOptions) {
-    // Resolve target
     if (typeof options.target === "string") {
       const el = document.querySelector<HTMLElement>(options.target);
       if (!el) {
@@ -45,21 +47,16 @@ export class Retouch {
       onDone: options.onDone,
     };
 
-    // Inject global styles
     injectStyles();
 
-    // Create root element
     this.root = h("div", { class: "rt-root" });
     this.container.appendChild(this.root);
 
-    // State machine
     this.sm = new StateMachine<AppState>("idle", STATE_TRANSITIONS);
-    this.sm.onChange(({ from, to }) => {
-      this.emitter.emit("state:change", { from, to });
+    this.sm.onChange(({ to }) => {
       this.handleStateChange(to);
     });
 
-    // Kick off
     this.sm.transition("dropzone");
   }
 
@@ -192,11 +189,7 @@ export class Retouch {
     }
   }
 
-  // These will be replaced by actual view implementations in later phases.
-  // For now they create minimal placeholder elements.
-
   private mountDropZone(): void {
-    const { createDropZone } = require("./ui/drop-zone") as typeof import("./ui/drop-zone");
     const view = createDropZone({
       onFiles: (files) => this.addFiles(files),
     });
@@ -205,7 +198,6 @@ export class Retouch {
   }
 
   private mountGallery(): void {
-    const { createGallery } = require("./ui/gallery") as typeof import("./ui/gallery");
     const view = createGallery({
       images: this.getImages(),
       onEdit: (id) => this.openEditor(id),
@@ -220,7 +212,6 @@ export class Retouch {
   private mountEditor(): void {
     const entry = this.getEditingEntry();
     if (!entry) return;
-    const { createEditor } = require("./ui/editor/editor") as typeof import("./ui/editor/editor");
     const view = createEditor({
       entry,
       onDone: () => this.closeEditor(true),

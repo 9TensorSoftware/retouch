@@ -14,6 +14,12 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@9tensor/retouch"><img src="https://img.shields.io/npm/v/@9tensor/retouch?color=D4572A&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/9TensorSoftware/retouch/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch?color=1A1815" alt="license" /></a>
+  <a href="https://www.npmjs.com/package/@9tensor/retouch"><img src="https://img.shields.io/npm/dm/@9tensor/retouch?color=6B6560" alt="downloads" /></a>
+</p>
+
+<p align="center">
   <a href="#install">Install</a> &nbsp;·&nbsp;
   <a href="#quick-start">Quick Start</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How It Works</a> &nbsp;·&nbsp;
@@ -40,15 +46,15 @@ Most image editors bolt onto your app like an afterthought. Rétouch was designe
 ## Install
 
 ```bash
-npm install retouch
+npm install @9tensor/retouch
 ```
 
 ```bash
-pnpm add retouch
+pnpm add @9tensor/retouch
 ```
 
 ```bash
-yarn add retouch
+yarn add @9tensor/retouch
 ```
 
 <br />
@@ -58,7 +64,7 @@ yarn add retouch
 ### Vanilla JS
 
 ```ts
-import { Retouch } from "retouch";
+import { Retouch } from "@9tensor/retouch";
 
 const editor = new Retouch({
   target: "#editor",

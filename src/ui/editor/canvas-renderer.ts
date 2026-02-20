@@ -16,11 +16,7 @@ export class CanvasRenderer {
   private rotation = 0;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
 
-  constructor(
-    container: HTMLElement,
-    image: HTMLImageElement,
-    edits: ImageEdits,
-  ) {
+  constructor(container: HTMLElement, image: HTMLImageElement, edits: ImageEdits) {
     this.container = container;
     this.image = image;
     this.adjustments = { ...edits.adjustments };
@@ -60,11 +56,7 @@ export class CanvasRenderer {
     if (imgW === 0 || imgH === 0) return;
 
     // Fit image to container
-    const scale = Math.min(
-      containerWidth * 0.9 / imgW,
-      containerHeight * 0.9 / imgH,
-      1,
-    );
+    const scale = Math.min((containerWidth * 0.9) / imgW, (containerHeight * 0.9) / imgH, 1);
 
     const drawW = Math.round(imgW * scale);
     const drawH = Math.round(imgH * scale);

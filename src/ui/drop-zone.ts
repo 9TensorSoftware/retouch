@@ -16,17 +16,8 @@ export function createDropZone(options: DropZoneOptions): ViewHandle {
   const zone = h(
     "div",
     { class: "rt-dropzone" },
-    h(
-      "div",
-      { class: "rt-dropzone__icon" },
-      createUploadIcon(),
-    ),
-    h(
-      "div",
-      { class: "rt-dropzone__text" },
-      "Drop images here or ",
-      h("strong", null, "browse"),
-    ),
+    h("div", { class: "rt-dropzone__icon" }, createUploadIcon()),
+    h("div", { class: "rt-dropzone__text" }, "Drop images here or ", h("strong", null, "browse")),
     h("div", { class: "rt-dropzone__hint" }, "PNG, JPG, WebP"),
     input,
   );

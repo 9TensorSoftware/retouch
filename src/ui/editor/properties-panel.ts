@@ -35,17 +35,25 @@ export function createPropertiesPanel(options: PropertiesPanelOptions): Properti
 
   for (const preset of ASPECT_PRESETS) {
     const isActive = cropTool.getAspectRatio() === preset.id;
-    const btn = h("button", {
-      class: `rt-props__aspect-btn${isActive ? " rt-props__aspect-btn--active" : ""}`,
-    }, preset.label);
+    const btn = h(
+      "button",
+      {
+        class: `rt-props__aspect-btn${isActive ? " rt-props__aspect-btn--active" : ""}`,
+      },
+      preset.label,
+    );
 
-    btn.addEventListener("click", () => {
-      for (const b of aspectBtns.values()) {
-        b.classList.remove("rt-props__aspect-btn--active");
-      }
-      btn.classList.add("rt-props__aspect-btn--active");
-      cropTool.setAspectRatio(preset.id);
-    }, { signal });
+    btn.addEventListener(
+      "click",
+      () => {
+        for (const b of aspectBtns.values()) {
+          b.classList.remove("rt-props__aspect-btn--active");
+        }
+        btn.classList.add("rt-props__aspect-btn--active");
+        cropTool.setAspectRatio(preset.id);
+      },
+      { signal },
+    );
 
     aspectBtns.set(preset.id, btn);
     aspectGrid.appendChild(btn);
@@ -60,11 +68,15 @@ export function createPropertiesPanel(options: PropertiesPanelOptions): Properti
     value: edits.rotation,
   }) as HTMLInputElement;
 
-  rotationInput.addEventListener("input", () => {
-    const deg = Number(rotationInput.value);
-    rotationValue.textContent = `${deg}\u00b0`;
-    onRotationChange(deg);
-  }, { signal });
+  rotationInput.addEventListener(
+    "input",
+    () => {
+      const deg = Number(rotationInput.value);
+      rotationValue.textContent = `${deg}\u00b0`;
+      onRotationChange(deg);
+    },
+    { signal },
+  );
 
   const cropProps = h(
     "div",

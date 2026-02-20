@@ -66,10 +66,7 @@ function buildFilterString(adj: ImageEdits["adjustments"]): string {
   return `brightness(${adj.brightness / 100}) contrast(${adj.contrast / 100}) saturate(${adj.saturation / 100})`;
 }
 
-export function exportImage(
-  image: HTMLImageElement,
-  edits: ImageEdits,
-): Promise<Blob> {
+export function exportImage(image: HTMLImageElement, edits: ImageEdits): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const { crop, rotation, adjustments } = edits;
 
@@ -100,15 +97,12 @@ export function exportImage(
     ctx.rotate(radians);
     ctx.drawImage(image, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
 
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error("[Retouch] Failed to export image as blob"));
-        }
-      },
-      "image/png",
-    );
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error("[Retouch] Failed to export image as blob"));
+      }
+    }, "image/png");
   });
 }

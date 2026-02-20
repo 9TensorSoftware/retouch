@@ -2,8 +2,9 @@ import { Retouch } from "../src/index";
 
 const editor = new Retouch({
   target: "#editor",
-  width: 800,
-  height: 600,
+  onDone: (blobs) => {
+    console.log("[Rétouch Demo] Done! Exported blobs:", blobs);
+  },
 });
 
 Object.assign(window, { editor });

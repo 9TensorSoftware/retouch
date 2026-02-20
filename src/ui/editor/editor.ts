@@ -87,27 +87,29 @@ export function createEditor(options: EditorOptions): ViewHandle {
   });
 
   // Body
-  const body = h(
-    "div",
-    { class: "rt-editor__body" },
-    toolbar.root,
-    canvasArea,
-    propsPanel.root,
-  );
+  const body = h("div", { class: "rt-editor__body" }, toolbar.root, canvasArea, propsPanel.root);
 
   // Root overlay
   const root = h("div", { class: "rt-editor-overlay" }, topbar, body);
 
   // Button handlers
-  cancelBtn.addEventListener("click", () => {
-    // Restore snapshot
-    Object.assign(entry.edits, editSnapshot);
-    onCancel();
-  }, { signal });
+  cancelBtn.addEventListener(
+    "click",
+    () => {
+      // Restore snapshot
+      Object.assign(entry.edits, editSnapshot);
+      onCancel();
+    },
+    { signal },
+  );
 
-  doneBtn.addEventListener("click", () => {
-    onDone();
-  }, { signal });
+  doneBtn.addEventListener(
+    "click",
+    () => {
+      onDone();
+    },
+    { signal },
+  );
 
   // Initial render
   renderer.render();

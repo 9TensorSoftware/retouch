@@ -1,5 +1,5 @@
 {
-  "name": "retouch",
+  "name": "@9tensor/retouch",
   "version": "0.0.1",
   "description": "Rétouch — a canvas-based image editor library",
   "author": "",
@@ -54,6 +54,13 @@
     "retouch",
     "typescript"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/9TensorSoftware/retouch"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   }

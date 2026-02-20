@@ -25,7 +25,7 @@ const MIN_SIZE = 0.05; // Minimum crop size in normalized coords
 
 export function createCropTool(options: CropToolOptions): CropToolHandle {
   const { container, renderer, onChange } = options;
-  let crop: CropRect = { ...options.edits.crop };
+  const crop: CropRect = { ...options.edits.crop };
   let aspectRatio: AspectRatioPreset = "free";
   const abort = new AbortController();
   const signal = abort.signal;
@@ -116,47 +116,73 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
 
   // ── Drag interaction ──
 
-  let dragging: { type: "move" | HandlePosition; startX: number; startY: number; startCrop: CropRect } | null = null;
+  let dragging: {
+    type: "move" | HandlePosition;
+    startX: number;
+    startY: number;
+    startCrop: CropRect;
+  } | null = null;
 
-  selection.addEventListener("pointerdown", (e) => {
-    if ((e.target as HTMLElement).dataset.handle) return;
-    e.preventDefault();
-    dragging = { type: "move", startX: e.clientX, startY: e.clientY, startCrop: { ...crop } };
-  }, { signal });
+  selection.addEventListener(
+    "pointerdown",
+    (e) => {
+      if ((e.target as HTMLElement).dataset.handle) return;
+      e.preventDefault();
+      dragging = { type: "move", startX: e.clientX, startY: e.clientY, startCrop: { ...crop } };
+    },
+    { signal },
+  );
 
   for (const [pos, handle] of Object.entries(handles)) {
-    handle.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragging = { type: pos as HandlePosition, startX: e.clientX, startY: e.clientY, startCrop: { ...crop } };
-    }, { signal });
+    handle.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragging = {
+          type: pos as HandlePosition,
+          startX: e.clientX,
+          startY: e.clientY,
+          startCrop: { ...crop },
+        };
+      },
+      { signal },
+    );
   }
 
-  document.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    e.preventDefault();
+  document.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!dragging) return;
+      e.preventDefault();
 
-    const imgRect = renderer.getImageRect();
-    if (imgRect.width === 0 || imgRect.height === 0) return;
+      const imgRect = renderer.getImageRect();
+      if (imgRect.width === 0 || imgRect.height === 0) return;
 
-    const dx = (e.clientX - dragging.startX) / imgRect.width;
-    const dy = (e.clientY - dragging.startY) / imgRect.height;
-    const sc = dragging.startCrop;
+      const dx = (e.clientX - dragging.startX) / imgRect.width;
+      const dy = (e.clientY - dragging.startY) / imgRect.height;
+      const sc = dragging.startCrop;
 
-    if (dragging.type === "move") {
-      crop.x = clamp(sc.x + dx, 0, 1 - sc.width);
-      crop.y = clamp(sc.y + dy, 0, 1 - sc.height);
-    } else {
-      handleResize(dragging.type, sc, dx, dy);
-    }
+      if (dragging.type === "move") {
+        crop.x = clamp(sc.x + dx, 0, 1 - sc.width);
+        crop.y = clamp(sc.y + dy, 0, 1 - sc.height);
+      } else {
+        handleResize(dragging.type, sc, dx, dy);
+      }
 
-    updateLayout();
-    onChange(crop);
-  }, { signal });
+      updateLayout();
+      onChange(crop);
+    },
+    { signal },
+  );
 
-  document.addEventListener("pointerup", () => {
-    dragging = null;
-  }, { signal });
+  document.addEventListener(
+    "pointerup",
+    () => {
+      dragging = null;
+    },
+    { signal },
+  );
 
   function handleResize(pos: HandlePosition, sc: CropRect, dx: number, dy: number): void {
     const ratio = ASPECT_RATIOS[aspectRatio];
