@@ -2,6 +2,8 @@ export type AppState = "idle" | "dropzone" | "gallery" | "editor" | "destroyed";
 
 export type EditorTool = "crop" | "adjust";
 
+export type GalleryViewMode = "grid" | "masonry" | "list";
+
 export type AspectRatioPreset = "free" | "16:9" | "4:3" | "1:1" | "3:2" | "9:16";
 
 export interface RetouchOptions {

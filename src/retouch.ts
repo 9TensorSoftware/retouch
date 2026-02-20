@@ -197,13 +197,28 @@ export class Retouch {
     this.currentView = view;
   }
 
+  async downloadImage(id: string): Promise<void> {
+    const entry = this.images.get(id);
+    if (!entry) return;
+
+    const blob = await exportImage(entry.image, entry.edits);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${entry.file.name.replace(/\.[^.]+$/, "")}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   private mountGallery(): void {
     const view = createGallery({
       images: this.getImages(),
       onEdit: (id) => this.openEditor(id),
       onRemove: (id) => this.removeImage(id),
       onAddMore: (files) => this.addFiles(files),
-      onDone: () => this.done(),
+      onDownload: (id) => this.downloadImage(id),
     });
     this.root.appendChild(view.root);
     this.currentView = view;

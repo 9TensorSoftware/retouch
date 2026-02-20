@@ -6,6 +6,7 @@ export type {
   AspectRatioPreset,
   CropRect,
   EditorTool,
+  GalleryViewMode,
   ImageEdits,
   ImageEntry,
   RetouchEventMap,
