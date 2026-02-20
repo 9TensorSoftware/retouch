@@ -232,7 +232,7 @@ export class Retouch {
       onDone: () => this.closeEditor(true),
       onCancel: () => this.closeEditor(false),
     });
-    this.root.appendChild(view.root);
+    document.body.appendChild(view.root);
     this.currentView = view;
   }
 }
