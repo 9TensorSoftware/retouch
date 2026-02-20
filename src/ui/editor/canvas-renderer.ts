@@ -1,3 +1,4 @@
+import { Canvas, FabricImage, filters } from "fabric";
 import type { Adjustments, ImageEdits } from "../../types";
 
 export interface ImageRect {
@@ -8,8 +9,8 @@ export interface ImageRect {
 }
 
 export class CanvasRenderer {
-  private readonly canvas: HTMLCanvasElement;
-  private readonly ctx: CanvasRenderingContext2D;
+  private readonly fabricCanvas: Canvas;
+  private readonly fabricImage: FabricImage;
   private readonly container: HTMLElement;
   private readonly image: HTMLImageElement;
   private adjustments: Adjustments;
@@ -22,13 +23,25 @@ export class CanvasRenderer {
     this.adjustments = { ...edits.adjustments };
     this.rotation = edits.rotation;
 
-    this.canvas = document.createElement("canvas");
-    this.canvas.style.display = "block";
-    this.container.appendChild(this.canvas);
+    const canvasEl = document.createElement("canvas");
+    this.container.appendChild(canvasEl);
 
-    const ctx = this.canvas.getContext("2d");
-    if (!ctx) throw new Error("[Retouch] Failed to get 2D context");
-    this.ctx = ctx;
+    this.fabricCanvas = new Canvas(canvasEl, {
+      selection: false,
+      renderOnAddRemove: false,
+      skipTargetFind: true,
+    });
+
+    this.fabricImage = new FabricImage(this.image, {
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      hasBorders: false,
+      originX: "center",
+      originY: "center",
+    });
+
+    this.fabricCanvas.add(this.fabricImage);
   }
 
   setAdjustments(adj: Adjustments): void {
@@ -44,7 +57,7 @@ export class CanvasRenderer {
   }
 
   getCanvasElement(): HTMLCanvasElement {
-    return this.canvas;
+    return this.fabricCanvas.getElement();
   }
 
   render(): void {
@@ -55,40 +68,29 @@ export class CanvasRenderer {
     const imgH = this.image.naturalHeight;
     if (imgW === 0 || imgH === 0) return;
 
-    // Fit image to container
+    // Fit image to container (same logic as before)
     const scale = Math.min((containerWidth * 0.9) / imgW, (containerHeight * 0.9) / imgH, 1);
 
     const drawW = Math.round(imgW * scale);
     const drawH = Math.round(imgH * scale);
 
-    // Size canvas to the image display size
-    this.canvas.width = drawW;
-    this.canvas.height = drawH;
-    this.canvas.style.width = `${drawW}px`;
-    this.canvas.style.height = `${drawH}px`;
+    // Size the fabric canvas to the drawn image dimensions
+    this.fabricCanvas.setDimensions({ width: drawW, height: drawH });
+
+    // Position image centered in canvas
+    this.fabricImage.set({
+      left: drawW / 2,
+      top: drawH / 2,
+      scaleX: scale,
+      scaleY: scale,
+      angle: this.rotation,
+    });
+
+    this.applyFilters();
 
     this.imageRect = { x: 0, y: 0, width: drawW, height: drawH };
 
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, drawW, drawH);
-
-    // Apply adjustments
-    const { brightness, contrast, saturation } = this.adjustments;
-    ctx.filter = `brightness(${brightness / 100}) contrast(${contrast / 100}) saturate(${saturation / 100})`;
-
-    // Apply rotation
-    if (this.rotation !== 0) {
-      const radians = (this.rotation * Math.PI) / 180;
-      ctx.save();
-      ctx.translate(drawW / 2, drawH / 2);
-      ctx.rotate(radians);
-      ctx.drawImage(this.image, -drawW / 2, -drawH / 2, drawW, drawH);
-      ctx.restore();
-    } else {
-      ctx.drawImage(this.image, 0, 0, drawW, drawH);
-    }
-
-    ctx.filter = "none";
+    this.fabricCanvas.requestRenderAll();
   }
 
   /** Convert screen coordinates (relative to canvas) to normalized image coords (0–1). */
@@ -110,6 +112,19 @@ export class CanvasRenderer {
   }
 
   destroy(): void {
-    this.canvas.remove();
+    this.fabricCanvas.dispose();
+  }
+
+  private applyFilters(): void {
+    const { brightness, contrast, saturation } = this.adjustments;
+
+    // Map 0–200 slider range (100 = neutral) to fabric's -1 to 1 range (0 = neutral)
+    this.fabricImage.filters = [
+      new filters.Brightness({ brightness: (brightness - 100) / 100 }),
+      new filters.Contrast({ contrast: (contrast - 100) / 100 }),
+      new filters.Saturation({ saturation: (saturation - 100) / 100 }),
+    ];
+
+    this.fabricImage.applyFilters();
   }
 }

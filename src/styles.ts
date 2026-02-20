@@ -526,10 +526,18 @@ const CSS = /* css */ `
   max-height: 90%;
 }
 
-.rt-editor__canvas-container canvas {
-  display: block;
+.rt-editor__canvas-container .canvas-container {
   border-radius: var(--rt-radius-sm);
   box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+
+.rt-editor__canvas-container .canvas-container canvas {
+  display: block;
+}
+
+.rt-editor__canvas-container .upper-canvas {
+  pointer-events: none;
 }
 
 /* ── Crop overlay ──────────────────────────── */
@@ -538,6 +546,7 @@ const CSS = /* css */ `
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 1;
 }
 
 .rt-crop__mask {

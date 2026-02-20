@@ -14,7 +14,7 @@
 
 <p align="center">
   Drop files, browse, click to edit — three states, one component.<br/>
-  Zero dependencies. Canvas-native. Framework-agnostic.
+  Powered by fabric.js. Canvas-native. Framework-agnostic.
 </p>
 
 <p align="center">
@@ -39,9 +39,9 @@
 
 ## Why Rétouch?
 
-Most image editors bolt onto your app like an afterthought. Rétouch was designed the other way around — to feel native from day one. No iframes, no external services, no heavy runtime. Just a canvas element that does exactly what your users expect.
+Most image editors bolt onto your app like an afterthought. Rétouch was designed the other way around — to feel native from day one. No iframes, no external services. Built on [fabric.js](http://fabricjs.com/) for robust canvas rendering, with a clean API that does exactly what your users expect.
 
-- **Tiny footprint** — zero runtime dependencies, tree-shakeable
+- **Powered by fabric.js** — battle-tested canvas engine under the hood, tree-shakeable
 - **Three-state UX** — drop zone, gallery, editor — all handled for you
 - **Canvas-native** — all processing happens on an HTML Canvas, no server round-trips
 - **Framework-agnostic** — vanilla JS core with a React wrapper available
