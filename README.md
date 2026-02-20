@@ -24,6 +24,7 @@
 </p>
 
 <p align="center">
+  <a href="https://9TensorSoftware.github.io/retouch.js/">Live Demo</a> &nbsp;·&nbsp;
   <a href="#install">Install</a> &nbsp;·&nbsp;
   <a href="#quick-start">Quick Start</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How It Works</a> &nbsp;·&nbsp;
