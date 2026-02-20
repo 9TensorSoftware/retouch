@@ -1,6 +1,6 @@
 <p align="center">
   <br />
-  <img src=".github/retouch-logo.svg" width="240" alt="Rétouch" />
+  <img src=".github/retouch-logo-dark.svg" width="240" alt="Rétouch" />
   <br />
 </p>
 
