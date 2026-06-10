@@ -1386,6 +1386,134 @@ const CSS = /* css */ `
   border-color: rgba(255,255,255,0.3);
   color: rgba(255,255,255,0.9);
 }
+
+/* ── AI command bar ────────────────────────── */
+
+.rt-ai-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: #14120F;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.rt-ai-bar__icon {
+  display: flex;
+  color: var(--rt-accent);
+  flex-shrink: 0;
+}
+
+.rt-ai-bar__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-ai-bar--busy .rt-ai-bar__icon {
+  animation: rt-ai-pulse 1s ease-in-out infinite;
+}
+
+@keyframes rt-ai-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.rt-ai-bar__input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--rt-radius-sm);
+  padding: 7px 12px;
+  color: rgba(255,255,255,0.9);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: var(--rt-transition);
+}
+
+.rt-ai-bar__input:focus {
+  border-color: var(--rt-accent);
+}
+
+.rt-ai-bar__input::placeholder {
+  color: rgba(255,255,255,0.3);
+}
+
+.rt-ai-bar__submit {
+  padding: 7px 14px;
+  border: none;
+  border-radius: var(--rt-radius-sm);
+  background: var(--rt-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--rt-transition);
+  flex-shrink: 0;
+}
+
+.rt-ai-bar__submit:hover {
+  background: var(--rt-accent-hover);
+}
+
+.rt-ai-bar__submit[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rt-ai-bar__status {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  max-width: 32%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rt-ai-bar__status--ok { color: #6fbf73; }
+.rt-ai-bar__status--error { color: #e07a6a; }
+
+.rt-ai-bar__popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 16px;
+  right: 16px;
+  max-width: 460px;
+  z-index: 5;
+  background: #1E1C18;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+}
+
+.rt-ai-bar__popover-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 10px;
+}
+
+.rt-ai-bar__popover-row {
+  display: flex;
+  gap: 8px;
+}
+
+.rt-ai-bar__key-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--rt-radius-sm);
+  padding: 7px 12px;
+  color: rgba(255,255,255,0.9);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
 `;
 
 let injected = false;

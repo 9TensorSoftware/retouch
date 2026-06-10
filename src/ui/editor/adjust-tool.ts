@@ -9,6 +9,8 @@ export interface AdjustToolOptions {
 export interface AdjustToolHandle {
   root: HTMLElement;
   getAdjustments(): Adjustments;
+  /** Sync sliders after an external change (does not fire onChange). */
+  setAdjustments(adjustments: Adjustments): void;
   destroy(): void;
 }
 
@@ -16,6 +18,7 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
   const adj: Adjustments = { ...options.adjustments };
   const abort = new AbortController();
   const signal = abort.signal;
+  const controls = new Map<keyof Adjustments, { input: HTMLInputElement; valueEl: HTMLElement }>();
 
   function createSlider(
     label: string,
@@ -42,6 +45,8 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
       { signal },
     );
 
+    controls.set(key, { input, valueEl });
+
     return h(
       "div",
       { class: "rt-props__row" },
@@ -62,6 +67,16 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
   return {
     root,
     getAdjustments: () => ({ ...adj }),
+    setAdjustments(next) {
+      for (const key of ["brightness", "contrast", "saturation"] as const) {
+        adj[key] = next[key];
+        const control = controls.get(key);
+        if (control) {
+          control.input.value = String(next[key]);
+          control.valueEl.textContent = formatValue(next[key], key);
+        }
+      }
+    },
     destroy() {
       abort.abort();
     },

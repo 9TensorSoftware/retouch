@@ -1,8 +1,14 @@
-import type { EditorTool, MediaEntry, ViewHandle } from "../../types";
+import type { AiContext } from "../../ai/interpreter";
+import { interpretCommand } from "../../ai/interpreter";
+import { createDefaultVideoEdits, DEFAULT_EDITS } from "../../constants";
+import type { AiEditOps, AiOptions, EditorTool, MediaEntry, ViewHandle } from "../../types";
+import { createCanvas } from "../../utils/canvas";
 import type { SeekQueue } from "../../utils/video";
 import { captureFrame, createSeekQueue, formatDuration } from "../../utils/video";
 import { h } from "../h";
 import { createAdjustTool } from "./adjust-tool";
+import type { AiBarHandle } from "./ai-bar";
+import { createAiBar, getStoredAiKey } from "./ai-bar";
 import { CanvasRenderer } from "./canvas-renderer";
 import { createCropTool } from "./crop-tool";
 import { createFiltersTool } from "./filters-tool";
@@ -13,12 +19,20 @@ import { createTransportBar } from "./transport-bar";
 import type { TrimToolHandle } from "./trim-tool";
 import { createTrimTool } from "./trim-tool";
 
+export type EditorAiEvent =
+  | { type: "start"; prompt: string }
+  | { type: "applied"; ops: AiEditOps; explanation: string }
+  | { type: "error"; error: Error };
+
 export interface EditorOptions {
   entry: MediaEntry;
   onDone: () => void;
   onCancel: () => void;
   /** Video only: receives a full-resolution frame canvas and its timestamp. */
   onCaptureFrame?: (canvas: HTMLCanvasElement, time: number) => void;
+  /** Enables the AI command bar when configured. */
+  ai?: AiOptions;
+  onAiEvent?: (event: EditorAiEvent) => void;
 }
 
 export function createEditor(options: EditorOptions): ViewHandle {
@@ -178,6 +192,103 @@ export function createEditor(options: EditorOptions): ViewHandle {
   transport?.setTrimEditable(activeTool === "trim");
   propsPanel.setActiveTool(activeTool);
 
+  // ── AI command bar ──
+
+  /** Apply validated AI ops through the same setters the manual tools use. */
+  function applyAiOps(ops: AiEditOps): void {
+    if (ops.reset) {
+      const defaults =
+        entry.kind === "video"
+          ? createDefaultVideoEdits(entry.duration)
+          : structuredClone(DEFAULT_EDITS);
+      Object.assign(entry.edits, defaults);
+    }
+    if (ops.filter !== undefined) entry.edits.filter = ops.filter;
+    if (ops.adjustments) {
+      entry.edits.adjustments = { ...entry.edits.adjustments, ...ops.adjustments };
+    }
+    if (ops.rotation !== undefined) entry.edits.rotation = ops.rotation;
+    if (ops.crop) entry.edits.crop = { ...ops.crop };
+    if (entry.kind === "video") {
+      const range = ops.trim ?? (ops.reset ? entry.edits.trim : undefined);
+      if (range) transport?.setTrim(range);
+      if (ops.mute !== undefined) {
+        entry.edits.mute = ops.mute;
+        entry.video.muted = ops.mute;
+      }
+    }
+
+    // Sync renderer + tool UIs
+    renderer.setAdjustments(entry.edits.adjustments);
+    renderer.setRotation(entry.edits.rotation);
+    renderer.setFilter(entry.edits.filter);
+    adjustTool.setAdjustments(entry.edits.adjustments);
+    filtersTool.setFilter(entry.edits.filter);
+    propsPanel.setRotation(entry.edits.rotation);
+    if (ops.aspect) {
+      cropTool.setAspectRatio(ops.aspect);
+    } else {
+      cropTool.setCrop(entry.edits.crop);
+    }
+    renderer.render();
+  }
+
+  /** Downscaled JPEG of the current frame for content-aware commands. */
+  function contextFrameBase64(): string | undefined {
+    if (options.ai?.sendImage === false) return undefined;
+    try {
+      let frame: HTMLCanvasElement;
+      if (entry.kind === "video") {
+        frame = captureFrame(entry.video, 512);
+      } else {
+        const img = entry.image;
+        const scale = Math.min(512 / img.naturalWidth, 512 / img.naturalHeight, 1);
+        frame = createCanvas(
+          Math.max(1, Math.round(img.naturalWidth * scale)),
+          Math.max(1, Math.round(img.naturalHeight * scale)),
+        );
+        frame.getContext("2d")?.drawImage(img, 0, 0, frame.width, frame.height);
+      }
+      return frame.toDataURL("image/jpeg", 0.7).split(",")[1];
+    } catch {
+      return undefined;
+    }
+  }
+
+  let aiBar: AiBarHandle | null = null;
+  const aiOptions = options.ai;
+  if (aiOptions && (aiOptions.apiKey || aiOptions.complete || aiOptions.allowUserKey)) {
+    aiBar = createAiBar({
+      ai: aiOptions,
+      onSubmit: async (prompt) => {
+        options.onAiEvent?.({ type: "start", prompt });
+        try {
+          const context: AiContext = {
+            kind: entry.kind,
+            width: entry.kind === "video" ? entry.width : entry.image.naturalWidth,
+            height: entry.kind === "video" ? entry.height : entry.image.naturalHeight,
+            duration: entry.kind === "video" ? entry.duration : undefined,
+            edits: entry.edits,
+          };
+          const resolved: AiOptions = {
+            ...aiOptions,
+            apiKey:
+              aiOptions.apiKey ??
+              (aiOptions.allowUserKey ? (getStoredAiKey() ?? undefined) : undefined),
+          };
+          const ops = await interpretCommand(resolved, prompt, context, contextFrameBase64());
+          applyAiOps(ops);
+          options.onAiEvent?.({ type: "applied", ops, explanation: ops.explanation });
+          return ops.explanation;
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          options.onAiEvent?.({ type: "error", error });
+          throw error;
+        }
+      },
+    });
+  }
+
   // Body — canvas and transport share a center column
   const centerChildren: HTMLElement[] = [canvasArea];
   if (transport) centerChildren.push(transport.root);
@@ -185,7 +296,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const body = h("div", { class: "rt-editor__body" }, toolbar.root, center, propsPanel.root);
 
   // Root overlay
-  const root = h("div", { class: "rt-editor-overlay" }, topbar, body);
+  const rootChildren: HTMLElement[] = [topbar];
+  if (aiBar) rootChildren.push(aiBar.root);
+  rootChildren.push(body);
+  const root = h("div", { class: "rt-editor-overlay" }, ...rootChildren);
 
   // Button handlers
   cancelBtn.addEventListener(
@@ -214,6 +328,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     destroy() {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();
+      aiBar?.destroy();
       trimTool?.destroy();
       transport?.destroy();
       seekQueue?.destroy();

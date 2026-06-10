@@ -15,6 +15,47 @@ export interface TrimRange {
 
 export type FileRejectionReason = "type" | "size" | "duration" | "count" | "load-error";
 
+/** Prepared request handed to a custom AI transport. */
+export interface AiRequest {
+  system: string;
+  prompt: string;
+  /** Base64 JPEG of the current frame (no data: prefix), when image context is enabled. */
+  imageBase64?: string;
+  /** JSON Schema describing the expected edit-operations object. */
+  schema: Record<string, unknown>;
+}
+
+export interface AiOptions {
+  /**
+   * Anthropic API key. Browser-visible — fine for prototypes; production
+   * should proxy via `baseUrl` or `complete` instead.
+   */
+  apiKey?: string;
+  /** Model ID. Defaults to "claude-haiku-4-5". */
+  model?: string;
+  /** API origin override (e.g. your server-side proxy). */
+  baseUrl?: string;
+  /** Attach a downscaled frame so content-aware commands work. Defaults to true. */
+  sendImage?: boolean;
+  /** Show an "Add API key" popover storing the end user's key in localStorage. */
+  allowUserKey?: boolean;
+  /** Custom transport replacing the built-in Anthropic call. Must resolve to the raw edit-operations object. */
+  complete?: (request: AiRequest) => Promise<unknown>;
+}
+
+/** Validated, clamped edit operations produced by the AI command bar. */
+export interface AiEditOps {
+  crop?: CropRect;
+  aspect?: AspectRatioPreset;
+  rotation?: number;
+  adjustments?: Partial<Adjustments>;
+  filter?: FilterPreset;
+  trim?: TrimRange;
+  mute?: boolean;
+  reset?: boolean;
+  explanation: string;
+}
+
 export type GalleryViewMode = "cols-2" | "cols-3" | "cols-4" | "width-fit" | "height-fit" | "list";
 
 export type AspectRatioPreset = "free" | "16:9" | "4:3" | "1:1" | "3:2" | "9:16";
@@ -32,6 +73,8 @@ export interface RetouchOptions {
   maxFileSize?: number;
   /** Maximum video duration in seconds. Defaults to Infinity. */
   maxVideoDuration?: number;
+  /** Enables the AI command bar in the editor when configured. */
+  ai?: AiOptions;
   /** Called when the user clicks Done in the gallery with all exported blobs. */
   onDone?: (blobs: Blob[]) => void;
 }
@@ -108,6 +151,9 @@ export interface RetouchEventMap {
   "editor:cancel": { id: string };
   "file:rejected": { file: File; reason: FileRejectionReason };
   "frame:capture": { sourceId: string; entry: ImageEntry };
+  "ai:start": { id: string; prompt: string };
+  "ai:applied": { id: string; ops: AiEditOps; explanation: string };
+  "ai:error": { id: string; error: Error };
   "export:start": { id: string; kind: MediaKind };
   "export:progress": { id: string; progress: number };
   "export:complete": { id: string; blob: Blob };

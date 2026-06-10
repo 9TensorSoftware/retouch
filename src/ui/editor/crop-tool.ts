@@ -13,6 +13,8 @@ export interface CropToolOptions {
 export interface CropToolHandle {
   root: HTMLElement;
   getCrop(): CropRect;
+  /** Reposition the overlay after an external crop change (does not fire onChange). */
+  setCrop(rect: CropRect): void;
   setAspectRatio(preset: AspectRatioPreset): void;
   getAspectRatio(): AspectRatioPreset;
   setVisible(visible: boolean): void;
@@ -246,6 +248,13 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
   return {
     root,
     getCrop: () => ({ ...crop }),
+    setCrop(rect) {
+      crop.x = clamp(rect.x, 0, 1 - MIN_SIZE);
+      crop.y = clamp(rect.y, 0, 1 - MIN_SIZE);
+      crop.width = clamp(rect.width, MIN_SIZE, 1 - crop.x);
+      crop.height = clamp(rect.height, MIN_SIZE, 1 - crop.y);
+      updateLayout();
+    },
     setAspectRatio(preset) {
       aspectRatio = preset;
       const ratio = ASPECT_RATIOS[preset];

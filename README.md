@@ -159,6 +159,30 @@ transport. Everything is non-destructive until export:
 - **Export** — MP4 (WebM fallback) via WebCodecs + lazily-loaded [mediabunny](https://mediabunny.dev/); browsers without WebCodecs fall back to a realtime MediaRecorder pipeline
 - Progress is reported per file (`export:progress` events) with cancellation via `cancelExport()`
 
+### AI command bar
+
+Let users type what they want — *"make it B&W and crop to a square"*, *"trim to
+the first 5 seconds"* — and have a vision model map it onto the same
+non-destructive edit operations the manual tools use. Token-gated and off by
+default:
+
+```ts
+new Retouch({
+  target: "#editor",
+  ai: { apiKey: "sk-ant-…" },              // dev/prototype: browser-direct Anthropic call
+  // ai: { baseUrl: "https://your-proxy" } // production: same wire format via your server
+  // ai: { complete: async (req) => {...} }// or fully custom transport
+  // ai: { allowUserKey: true }            // or let end users paste their own key
+});
+```
+
+Defaults to `claude-haiku-4-5` with a downscaled frame attached for
+content-aware commands ("crop to the dog"). Every model-returned value is
+validated and clamped through the same primitives the manual tools use before
+it touches edit state. Browser-visible API keys are prototype-grade — proxy
+via `baseUrl` or `complete` in production. Events: `ai:start`, `ai:applied`,
+`ai:error`.
+
 <br />
 
 ## API

@@ -49,6 +49,7 @@ export class Retouch {
     >
   > & {
     onDone?: RetouchOptions["onDone"];
+    ai?: RetouchOptions["ai"];
   };
 
   private currentView: ViewHandle | null = null;
@@ -73,6 +74,7 @@ export class Retouch {
       maxFileSize: options.maxFileSize ?? Number.POSITIVE_INFINITY,
       maxVideoDuration: options.maxVideoDuration ?? Number.POSITIVE_INFINITY,
       onDone: options.onDone,
+      ai: options.ai,
     };
 
     injectStyles();
@@ -380,6 +382,20 @@ export class Retouch {
         entry.kind === "video"
           ? (canvas, time) => void this.addCapturedFrame(entry, canvas, time)
           : undefined,
+      ai: this.options.ai,
+      onAiEvent: (event) => {
+        if (event.type === "start") {
+          this.emitter.emit("ai:start", { id: entry.id, prompt: event.prompt });
+        } else if (event.type === "applied") {
+          this.emitter.emit("ai:applied", {
+            id: entry.id,
+            ops: event.ops,
+            explanation: event.explanation,
+          });
+        } else {
+          this.emitter.emit("ai:error", { id: entry.id, error: event.error });
+        }
+      },
     });
     document.body.appendChild(view.root);
     this.currentView = view;

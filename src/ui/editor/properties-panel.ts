@@ -17,6 +17,8 @@ export interface PropertiesPanelOptions {
 
 export interface PropertiesPanelHandle extends ViewHandle {
   setActiveTool(tool: EditorTool): void;
+  /** Sync the rotation slider after an external change (does not fire onRotationChange). */
+  setRotation(degrees: number): void;
 }
 
 const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
@@ -132,6 +134,10 @@ export function createPropertiesPanel(options: PropertiesPanelOptions): Properti
       adjustProps.style.display = tool === "adjust" ? "" : "none";
       filtersProps.style.display = tool === "filters" ? "" : "none";
       if (trimProps) trimProps.style.display = tool === "trim" ? "" : "none";
+    },
+    setRotation(degrees) {
+      rotationInput.value = String(degrees);
+      rotationValue.textContent = `${degrees}°`;
     },
     destroy() {
       abort.abort();
