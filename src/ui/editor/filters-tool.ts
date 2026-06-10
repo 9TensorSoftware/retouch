@@ -4,7 +4,8 @@ import { buildPresetFilter, FILTER_PRESETS } from "../../utils/filters";
 import { h } from "../h";
 
 export interface FiltersToolOptions {
-  image: HTMLImageElement;
+  /** Preview source — the image itself, or a captured frame canvas for video. */
+  image: HTMLImageElement | HTMLCanvasElement;
   filter: FilterPreset;
   onChange: (filter: FilterPreset) => void;
 }
@@ -77,10 +78,14 @@ export function createFiltersTool(options: FiltersToolOptions): FiltersToolHandl
 }
 
 /** Render a small, preset-filtered preview of the image as a data URL. */
-function renderPreview(image: HTMLImageElement, preset: FilterPreset, maxSize: number): string {
-  const iw = image.naturalWidth;
-  const ih = image.naturalHeight;
-  if (iw === 0 || ih === 0) return image.src;
+function renderPreview(
+  image: HTMLImageElement | HTMLCanvasElement,
+  preset: FilterPreset,
+  maxSize: number,
+): string {
+  const iw = "naturalWidth" in image ? image.naturalWidth : image.width;
+  const ih = "naturalHeight" in image ? image.naturalHeight : image.height;
+  if (iw === 0 || ih === 0) return "";
 
   const scale = Math.min(maxSize / iw, maxSize / ih, 1);
   const width = Math.max(1, Math.round(iw * scale));

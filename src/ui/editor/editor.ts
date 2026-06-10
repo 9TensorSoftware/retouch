@@ -1,4 +1,6 @@
-import type { EditorTool, ImageEdits, ImageEntry, ViewHandle } from "../../types";
+import type { EditorTool, MediaEntry, ViewHandle } from "../../types";
+import type { SeekQueue } from "../../utils/video";
+import { captureFrame, createSeekQueue, formatDuration } from "../../utils/video";
 import { h } from "../h";
 import { createAdjustTool } from "./adjust-tool";
 import { CanvasRenderer } from "./canvas-renderer";
@@ -6,9 +8,11 @@ import { createCropTool } from "./crop-tool";
 import { createFiltersTool } from "./filters-tool";
 import { createPropertiesPanel } from "./properties-panel";
 import { createToolbar } from "./toolbar";
+import type { TransportBarHandle } from "./transport-bar";
+import { createTransportBar } from "./transport-bar";
 
 export interface EditorOptions {
-  entry: ImageEntry;
+  entry: MediaEntry;
   onDone: () => void;
   onCancel: () => void;
 }
@@ -19,16 +23,18 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const signal = abort.signal;
 
   // Snapshot edits so cancel can restore them
-  const editSnapshot: ImageEdits = structuredClone(entry.edits);
-  let activeTool: EditorTool = "crop";
+  const editSnapshot = structuredClone(entry.edits);
+  // The trim tool joins the video set in Stage A3.
+  const tools: EditorTool[] = ["crop", "adjust", "filters"];
+  let activeTool: EditorTool = tools[0];
 
   // Top bar
   const filenameEl = h("span", { class: "rt-editor__filename" }, entry.file.name);
-  const dimsEl = h(
-    "span",
-    { class: "rt-editor__dimensions" },
-    `${entry.image.naturalWidth} \u00d7 ${entry.image.naturalHeight}`,
-  );
+  const dimsText =
+    entry.kind === "video"
+      ? `${entry.width} × ${entry.height} · ${formatDuration(entry.duration)}`
+      : `${entry.image.naturalWidth} × ${entry.image.naturalHeight}`;
+  const dimsEl = h("span", { class: "rt-editor__dimensions" }, dimsText);
   const cancelBtn = h("button", { class: "rt-editor__btn-cancel" }, "Cancel");
   const doneBtn = h("button", { class: "rt-editor__btn-done" }, "Done");
 
@@ -42,7 +48,29 @@ export function createEditor(options: EditorOptions): ViewHandle {
   // Canvas
   const canvasContainer = h("div", { class: "rt-editor__canvas-container" });
   const canvasArea = h("div", { class: "rt-editor__canvas-area" }, canvasContainer);
-  const renderer = new CanvasRenderer(canvasContainer, entry.image, entry.edits);
+  const renderer = new CanvasRenderer(
+    canvasContainer,
+    entry.kind === "video" ? entry.video : entry.image,
+    entry.edits,
+  );
+
+  // Video transport (playback persists across all tools)
+  let seekQueue: SeekQueue | null = null;
+  let transport: TransportBarHandle | null = null;
+  if (entry.kind === "video") {
+    const videoEdits = entry.edits;
+    seekQueue = createSeekQueue(entry.video);
+    transport = createTransportBar({
+      video: entry.video,
+      edits: videoEdits,
+      seekQueue,
+      onMuteChange: (mute) => {
+        videoEdits.mute = mute;
+      },
+    });
+    // Open on the first trimmed frame (the element sits at the poster frame).
+    void seekQueue.seek(videoEdits.trim.start);
+  }
 
   // Crop tool (DOM overlay, sits inside canvasContainer)
   const cropTool = createCropTool({
@@ -67,7 +95,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   // Filters tool
   const filtersTool = createFiltersTool({
-    image: entry.image,
+    image: entry.kind === "video" ? captureFrame(entry.video, 240) : entry.image,
     filter: entry.edits.filter,
     onChange: (filter) => {
       entry.edits.filter = filter;
@@ -91,6 +119,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   // Toolbar (left side)
   const toolbar = createToolbar({
+    tools,
     activeTool,
     onToolChange: (tool) => {
       activeTool = tool;
@@ -99,8 +128,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
   });
 
-  // Body
-  const body = h("div", { class: "rt-editor__body" }, toolbar.root, canvasArea, propsPanel.root);
+  // Body — canvas and transport share a center column
+  const centerChildren: HTMLElement[] = [canvasArea];
+  if (transport) centerChildren.push(transport.root);
+  const center = h("div", { class: "rt-editor__center" }, ...centerChildren);
+  const body = h("div", { class: "rt-editor__body" }, toolbar.root, center, propsPanel.root);
 
   // Root overlay
   const root = h("div", { class: "rt-editor-overlay" }, topbar, body);
@@ -131,6 +163,9 @@ export function createEditor(options: EditorOptions): ViewHandle {
     root,
     destroy() {
       abort.abort();
+      if (entry.kind === "video") entry.video.pause();
+      transport?.destroy();
+      seekQueue?.destroy();
       cropTool.destroy();
       adjustTool.destroy();
       filtersTool.destroy();

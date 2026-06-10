@@ -41,6 +41,13 @@ export function buildPresetFilter(preset: FilterPreset): FabricFilter | null {
   }
 }
 
+/** True when the adjustments and preset would not change a single pixel. */
+export function isNeutral(adj: Adjustments, preset: FilterPreset): boolean {
+  return (
+    preset === "none" && adj.brightness === 100 && adj.contrast === 100 && adj.saturation === 100
+  );
+}
+
 /**
  * Build the full fabric filter stack for an image: the preset filter (if any)
  * sits beneath the brightness/contrast/saturation adjustments. Shared by the

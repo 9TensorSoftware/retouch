@@ -1108,6 +1108,84 @@ const CSS = /* css */ `
   width: 22px;
   height: 22px;
 }
+
+/* ── Video transport bar ───────────────────── */
+
+.rt-editor__center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rt-video-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #1E1C18;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.rt-video-bar__btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.9);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: var(--rt-transition);
+}
+
+.rt-video-bar__btn:hover {
+  background: rgba(255,255,255,0.16);
+}
+
+.rt-video-bar__btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-video-bar__time {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rt-video-bar__strip {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  position: relative;
+}
+
+.rt-video-bar__scrubber {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  outline: none;
+}
+
+.rt-video-bar__scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
 `;
 
 let injected = false;

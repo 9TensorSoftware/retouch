@@ -139,10 +139,7 @@ export class Retouch {
   }
 
   openEditor(id: string): void {
-    const entry = this.media.get(id);
-    if (!entry) return;
-    // Video editing arrives with the editor's video mode (Stage A2).
-    if (entry.kind === "video") return;
+    if (!this.media.has(id)) return;
     this.editingImageId = id;
     this.emitter.emit("editor:open", { id });
     this.sm.transition("editor");
@@ -297,7 +294,7 @@ export class Retouch {
 
   private mountEditor(): void {
     const entry = this.getEditingEntry();
-    if (!entry || entry.kind !== "image") return;
+    if (!entry) return;
     const view = createEditor({
       entry,
       onDone: () => this.closeEditor(true),

@@ -344,11 +344,7 @@ function createOverlay(
     { signal },
   );
 
-  // Video editing arrives with the editor's video mode (Stage A2).
-  const actions =
-    entry.kind === "video"
-      ? h("div", { class: "rt-gallery__item-actions" }, downloadBtn)
-      : h("div", { class: "rt-gallery__item-actions" }, downloadBtn, editBtn);
+  const actions = h("div", { class: "rt-gallery__item-actions" }, downloadBtn, editBtn);
 
   return h(
     "div",
@@ -486,10 +482,7 @@ function createNameRow(
       ? `${formatFileSize(entry.file.size)} · ${formatDuration(entry.duration)}`
       : formatFileSize(entry.file.size);
 
-  const actions =
-    entry.kind === "video"
-      ? h("div", { class: "rt-gallery__names-actions" }, downloadBtn, removeBtn)
-      : h("div", { class: "rt-gallery__names-actions" }, downloadBtn, editBtn, removeBtn);
+  const actions = h("div", { class: "rt-gallery__names-actions" }, downloadBtn, editBtn, removeBtn);
 
   const row = h(
     "div",

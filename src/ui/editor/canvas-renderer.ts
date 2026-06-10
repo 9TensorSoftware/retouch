@@ -1,6 +1,8 @@
 import { Canvas, FabricImage } from "fabric";
+import { PREVIEW_MAX_DIM } from "../../constants";
 import type { Adjustments, FilterPreset, ImageEdits } from "../../types";
-import { buildFabricFilters } from "../../utils/filters";
+import { createCanvas } from "../../utils/canvas";
+import { buildFabricFilters, isNeutral } from "../../utils/filters";
 
 export interface ImageRect {
   x: number;
@@ -9,22 +11,60 @@ export interface ImageRect {
   height: number;
 }
 
+export type RenderSource = HTMLImageElement | HTMLVideoElement;
+
+type VideoWithRVFC = HTMLVideoElement & {
+  requestVideoFrameCallback?: (cb: () => void) => number;
+};
+
 export class CanvasRenderer {
   private readonly fabricCanvas: Canvas;
   private readonly fabricImage: FabricImage;
   private readonly container: HTMLElement;
-  private readonly image: HTMLImageElement;
+  private readonly video: HTMLVideoElement | null;
+  /**
+   * Video frames are copied into this capped-size canvas and fabric wraps the
+   * canvas, not the element. That bounds per-frame filter cost, stays inside
+   * the WebGL texture limit, and keeps crop-overlay math source-agnostic.
+   */
+  private readonly frameCanvas: HTMLCanvasElement | null;
+  private readonly frameCtx: CanvasRenderingContext2D | null;
+  private readonly sourceWidth: number;
+  private readonly sourceHeight: number;
+  private readonly abort = new AbortController();
   private adjustments: Adjustments;
   private rotation = 0;
   private filter: FilterPreset;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
+  private looping = false;
 
-  constructor(container: HTMLElement, image: HTMLImageElement, edits: ImageEdits) {
+  constructor(container: HTMLElement, source: RenderSource, edits: ImageEdits) {
     this.container = container;
-    this.image = image;
     this.adjustments = { ...edits.adjustments };
     this.rotation = edits.rotation;
     this.filter = edits.filter;
+
+    this.video = "videoWidth" in source ? source : null;
+    if (this.video) {
+      this.sourceWidth = this.video.videoWidth;
+      this.sourceHeight = this.video.videoHeight;
+      const cap = Math.min(
+        PREVIEW_MAX_DIM / this.sourceWidth,
+        PREVIEW_MAX_DIM / this.sourceHeight,
+        1,
+      );
+      this.frameCanvas = createCanvas(
+        Math.max(1, Math.round(this.sourceWidth * cap)),
+        Math.max(1, Math.round(this.sourceHeight * cap)),
+      );
+      this.frameCtx = this.frameCanvas.getContext("2d");
+      this.drawFrame();
+    } else {
+      this.sourceWidth = (source as HTMLImageElement).naturalWidth;
+      this.sourceHeight = (source as HTMLImageElement).naturalHeight;
+      this.frameCanvas = null;
+      this.frameCtx = null;
+    }
 
     const canvasEl = document.createElement("canvas");
     this.container.appendChild(canvasEl);
@@ -35,16 +75,45 @@ export class CanvasRenderer {
       skipTargetFind: true,
     });
 
-    this.fabricImage = new FabricImage(this.image, {
+    this.fabricImage = new FabricImage(this.frameCanvas ?? (source as HTMLImageElement), {
       selectable: false,
       evented: false,
       hasControls: false,
       hasBorders: false,
       originX: "center",
       originY: "center",
+      ...(this.video ? { objectCaching: false } : {}),
     });
 
     this.fabricCanvas.add(this.fabricImage);
+
+    if (this.video) {
+      const signal = this.abort.signal;
+      this.video.addEventListener("play", () => this.startLoop(), { signal });
+      this.video.addEventListener(
+        "pause",
+        () => {
+          this.stopLoop();
+          this.renderFrame();
+        },
+        { signal },
+      );
+      this.video.addEventListener(
+        "ended",
+        () => {
+          this.stopLoop();
+          this.renderFrame();
+        },
+        { signal },
+      );
+      this.video.addEventListener(
+        "seeked",
+        () => {
+          if (this.video?.paused) this.renderFrame();
+        },
+        { signal },
+      );
+    }
   }
 
   setAdjustments(adj: Adjustments): void {
@@ -76,25 +145,30 @@ export class CanvasRenderer {
     const availWidth = (area?.clientWidth ?? this.container.clientWidth) || 800;
     const availHeight = (area?.clientHeight ?? this.container.clientHeight) || 600;
 
-    const imgW = this.image.naturalWidth;
-    const imgH = this.image.naturalHeight;
-    if (imgW === 0 || imgH === 0) return;
+    if (this.sourceWidth === 0 || this.sourceHeight === 0) return;
 
-    // Fit image within the available area, with a small margin.
-    const scale = Math.min((availWidth * 0.9) / imgW, (availHeight * 0.9) / imgH, 1);
+    // Fit the source within the available area, with a small margin.
+    const scale = Math.min(
+      (availWidth * 0.9) / this.sourceWidth,
+      (availHeight * 0.9) / this.sourceHeight,
+      1,
+    );
 
-    const drawW = Math.round(imgW * scale);
-    const drawH = Math.round(imgH * scale);
+    const drawW = Math.round(this.sourceWidth * scale);
+    const drawH = Math.round(this.sourceHeight * scale);
 
     // Size the fabric canvas to the drawn image dimensions
     this.fabricCanvas.setDimensions({ width: drawW, height: drawH });
 
-    // Position image centered in canvas
+    // The fabric element may be the capped frame canvas rather than the source.
+    const elementW = this.frameCanvas?.width ?? this.sourceWidth;
+    const elementH = this.frameCanvas?.height ?? this.sourceHeight;
+
     this.fabricImage.set({
       left: drawW / 2,
       top: drawH / 2,
-      scaleX: scale,
-      scaleY: scale,
+      scaleX: drawW / elementW,
+      scaleY: drawH / elementH,
       angle: this.rotation,
     });
 
@@ -102,6 +176,15 @@ export class CanvasRenderer {
 
     this.imageRect = { x: 0, y: 0, width: drawW, height: drawH };
 
+    this.fabricCanvas.requestRenderAll();
+  }
+
+  /** Redraw the current frame (and re-filter it when filters are active). */
+  renderFrame(): void {
+    if (this.video) this.drawFrame();
+    if (!isNeutral(this.adjustments, this.filter)) {
+      this.fabricImage.applyFilters();
+    }
     this.fabricCanvas.requestRenderAll();
   }
 
@@ -124,11 +207,44 @@ export class CanvasRenderer {
   }
 
   destroy(): void {
+    this.stopLoop();
+    this.abort.abort();
     this.fabricCanvas.dispose();
   }
 
+  private drawFrame(): void {
+    if (!this.video || !this.frameCtx || !this.frameCanvas) return;
+    this.frameCtx.drawImage(this.video, 0, 0, this.frameCanvas.width, this.frameCanvas.height);
+  }
+
+  private startLoop(): void {
+    if (this.looping || !this.video) return;
+    this.looping = true;
+    const video = this.video as VideoWithRVFC;
+    const rvfc =
+      typeof video.requestVideoFrameCallback === "function"
+        ? video.requestVideoFrameCallback.bind(video)
+        : null;
+    const schedule = (cb: () => void) => {
+      if (rvfc) rvfc(cb);
+      else requestAnimationFrame(cb);
+    };
+    const step = () => {
+      if (!this.looping) return;
+      this.renderFrame();
+      schedule(step);
+    };
+    schedule(step);
+  }
+
+  private stopLoop(): void {
+    this.looping = false;
+  }
+
   private applyFilters(): void {
-    this.fabricImage.filters = buildFabricFilters(this.adjustments, this.filter);
+    this.fabricImage.filters = isNeutral(this.adjustments, this.filter)
+      ? []
+      : buildFabricFilters(this.adjustments, this.filter);
     this.fabricImage.applyFilters();
   }
 }
