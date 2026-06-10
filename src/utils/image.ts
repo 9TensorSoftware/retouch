@@ -1,7 +1,8 @@
 import { FabricImage, StaticCanvas } from "fabric";
-import { DEFAULT_EDITS } from "../constants";
-import type { ImageEdits, ImageEntry } from "../types";
+import { createDefaultVideoEdits, DEFAULT_EDITS } from "../constants";
+import type { FileRejectionReason, ImageEdits, MediaEntry } from "../types";
 import { buildFabricFilters } from "./filters";
+import { capturePoster, createSeekQueue, loadVideo, releaseVideo } from "./video";
 
 export function generateId(): string {
   return crypto.randomUUID();
@@ -40,28 +41,91 @@ export function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
+export interface ProcessFilesOptions {
+  acceptedImageTypes: string[];
+  acceptedVideoTypes: string[];
+  maxFileSize: number;
+  maxVideoDuration: number;
+}
+
+export interface RejectedFile {
+  file: File;
+  reason: FileRejectionReason;
+}
+
+export interface ProcessFilesResult {
+  entries: MediaEntry[];
+  rejected: RejectedFile[];
+}
+
 export async function processFiles(
   files: FileList | File[],
-  acceptedTypes: string[],
-): Promise<ImageEntry[]> {
-  const entries: ImageEntry[] = [];
-  const fileArray = Array.from(files);
+  options: ProcessFilesOptions,
+): Promise<ProcessFilesResult> {
+  const entries: MediaEntry[] = [];
+  const rejected: RejectedFile[] = [];
 
-  for (const file of fileArray) {
-    if (!isAcceptedType(file, acceptedTypes)) continue;
+  for (const file of Array.from(files)) {
+    const isImage = isAcceptedType(file, options.acceptedImageTypes);
+    const isVideo = !isImage && isAcceptedType(file, options.acceptedVideoTypes);
 
-    const image = await loadImage(file);
-    entries.push({
-      id: generateId(),
-      file,
-      image,
-      thumbnailUrl: createThumbnailUrl(file),
-      edits: structuredClone(DEFAULT_EDITS),
-      edited: false,
-    });
+    if (!isImage && !isVideo) {
+      rejected.push({ file, reason: "type" });
+      continue;
+    }
+    if (file.size > options.maxFileSize) {
+      rejected.push({ file, reason: "size" });
+      continue;
+    }
+
+    if (isImage) {
+      try {
+        const image = await loadImage(file);
+        entries.push({
+          kind: "image",
+          id: generateId(),
+          file,
+          image,
+          thumbnailUrl: createThumbnailUrl(file),
+          edits: structuredClone(DEFAULT_EDITS),
+          edited: false,
+        });
+      } catch {
+        rejected.push({ file, reason: "load-error" });
+      }
+      continue;
+    }
+
+    try {
+      const { video, url, duration, width, height } = await loadVideo(file);
+      if (duration > options.maxVideoDuration) {
+        releaseVideo(video);
+        URL.revokeObjectURL(url);
+        rejected.push({ file, reason: "duration" });
+        continue;
+      }
+      const seekQueue = createSeekQueue(video);
+      const thumbnailUrl = await capturePoster(video, seekQueue);
+      seekQueue.destroy();
+      entries.push({
+        kind: "video",
+        id: generateId(),
+        file,
+        video,
+        videoUrl: url,
+        duration,
+        width,
+        height,
+        thumbnailUrl,
+        edits: createDefaultVideoEdits(duration),
+        edited: false,
+      });
+    } catch {
+      rejected.push({ file, reason: "load-error" });
+    }
   }
 
-  return entries;
+  return { entries, rejected };
 }
 
 export async function exportImage(image: HTMLImageElement, edits: ImageEdits): Promise<Blob> {

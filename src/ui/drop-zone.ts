@@ -3,12 +3,18 @@ import { h } from "./h";
 
 export interface DropZoneOptions {
   onFiles: (files: File[]) => void;
+  /** Comma-joined MIME list for the file input. */
+  accept: string;
+  /** Lead text, e.g. "Drop files here or ". */
+  label: string;
+  /** Format hint, e.g. "PNG, JPG, WebP, MP4, WebM". */
+  hint: string;
 }
 
 export function createDropZone(options: DropZoneOptions): ViewHandle {
   const input = h("input", {
     type: "file",
-    accept: "image/*",
+    accept: options.accept,
     multiple: true,
     style: "display:none",
   }) as HTMLInputElement;
@@ -17,8 +23,8 @@ export function createDropZone(options: DropZoneOptions): ViewHandle {
     "div",
     { class: "rt-dropzone" },
     h("div", { class: "rt-dropzone__icon" }, createUploadIcon()),
-    h("div", { class: "rt-dropzone__text" }, "Drop images here or ", h("strong", null, "browse")),
-    h("div", { class: "rt-dropzone__hint" }, "PNG, JPG, WebP"),
+    h("div", { class: "rt-dropzone__text" }, options.label, h("strong", null, "browse")),
+    h("div", { class: "rt-dropzone__hint" }, options.hint),
     input,
   );
 

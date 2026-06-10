@@ -1,8 +1,19 @@
 export type AppState = "idle" | "dropzone" | "gallery" | "editor" | "destroyed";
 
-export type EditorTool = "crop" | "adjust" | "filters";
+export type EditorTool = "trim" | "crop" | "adjust" | "filters";
 
 export type FilterPreset = "none" | "bw" | "sepia" | "warm" | "cool" | "vintage" | "vivid";
+
+export type MediaKind = "image" | "video";
+
+export interface TrimRange {
+  /** Seconds from media start, >= 0. */
+  start: number;
+  /** Seconds from media start; end - start >= MIN_TRIM_DURATION. */
+  end: number;
+}
+
+export type FileRejectionReason = "type" | "size" | "duration" | "count" | "load-error";
 
 export type GalleryViewMode = "cols-2" | "cols-3" | "cols-4" | "width-fit" | "height-fit" | "list";
 
@@ -13,8 +24,14 @@ export interface RetouchOptions {
   target: string | HTMLElement;
   /** Maximum number of files. Defaults to Infinity. */
   maxFiles?: number;
-  /** Accepted MIME types. Defaults to common image types. */
+  /** Accepted image MIME types. Defaults to common image types. */
   acceptedTypes?: string[];
+  /** Accepted video MIME types. Pass [] to disable video. */
+  acceptedVideoTypes?: string[];
+  /** Maximum file size in bytes for any media. Defaults to Infinity. */
+  maxFileSize?: number;
+  /** Maximum video duration in seconds. Defaults to Infinity. */
+  maxVideoDuration?: number;
   /** Called when the user clicks Done in the gallery with all exported blobs. */
   onDone?: (blobs: Blob[]) => void;
 }
@@ -48,22 +65,53 @@ export interface ImageEdits {
   filter: FilterPreset;
 }
 
-export interface ImageEntry {
+export interface VideoEdits extends ImageEdits {
+  trim: TrimRange;
+  mute: boolean;
+}
+
+interface MediaEntryBase {
   id: string;
   file: File;
-  image: HTMLImageElement;
+  /** Object URL for the gallery thumbnail (video: a captured poster frame). */
   thumbnailUrl: string;
-  edits: ImageEdits;
   edited: boolean;
 }
 
+export interface ImageEntry extends MediaEntryBase {
+  kind: "image";
+  image: HTMLImageElement;
+  edits: ImageEdits;
+}
+
+export interface VideoEntry extends MediaEntryBase {
+  kind: "video";
+  /** Detached element; never appended to the DOM. */
+  video: HTMLVideoElement;
+  /** Object URL backing video.src — revoked separately from thumbnailUrl. */
+  videoUrl: string;
+  /** Seconds. */
+  duration: number;
+  width: number;
+  height: number;
+  edits: VideoEdits;
+}
+
+export type MediaEntry = ImageEntry | VideoEntry;
+
 export interface RetouchEventMap {
   "state:change": { from: AppState; to: AppState };
-  "images:add": { entries: ImageEntry[] };
+  "images:add": { entries: MediaEntry[] };
   "images:remove": { id: string };
   "editor:open": { id: string };
-  "editor:done": { id: string; edits: ImageEdits };
+  "editor:done": { id: string; edits: ImageEdits | VideoEdits };
   "editor:cancel": { id: string };
+  "file:rejected": { file: File; reason: FileRejectionReason };
+  "frame:capture": { sourceId: string; entry: ImageEntry };
+  "export:start": { id: string; kind: MediaKind };
+  "export:progress": { id: string; progress: number };
+  "export:complete": { id: string; blob: Blob };
+  "export:error": { id: string; error: Error };
   done: { blobs: Blob[] };
 }
 

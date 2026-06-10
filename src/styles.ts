@@ -1070,6 +1070,44 @@ const CSS = /* css */ `
 .rt-props__filter-btn--active .rt-props__filter-label {
   color: var(--rt-accent);
 }
+
+/* ── Video gallery badges ──────────────────── */
+
+.rt-gallery__item-duration {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.65);
+  color: rgba(255,255,255,0.9);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.rt-gallery__item-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  color: rgba(255,255,255,0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.rt-gallery__item-play svg {
+  width: 22px;
+  height: 22px;
+}
 `;
 
 let injected = false;

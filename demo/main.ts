@@ -1,7 +1,8 @@
-import { Retouch } from "../src/index";
+import { ACCEPTED_VIDEO_TYPES, Retouch } from "../src/index";
 
 const editor = new Retouch({
   target: "#editor",
+  acceptedVideoTypes: ACCEPTED_VIDEO_TYPES,
   onDone: (blobs) => {
     console.log(`[Rétouch] Done — exported ${blobs.length} image(s)`, blobs);
 

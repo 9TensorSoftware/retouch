@@ -2,12 +2,20 @@ import { ACCEPTED_TYPES } from "./constants";
 import { EventEmitter } from "./event-emitter";
 import { StateMachine } from "./state-machine";
 import { injectStyles } from "./styles";
-import type { AppState, ImageEntry, RetouchEventMap, RetouchOptions, ViewHandle } from "./types";
+import type {
+  AppState,
+  ImageEntry,
+  MediaEntry,
+  RetouchEventMap,
+  RetouchOptions,
+  ViewHandle,
+} from "./types";
 import { createDropZone } from "./ui/drop-zone";
 import { createEditor } from "./ui/editor/editor";
 import { createGallery } from "./ui/gallery";
 import { h } from "./ui/h";
 import { exportImage, processFiles, revokeThumbnailUrl } from "./utils/image";
+import { isImageEntry, releaseVideo } from "./utils/video";
 
 const STATE_TRANSITIONS: Record<AppState, AppState[]> = {
   idle: ["dropzone"],
@@ -20,10 +28,15 @@ const STATE_TRANSITIONS: Record<AppState, AppState[]> = {
 export class Retouch {
   private readonly root: HTMLElement;
   private readonly container: HTMLElement;
-  private readonly images = new Map<string, ImageEntry>();
+  private readonly media = new Map<string, MediaEntry>();
   private readonly sm: StateMachine<AppState>;
   private readonly emitter = new EventEmitter<RetouchEventMap>();
-  private readonly options: Required<Pick<RetouchOptions, "maxFiles" | "acceptedTypes">> & {
+  private readonly options: Required<
+    Pick<
+      RetouchOptions,
+      "maxFiles" | "acceptedTypes" | "acceptedVideoTypes" | "maxFileSize" | "maxVideoDuration"
+    >
+  > & {
     onDone?: RetouchOptions["onDone"];
   };
 
@@ -44,6 +57,10 @@ export class Retouch {
     this.options = {
       maxFiles: options.maxFiles ?? Number.POSITIVE_INFINITY,
       acceptedTypes: options.acceptedTypes ?? ACCEPTED_TYPES,
+      // Off by default until video export ships; pass ACCEPTED_VIDEO_TYPES to opt in.
+      acceptedVideoTypes: options.acceptedVideoTypes ?? [],
+      maxFileSize: options.maxFileSize ?? Number.POSITIVE_INFINITY,
+      maxVideoDuration: options.maxVideoDuration ?? Number.POSITIVE_INFINITY,
       onDone: options.onDone,
     };
 
@@ -72,15 +89,27 @@ export class Retouch {
   }
 
   async addFiles(files: File[]): Promise<void> {
-    const remaining = this.options.maxFiles - this.images.size;
+    const remaining = this.options.maxFiles - this.media.size;
+    for (const file of files.slice(Math.max(0, remaining))) {
+      this.emitter.emit("file:rejected", { file, reason: "count" });
+    }
     if (remaining <= 0) return;
 
     const sliced = files.slice(0, remaining);
-    const entries = await processFiles(sliced, this.options.acceptedTypes);
+    const { entries, rejected } = await processFiles(sliced, {
+      acceptedImageTypes: this.options.acceptedTypes,
+      acceptedVideoTypes: this.options.acceptedVideoTypes,
+      maxFileSize: this.options.maxFileSize,
+      maxVideoDuration: this.options.maxVideoDuration,
+    });
+
+    for (const rejection of rejected) {
+      this.emitter.emit("file:rejected", rejection);
+    }
     if (entries.length === 0) return;
 
     for (const entry of entries) {
-      this.images.set(entry.id, entry);
+      this.media.set(entry.id, entry);
     }
 
     this.emitter.emit("images:add", { entries });
@@ -94,19 +123,26 @@ export class Retouch {
   }
 
   removeImage(id: string): void {
-    const entry = this.images.get(id);
+    const entry = this.media.get(id);
     if (!entry) return;
     revokeThumbnailUrl(entry.thumbnailUrl);
-    this.images.delete(id);
+    if (entry.kind === "video") {
+      releaseVideo(entry.video);
+      URL.revokeObjectURL(entry.videoUrl);
+    }
+    this.media.delete(id);
     this.emitter.emit("images:remove", { id });
 
-    if (this.images.size === 0 && this.sm.state === "gallery") {
+    if (this.media.size === 0 && this.sm.state === "gallery") {
       this.sm.transition("dropzone");
     }
   }
 
   openEditor(id: string): void {
-    if (!this.images.has(id)) return;
+    const entry = this.media.get(id);
+    if (!entry) return;
+    // Video editing arrives with the editor's video mode (Stage A2).
+    if (entry.kind === "video") return;
     this.editingImageId = id;
     this.emitter.emit("editor:open", { id });
     this.sm.transition("editor");
@@ -115,7 +151,7 @@ export class Retouch {
   closeEditor(commit: boolean): void {
     if (this.sm.state !== "editor" || !this.editingImageId) return;
     const id = this.editingImageId;
-    const entry = this.images.get(id);
+    const entry = this.media.get(id);
 
     if (commit && entry) {
       entry.edited = true;
@@ -128,20 +164,30 @@ export class Retouch {
     this.sm.transition("gallery");
   }
 
-  getEditingEntry(): ImageEntry | null {
+  getEditingEntry(): MediaEntry | null {
     if (!this.editingImageId) return null;
-    return this.images.get(this.editingImageId) ?? null;
+    return this.media.get(this.editingImageId) ?? null;
   }
 
+  /** All media entries, in insertion order. */
+  getMedia(): MediaEntry[] {
+    return Array.from(this.media.values());
+  }
+
+  /** @deprecated Use getMedia() — this excludes video entries. */
   getImages(): ImageEntry[] {
-    return Array.from(this.images.values());
+    return this.getMedia().filter(isImageEntry);
   }
 
   async exportAll(): Promise<Blob[]> {
     const blobs: Blob[] = [];
-    for (const entry of this.images.values()) {
-      const blob = await exportImage(entry.image, entry.edits);
-      blobs.push(blob);
+    for (const entry of this.media.values()) {
+      if (entry.kind === "image") {
+        blobs.push(await exportImage(entry.image, entry.edits));
+      } else {
+        // Interim until the video export pipeline lands: pass the original through.
+        blobs.push(entry.file);
+      }
     }
     return blobs;
   }
@@ -156,10 +202,14 @@ export class Retouch {
     if (this.sm.state === "destroyed") return;
     this.unmountCurrentView();
 
-    for (const entry of this.images.values()) {
+    for (const entry of this.media.values()) {
       revokeThumbnailUrl(entry.thumbnailUrl);
+      if (entry.kind === "video") {
+        releaseVideo(entry.video);
+        URL.revokeObjectURL(entry.videoUrl);
+      }
     }
-    this.images.clear();
+    this.media.clear();
 
     this.root.remove();
     this.sm.transition("destroyed");
@@ -192,23 +242,40 @@ export class Retouch {
     }
   }
 
+  private acceptAttribute(): string {
+    return [...this.options.acceptedTypes, ...this.options.acceptedVideoTypes].join(",");
+  }
+
   private mountDropZone(): void {
+    const videoEnabled = this.options.acceptedVideoTypes.length > 0;
     const view = createDropZone({
       onFiles: (files) => this.addFiles(files),
+      accept: this.acceptAttribute(),
+      label: videoEnabled ? "Drop files here or " : "Drop images here or ",
+      hint: videoEnabled ? "PNG, JPG, WebP, MP4, WebM" : "PNG, JPG, WebP",
     });
     this.root.appendChild(view.root);
     this.currentView = view;
   }
 
   async downloadImage(id: string): Promise<void> {
-    const entry = this.images.get(id);
+    const entry = this.media.get(id);
     if (!entry) return;
 
-    const blob = await exportImage(entry.image, entry.edits);
+    let blob: Blob;
+    let filename: string;
+    if (entry.kind === "image") {
+      blob = await exportImage(entry.image, entry.edits);
+      filename = `${entry.file.name.replace(/\.[^.]+$/, "")}.png`;
+    } else {
+      // Interim until the video export pipeline lands: download the original.
+      blob = entry.file;
+      filename = entry.file.name;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${entry.file.name.replace(/\.[^.]+$/, "")}.png`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -217,7 +284,8 @@ export class Retouch {
 
   private mountGallery(): void {
     const view = createGallery({
-      images: this.getImages(),
+      images: this.getMedia(),
+      accept: this.acceptAttribute(),
       onEdit: (id) => this.openEditor(id),
       onRemove: (id) => this.removeImage(id),
       onAddMore: (files) => this.addFiles(files),
@@ -229,7 +297,7 @@ export class Retouch {
 
   private mountEditor(): void {
     const entry = this.getEditingEntry();
-    if (!entry) return;
+    if (!entry || entry.kind !== "image") return;
     const view = createEditor({
       entry,
       onDone: () => this.closeEditor(true),

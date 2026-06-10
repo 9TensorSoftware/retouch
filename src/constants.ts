@@ -1,8 +1,19 @@
-import type { Adjustments, CropRect, ImageEdits } from "./types";
+import type { Adjustments, CropRect, ImageEdits, VideoEdits } from "./types";
 
 export const VERSION = "0.0.2";
 
 export const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+export const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+
+/** Smallest allowed trimmed length, in seconds. */
+export const MIN_TRIM_DURATION = 0.1;
+
+/** Long-edge cap for the editor's video preview canvas. */
+export const PREVIEW_MAX_DIM = 1280;
+
+export const FILMSTRIP_THUMB_HEIGHT = 48;
+export const FILMSTRIP_MAX_THUMBS = 20;
 
 export const DEFAULT_CROP: CropRect = { x: 0, y: 0, width: 1, height: 1 };
 
@@ -18,6 +29,14 @@ export const DEFAULT_EDITS: ImageEdits = {
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   filter: "none",
 };
+
+export function createDefaultVideoEdits(duration: number): VideoEdits {
+  return {
+    ...structuredClone(DEFAULT_EDITS),
+    trim: { start: 0, end: duration },
+    mute: false,
+  };
+}
 
 export const ASPECT_RATIOS: Record<string, number | null> = {
   free: null,

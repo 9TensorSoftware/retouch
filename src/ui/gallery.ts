@@ -1,8 +1,11 @@
-import type { GalleryViewMode, ImageEntry, ViewHandle } from "../types";
+import type { GalleryViewMode, MediaEntry, ViewHandle } from "../types";
+import { formatDuration } from "../utils/video";
 import { h } from "./h";
 
 export interface GalleryOptions {
-  images: ImageEntry[];
+  images: MediaEntry[];
+  /** Comma-joined MIME list for the add-more file input. */
+  accept: string;
   onEdit: (id: string) => void;
   onRemove: (id: string) => void;
   onAddMore: (files: File[]) => void;
@@ -74,7 +77,7 @@ export function createGallery(options: GalleryOptions): ViewHandle {
   // Shared hidden file input
   const input = h("input", {
     type: "file",
-    accept: "image/*",
+    accept: options.accept,
     multiple: true,
     style: "display:none",
   }) as HTMLInputElement;
@@ -251,6 +254,7 @@ function renderHeightFitView(
     const overlay = createOverlay(entry, options, signal);
 
     item.append(img, status, removeBtn, overlay);
+    appendVideoBadges(item, entry);
     strip.appendChild(item);
   }
 
@@ -284,7 +288,7 @@ function renderListView(
 // ── Shared Helpers ────────────────────────────
 
 function createFlowCard(
-  entry: ImageEntry,
+  entry: MediaEntry,
   options: GalleryOptions,
   signal: AbortSignal,
 ): HTMLElement {
@@ -295,11 +299,24 @@ function createFlowCard(
   const overlay = createOverlay(entry, options, signal);
 
   item.append(img, status, removeBtn, overlay);
+  appendVideoBadges(item, entry);
   return item;
 }
 
+/** Duration pill + play glyph on video cards. */
+function appendVideoBadges(item: HTMLElement, entry: MediaEntry): void {
+  if (entry.kind !== "video") return;
+  item.appendChild(
+    h("span", { class: "rt-gallery__item-duration" }, formatDuration(entry.duration)),
+  );
+  const play = h("div", { class: "rt-gallery__item-play" });
+  play.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 6.5v11l9-5.5z"/></svg>';
+  item.appendChild(play);
+}
+
 function createOverlay(
-  entry: ImageEntry,
+  entry: MediaEntry,
   options: GalleryOptions,
   signal: AbortSignal,
 ): HTMLElement {
@@ -327,6 +344,12 @@ function createOverlay(
     { signal },
   );
 
+  // Video editing arrives with the editor's video mode (Stage A2).
+  const actions =
+    entry.kind === "video"
+      ? h("div", { class: "rt-gallery__item-actions" }, downloadBtn)
+      : h("div", { class: "rt-gallery__item-actions" }, downloadBtn, editBtn);
+
   return h(
     "div",
     { class: "rt-gallery__item-overlay" },
@@ -334,18 +357,18 @@ function createOverlay(
       "div",
       { class: "rt-gallery__item-info" },
       h("span", { class: "rt-gallery__item-name" }, entry.file.name),
-      h("div", { class: "rt-gallery__item-actions" }, downloadBtn, editBtn),
+      actions,
     ),
   );
 }
 
-function createStatusDot(entry: ImageEntry): HTMLElement {
+function createStatusDot(entry: MediaEntry): HTMLElement {
   const cls = entry.edited ? "rt-gallery__item-status--edited" : "rt-gallery__item-status--pending";
   return h("div", { class: `rt-gallery__item-status ${cls}` });
 }
 
 function createRemoveButton(
-  entry: ImageEntry,
+  entry: MediaEntry,
   parentEl: HTMLElement,
   options: GalleryOptions,
   signal: AbortSignal,
@@ -429,7 +452,7 @@ function createAddCell(
 }
 
 function createNameRow(
-  entry: ImageEntry,
+  entry: MediaEntry,
   options: GalleryOptions,
   signal: AbortSignal,
 ): HTMLElement {
@@ -458,6 +481,16 @@ function createNameRow(
   removeBtn.innerHTML =
     '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>';
 
+  const sizeText =
+    entry.kind === "video"
+      ? `${formatFileSize(entry.file.size)} · ${formatDuration(entry.duration)}`
+      : formatFileSize(entry.file.size);
+
+  const actions =
+    entry.kind === "video"
+      ? h("div", { class: "rt-gallery__names-actions" }, downloadBtn, removeBtn)
+      : h("div", { class: "rt-gallery__names-actions" }, downloadBtn, editBtn, removeBtn);
+
   const row = h(
     "div",
     { class: "rt-gallery__names-item", "data-id": entry.id },
@@ -466,10 +499,10 @@ function createNameRow(
       "div",
       { class: "rt-gallery__names-details" },
       h("span", { class: "rt-gallery__names-filename" }, entry.file.name),
-      h("span", { class: "rt-gallery__names-size" }, formatFileSize(entry.file.size)),
+      h("span", { class: "rt-gallery__names-size" }, sizeText),
     ),
     h("div", { class: "rt-gallery__names-status" }, status),
-    h("div", { class: "rt-gallery__names-actions" }, downloadBtn, editBtn, removeBtn),
+    actions,
   );
 
   removeBtn.addEventListener(
