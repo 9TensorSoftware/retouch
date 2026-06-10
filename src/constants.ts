@@ -1,6 +1,6 @@
 import type { Adjustments, CropRect, ImageEdits } from "./types";
 
-export const VERSION = "0.0.1";
+export const VERSION = "0.0.2";
 
 export const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
