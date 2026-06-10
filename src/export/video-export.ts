@@ -1,5 +1,6 @@
 import type { VideoEntry } from "../types";
 import { createFramePipeline } from "./frame-pipeline";
+import { exportWithMediaRecorder } from "./media-recorder-export";
 
 export interface VideoExportOptions {
   /** Receives 0..1 conversion progress. */
@@ -21,8 +22,8 @@ export async function exportVideo(
   options: VideoExportOptions = {},
 ): Promise<Blob> {
   if (!supportsWebCodecs()) {
-    // The MediaRecorder fallback lands with Stage B2.
-    throw new Error("[Retouch] Video export requires WebCodecs support in this browser.");
+    // Realtime, recorder-grade fallback (e.g. Firefox Android).
+    return exportWithMediaRecorder(entry, options);
   }
 
   const mb = await import("mediabunny");

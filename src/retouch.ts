@@ -1,4 +1,4 @@
-import { ACCEPTED_TYPES } from "./constants";
+import { ACCEPTED_TYPES, ACCEPTED_VIDEO_TYPES } from "./constants";
 import { EventEmitter } from "./event-emitter";
 import { exportVideo, extensionForBlob } from "./export/video-export";
 import { StateMachine } from "./state-machine";
@@ -14,6 +14,8 @@ import type {
 } from "./types";
 import { createDropZone } from "./ui/drop-zone";
 import { createEditor } from "./ui/editor/editor";
+import type { ExportOverlayHandle } from "./ui/export-overlay";
+import { createExportOverlay } from "./ui/export-overlay";
 import { createGallery } from "./ui/gallery";
 import { h } from "./ui/h";
 import {
@@ -67,8 +69,7 @@ export class Retouch {
     this.options = {
       maxFiles: options.maxFiles ?? Number.POSITIVE_INFINITY,
       acceptedTypes: options.acceptedTypes ?? ACCEPTED_TYPES,
-      // Off by default until video export ships; pass ACCEPTED_VIDEO_TYPES to opt in.
-      acceptedVideoTypes: options.acceptedVideoTypes ?? [],
+      acceptedVideoTypes: options.acceptedVideoTypes ?? ACCEPTED_VIDEO_TYPES,
       maxFileSize: options.maxFileSize ?? Number.POSITIVE_INFINITY,
       maxVideoDuration: options.maxVideoDuration ?? Number.POSITIVE_INFINITY,
       onDone: options.onDone,
@@ -192,6 +193,16 @@ export class Retouch {
     this.exportAbort = abort;
     const blobs: Blob[] = [];
 
+    // Videos take a while — show a progress card for the run.
+    const hasVideo = this.getMedia().some((entry) => entry.kind === "video");
+    const overlay = hasVideo
+      ? createExportOverlay({
+          items: this.getMedia().map((entry) => ({ id: entry.id, name: entry.file.name })),
+          onCancel: () => this.cancelExport(),
+        })
+      : null;
+    if (overlay) document.body.appendChild(overlay.root);
+
     try {
       for (const entry of this.media.values()) {
         if (abort.signal.aborted) throw new Error("[Retouch] Export canceled");
@@ -200,19 +211,22 @@ export class Retouch {
           const blob =
             entry.kind === "image"
               ? await exportImage(entry.image, entry.edits)
-              : await this.exportVideoEntry(entry, abort.signal);
+              : await this.exportVideoEntry(entry, abort.signal, overlay);
+          overlay?.setComplete(entry.id);
           this.emitter.emit("export:progress", { id: entry.id, progress: 1 });
           this.emitter.emit("export:complete", { id: entry.id, blob });
           blobs.push(blob);
         } catch (err) {
           if (abort.signal.aborted) throw err;
           const error = err instanceof Error ? err : new Error(String(err));
+          overlay?.setError(entry.id);
           this.emitter.emit("export:error", { id: entry.id, error });
           // Degrade gracefully: deliver the unedited original for this entry.
           blobs.push(entry.file);
         }
       }
     } finally {
+      overlay?.destroy();
       if (this.exportAbort === abort) this.exportAbort = null;
     }
     return blobs;
@@ -223,10 +237,15 @@ export class Retouch {
     this.exportAbort?.abort();
   }
 
-  private exportVideoEntry(entry: VideoEntry, signal: AbortSignal): Promise<Blob> {
+  private exportVideoEntry(
+    entry: VideoEntry,
+    signal: AbortSignal,
+    overlay?: ExportOverlayHandle | null,
+  ): Promise<Blob> {
     return exportVideo(entry, {
       signal,
       onProgress: (progress) => {
+        overlay?.setProgress(entry.id, progress);
         this.emitter.emit("export:progress", { id: entry.id, progress });
       },
     });

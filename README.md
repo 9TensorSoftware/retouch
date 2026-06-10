@@ -44,6 +44,7 @@ Most image editors bolt onto your app like an afterthought. Rétouch was designe
 - **Powered by fabric.js** — battle-tested canvas engine under the hood, tree-shakeable
 - **Three-state UX** — drop zone, gallery, editor — all handled for you
 - **Canvas-native** — all processing happens on an HTML Canvas, no server round-trips
+- **Video too** — trim, crop, adjust and filter videos, re-encoded in the browser via WebCodecs ([mediabunny](https://mediabunny.dev/) loads lazily, only when a video is exported)
 - **Framework-agnostic** — vanilla JS core with a React wrapper available
 
 <br />
@@ -137,12 +138,26 @@ Opens as a modal overlay with dark chrome to keep focus on the image. Tool sideb
 
 | Tool | Description |
 |------|-------------|
-| **Crop** | Free-form or fixed aspect ratio (16:9, 4:3, 1:1, 3:2, 9:16). Rule-of-thirds grid overlay. Rotation control. |
-| **Adjust** | Brightness, contrast, saturation sliders with real-time preview. |
+| **Crop** | Free-form or fixed aspect ratio (16:9, 4:3, 1:1, 3:2, 9:16). Rule-of-thirds grid overlay. Rotation control. Works on video too. |
+| **Adjust** | Brightness, contrast, saturation sliders with real-time preview — live on playing video. |
 | **Filters** | Quick presets — Warm, Cool, B&W, and more. One-tap application with live thumbnails. |
-| **Draw** | Freehand drawing and annotation directly on the canvas. |
-| **Text** | Add and position text overlays with font and color controls. |
-| **Sticker** | Place image overlays and shapes onto the canvas. |
+| **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging. |
+| **Draw** | _Planned._ Freehand drawing and annotation directly on the canvas. |
+| **Text** | _Planned._ Add and position text overlays with font and color controls. |
+| **Sticker** | _Planned._ Place image overlays and shapes onto the canvas. |
+
+### Video
+
+Drop an MP4, WebM, or MOV alongside your images. Videos get poster cards with a
+duration badge in the gallery and open in the same editor with a playback
+transport. Everything is non-destructive until export:
+
+- **Trim** — sample-accurate in/out points; untouched clips trim losslessly without re-encoding
+- **Crop / rotate / adjust / filter** — applied per frame at export, matching the live preview exactly
+- **Frame capture** — grab any frame as a new image entry, carrying the video's edits
+- **Audio** — preserved through export; one-tap mute discards the track
+- **Export** — MP4 (WebM fallback) via WebCodecs + lazily-loaded [mediabunny](https://mediabunny.dev/); browsers without WebCodecs fall back to a realtime MediaRecorder pipeline
+- Progress is reported per file (`export:progress` events) with cancellation via `cancelExport()`
 
 <br />
 

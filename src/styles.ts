@@ -1296,6 +1296,96 @@ const CSS = /* css */ `
   color: rgba(255,255,255,0.35);
   margin-top: 12px;
 }
+
+/* ── Export overlay ────────────────────────── */
+
+.rt-export-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(10,9,8,0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rt-export-overlay__card {
+  width: min(420px, 90vw);
+  background: #1E1C18;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 24px;
+  color: #fff;
+}
+
+.rt-export-overlay__title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.rt-export-overlay__row {
+  margin: 12px 0;
+}
+
+.rt-export-overlay__name {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+}
+
+.rt-export-overlay__name span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rt-export-overlay__pct {
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,0.5);
+  flex-shrink: 0;
+}
+
+.rt-export-overlay__bar {
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.rt-export-overlay__fill {
+  height: 100%;
+  width: 0%;
+  background: var(--rt-accent);
+  transition: width 0.15s ease;
+}
+
+.rt-export-overlay__fill--error {
+  background: #c0392b;
+}
+
+.rt-export-overlay__cancel {
+  margin-top: 16px;
+  padding: 7px 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--rt-radius-sm);
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--rt-transition);
+  font-family: inherit;
+}
+
+.rt-export-overlay__cancel:hover {
+  border-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.9);
+}
 `;
 
 let injected = false;
