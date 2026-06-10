@@ -3,11 +3,14 @@ import { h } from "../h";
 import type { AdjustToolHandle } from "./adjust-tool";
 import type { CropToolHandle } from "./crop-tool";
 import type { FiltersToolHandle } from "./filters-tool";
+import type { TrimToolHandle } from "./trim-tool";
 
 export interface PropertiesPanelOptions {
   cropTool: CropToolHandle;
   adjustTool: AdjustToolHandle;
   filtersTool: FiltersToolHandle;
+  /** Present only for video entries. */
+  trimTool?: TrimToolHandle;
   edits: ImageEdits;
   onRotationChange: (degrees: number) => void;
 }
@@ -26,7 +29,7 @@ const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
 ];
 
 export function createPropertiesPanel(options: PropertiesPanelOptions): PropertiesPanelHandle {
-  const { cropTool, adjustTool, filtersTool, edits, onRotationChange } = options;
+  const { cropTool, adjustTool, filtersTool, trimTool, edits, onRotationChange } = options;
   const abort = new AbortController();
   const signal = abort.signal;
 
@@ -105,15 +108,20 @@ export function createPropertiesPanel(options: PropertiesPanelOptions): Properti
   // ── Filters properties ──
   const filtersProps = filtersTool.root;
 
+  // ── Trim properties (video only) ──
+  const trimProps = trimTool?.root ?? null;
+
   // ── Panel ──
   const content = h("div");
+  if (trimProps) content.appendChild(trimProps);
   content.appendChild(cropProps);
   content.appendChild(adjustProps);
   content.appendChild(filtersProps);
 
-  // Initially show crop
+  // Initially show crop (the editor immediately sets the real active tool)
   adjustProps.style.display = "none";
   filtersProps.style.display = "none";
+  if (trimProps) trimProps.style.display = "none";
 
   const root = h("div", { class: "rt-props" }, content);
 
@@ -123,6 +131,7 @@ export function createPropertiesPanel(options: PropertiesPanelOptions): Properti
       cropProps.style.display = tool === "crop" ? "" : "none";
       adjustProps.style.display = tool === "adjust" ? "" : "none";
       filtersProps.style.display = tool === "filters" ? "" : "none";
+      if (trimProps) trimProps.style.display = tool === "trim" ? "" : "none";
     },
     destroy() {
       abort.abort();

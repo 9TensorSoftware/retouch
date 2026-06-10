@@ -1159,32 +1159,116 @@ const CSS = /* css */ `
   white-space: nowrap;
 }
 
-.rt-video-bar__strip {
+/* ── Filmstrip scrubber ────────────────────── */
+
+.rt-filmstrip {
+  position: relative;
   flex: 1;
+  height: 48px;
+  min-width: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.rt-filmstrip__thumbs {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.rt-filmstrip__thumb-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rt-filmstrip__thumb-slot canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.rt-filmstrip__shade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(10,9,8,0.72);
+  pointer-events: none;
+}
+
+.rt-filmstrip__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(0,0,0,0.6);
+  transform: translateX(-1px);
+  pointer-events: none;
+}
+
+.rt-filmstrip__handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  background: var(--rt-accent);
+  cursor: ew-resize;
+  display: none;
+  z-index: 2;
+}
+
+.rt-filmstrip--editable .rt-filmstrip__handle {
+  display: block;
+}
+
+.rt-filmstrip__handle--in {
+  border-radius: 6px 0 0 6px;
+}
+
+.rt-filmstrip__handle--out {
+  transform: translateX(-100%);
+  border-radius: 0 6px 6px 0;
+}
+
+.rt-filmstrip__handle::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  right: 4.5px;
+  top: 15px;
+  bottom: 15px;
+  background: rgba(255,255,255,0.75);
+  border-radius: 1.5px;
+}
+
+.rt-filmstrip__handle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+/* ── Trim panel ────────────────────────────── */
+
+.rt-props__trim-row {
   display: flex;
   align-items: center;
-  min-width: 0;
-  position: relative;
+  justify-content: space-between;
 }
 
-.rt-video-bar__scrubber {
-  width: 100%;
-  height: 4px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: rgba(255,255,255,0.1);
-  border-radius: 2px;
-  outline: none;
+.rt-props__trim-value {
+  width: auto;
+  color: rgba(255,255,255,0.85);
 }
 
-.rt-video-bar__scrubber::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-  cursor: pointer;
+.rt-props__hint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255,255,255,0.35);
+  margin-top: 12px;
 }
 `;
 

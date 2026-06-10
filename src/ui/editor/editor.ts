@@ -10,6 +10,8 @@ import { createPropertiesPanel } from "./properties-panel";
 import { createToolbar } from "./toolbar";
 import type { TransportBarHandle } from "./transport-bar";
 import { createTransportBar } from "./transport-bar";
+import type { TrimToolHandle } from "./trim-tool";
+import { createTrimTool } from "./trim-tool";
 
 export interface EditorOptions {
   entry: MediaEntry;
@@ -24,8 +26,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   // Snapshot edits so cancel can restore them
   const editSnapshot = structuredClone(entry.edits);
-  // The trim tool joins the video set in Stage A3.
-  const tools: EditorTool[] = ["crop", "adjust", "filters"];
+  const tools: EditorTool[] =
+    entry.kind === "video" ? ["trim", "crop", "adjust", "filters"] : ["crop", "adjust", "filters"];
   let activeTool: EditorTool = tools[0];
 
   // Top bar
@@ -57,6 +59,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
   // Video transport (playback persists across all tools)
   let seekQueue: SeekQueue | null = null;
   let transport: TransportBarHandle | null = null;
+  let trimTool: TrimToolHandle | undefined;
   if (entry.kind === "video") {
     const videoEdits = entry.edits;
     seekQueue = createSeekQueue(entry.video);
@@ -64,9 +67,18 @@ export function createEditor(options: EditorOptions): ViewHandle {
       video: entry.video,
       edits: videoEdits,
       seekQueue,
+      videoUrl: entry.videoUrl,
+      duration: entry.duration,
+      videoWidth: entry.width,
+      videoHeight: entry.height,
       onMuteChange: (mute) => {
         videoEdits.mute = mute;
       },
+    });
+    trimTool = createTrimTool({
+      edits: videoEdits,
+      duration: entry.duration,
+      transport,
     });
     // Open on the first trimmed frame (the element sits at the poster frame).
     void seekQueue.seek(videoEdits.trim.start);
@@ -109,6 +121,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     cropTool,
     adjustTool,
     filtersTool,
+    trimTool,
     edits: entry.edits,
     onRotationChange: (deg) => {
       entry.edits.rotation = deg;
@@ -124,9 +137,15 @@ export function createEditor(options: EditorOptions): ViewHandle {
     onToolChange: (tool) => {
       activeTool = tool;
       cropTool.setVisible(tool === "crop");
+      transport?.setTrimEditable(tool === "trim");
       propsPanel.setActiveTool(tool);
     },
   });
+
+  // Sync initial tool state (video opens on Trim, image on Crop).
+  cropTool.setVisible(activeTool === "crop");
+  transport?.setTrimEditable(activeTool === "trim");
+  propsPanel.setActiveTool(activeTool);
 
   // Body — canvas and transport share a center column
   const centerChildren: HTMLElement[] = [canvasArea];
@@ -164,6 +183,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     destroy() {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();
+      trimTool?.destroy();
       transport?.destroy();
       seekQueue?.destroy();
       cropTool.destroy();
