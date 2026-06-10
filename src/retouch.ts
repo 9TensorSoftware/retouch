@@ -8,14 +8,22 @@ import type {
   MediaEntry,
   RetouchEventMap,
   RetouchOptions,
+  VideoEntry,
   ViewHandle,
 } from "./types";
 import { createDropZone } from "./ui/drop-zone";
 import { createEditor } from "./ui/editor/editor";
 import { createGallery } from "./ui/gallery";
 import { h } from "./ui/h";
-import { exportImage, processFiles, revokeThumbnailUrl } from "./utils/image";
-import { isImageEntry, releaseVideo } from "./utils/video";
+import {
+  createThumbnailUrl,
+  exportImage,
+  generateId,
+  loadImage,
+  processFiles,
+  revokeThumbnailUrl,
+} from "./utils/image";
+import { frameFileName, isImageEntry, releaseVideo } from "./utils/video";
 
 const STATE_TRANSITIONS: Record<AppState, AppState[]> = {
   idle: ["dropzone"],
@@ -299,8 +307,43 @@ export class Retouch {
       entry,
       onDone: () => this.closeEditor(true),
       onCancel: () => this.closeEditor(false),
+      onCaptureFrame:
+        entry.kind === "video"
+          ? (canvas, time) => void this.addCapturedFrame(entry, canvas, time)
+          : undefined,
     });
     document.body.appendChild(view.root);
     this.currentView = view;
+  }
+
+  /** Turn a captured video frame into a new image entry carrying the video's visual edits. */
+  private async addCapturedFrame(
+    source: VideoEntry,
+    canvas: HTMLCanvasElement,
+    time: number,
+  ): Promise<void> {
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
+    if (!blob) return;
+    const file = new File([blob], frameFileName(source.file.name, time), { type: "image/png" });
+
+    if (this.media.size >= this.options.maxFiles) {
+      this.emitter.emit("file:rejected", { file, reason: "count" });
+      return;
+    }
+
+    const image = await loadImage(file);
+    const { crop, rotation, adjustments, filter } = structuredClone(source.edits);
+    const entry: ImageEntry = {
+      kind: "image",
+      id: generateId(),
+      file,
+      image,
+      thumbnailUrl: createThumbnailUrl(file),
+      edits: { crop, rotation, adjustments, filter },
+      edited: false,
+    };
+    this.media.set(entry.id, entry);
+    this.emitter.emit("images:add", { entries: [entry] });
+    this.emitter.emit("frame:capture", { sourceId: source.id, entry });
   }
 }

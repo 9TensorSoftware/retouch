@@ -736,6 +736,32 @@ const CSS = /* css */ `
   font-family: inherit;
 }
 
+.rt-editor__btn-capture {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--rt-radius-sm);
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--rt-transition);
+  font-family: inherit;
+}
+
+.rt-editor__btn-capture:hover {
+  border-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.9);
+}
+
+.rt-editor__btn-capture svg {
+  width: 15px;
+  height: 15px;
+}
+
 .rt-editor__btn-cancel:hover {
   border-color: rgba(255,255,255,0.25);
   color: rgba(255,255,255,0.85);

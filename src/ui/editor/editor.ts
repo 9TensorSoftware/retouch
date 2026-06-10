@@ -17,6 +17,8 @@ export interface EditorOptions {
   entry: MediaEntry;
   onDone: () => void;
   onCancel: () => void;
+  /** Video only: receives a full-resolution frame canvas and its timestamp. */
+  onCaptureFrame?: (canvas: HTMLCanvasElement, time: number) => void;
 }
 
 export function createEditor(options: EditorOptions): ViewHandle {
@@ -40,11 +42,40 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const cancelBtn = h("button", { class: "rt-editor__btn-cancel" }, "Cancel");
   const doneBtn = h("button", { class: "rt-editor__btn-done" }, "Done");
 
+  const topbarRight = h("div", { class: "rt-editor__topbar-right" });
+  if (entry.kind === "video" && options.onCaptureFrame) {
+    const captureBtn = h("button", {
+      class: "rt-editor__btn-capture",
+      title: "Capture current frame as image",
+    });
+    const captureLabel = () => {
+      captureBtn.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Capture frame</span>';
+    };
+    captureLabel();
+    let revertId = 0;
+    captureBtn.addEventListener(
+      "click",
+      () => {
+        entry.video.pause();
+        const canvas = captureFrame(entry.video);
+        options.onCaptureFrame?.(canvas, entry.video.currentTime);
+        captureBtn.innerHTML =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12.5l5 5L20 6.5"/></svg><span>Captured</span>';
+        clearTimeout(revertId);
+        revertId = window.setTimeout(captureLabel, 1400);
+      },
+      { signal },
+    );
+    topbarRight.appendChild(captureBtn);
+  }
+  topbarRight.append(cancelBtn, doneBtn);
+
   const topbar = h(
     "div",
     { class: "rt-editor__topbar" },
     h("div", { class: "rt-editor__topbar-left" }, filenameEl, dimsEl),
-    h("div", { class: "rt-editor__topbar-right" }, cancelBtn, doneBtn),
+    topbarRight,
   );
 
   // Canvas
