@@ -1,6 +1,7 @@
-import { FabricImage, filters, StaticCanvas } from "fabric";
+import { FabricImage, StaticCanvas } from "fabric";
 import { DEFAULT_EDITS } from "../constants";
 import type { ImageEdits, ImageEntry } from "../types";
+import { buildFabricFilters } from "./filters";
 
 export function generateId(): string {
   return crypto.randomUUID();
@@ -108,12 +109,8 @@ export async function exportImage(image: HTMLImageElement, edits: ImageEdits): P
     angle: rotation,
   });
 
-  // Apply the same filter mapping as CanvasRenderer
-  fabricImg.filters = [
-    new filters.Brightness({ brightness: (adjustments.brightness - 100) / 100 }),
-    new filters.Contrast({ contrast: (adjustments.contrast - 100) / 100 }),
-    new filters.Saturation({ saturation: (adjustments.saturation - 100) / 100 }),
-  ];
+  // Same filter stack as the live CanvasRenderer (preset beneath adjustments)
+  fabricImg.filters = buildFabricFilters(adjustments, edits.filter);
   fabricImg.applyFilters();
 
   exportCanvas.add(fabricImg);

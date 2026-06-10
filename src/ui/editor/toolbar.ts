@@ -21,6 +21,11 @@ const TOOLS: { id: EditorTool; label: string; icon: string }[] = [
     label: "Adjust",
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>',
   },
+  {
+    id: "filters",
+    label: "Filters",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/></svg>',
+  },
 ];
 
 export function createToolbar(options: ToolbarOptions): ToolbarHandle {

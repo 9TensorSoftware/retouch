@@ -1,5 +1,6 @@
-import { Canvas, FabricImage, filters } from "fabric";
-import type { Adjustments, ImageEdits } from "../../types";
+import { Canvas, FabricImage } from "fabric";
+import type { Adjustments, FilterPreset, ImageEdits } from "../../types";
+import { buildFabricFilters } from "../../utils/filters";
 
 export interface ImageRect {
   x: number;
@@ -15,6 +16,7 @@ export class CanvasRenderer {
   private readonly image: HTMLImageElement;
   private adjustments: Adjustments;
   private rotation = 0;
+  private filter: FilterPreset;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
 
   constructor(container: HTMLElement, image: HTMLImageElement, edits: ImageEdits) {
@@ -22,6 +24,7 @@ export class CanvasRenderer {
     this.image = image;
     this.adjustments = { ...edits.adjustments };
     this.rotation = edits.rotation;
+    this.filter = edits.filter;
 
     const canvasEl = document.createElement("canvas");
     this.container.appendChild(canvasEl);
@@ -52,6 +55,10 @@ export class CanvasRenderer {
     this.rotation = deg;
   }
 
+  setFilter(preset: FilterPreset): void {
+    this.filter = preset;
+  }
+
   getImageRect(): ImageRect {
     return { ...this.imageRect };
   }
@@ -61,15 +68,20 @@ export class CanvasRenderer {
   }
 
   render(): void {
-    const containerWidth = this.container.clientWidth || 800;
-    const containerHeight = this.container.clientHeight || 600;
+    // Measure the available area from the parent, not `this.container`: the
+    // container is sized by its content (the canvas), so measuring it here would
+    // feed each render's canvas size back into the next render's fit scale,
+    // shrinking the image by the 0.9 margin on every edit.
+    const area = this.container.parentElement;
+    const availWidth = (area?.clientWidth ?? this.container.clientWidth) || 800;
+    const availHeight = (area?.clientHeight ?? this.container.clientHeight) || 600;
 
     const imgW = this.image.naturalWidth;
     const imgH = this.image.naturalHeight;
     if (imgW === 0 || imgH === 0) return;
 
-    // Fit image to container (same logic as before)
-    const scale = Math.min((containerWidth * 0.9) / imgW, (containerHeight * 0.9) / imgH, 1);
+    // Fit image within the available area, with a small margin.
+    const scale = Math.min((availWidth * 0.9) / imgW, (availHeight * 0.9) / imgH, 1);
 
     const drawW = Math.round(imgW * scale);
     const drawH = Math.round(imgH * scale);
@@ -116,15 +128,7 @@ export class CanvasRenderer {
   }
 
   private applyFilters(): void {
-    const { brightness, contrast, saturation } = this.adjustments;
-
-    // Map 0–200 slider range (100 = neutral) to fabric's -1 to 1 range (0 = neutral)
-    this.fabricImage.filters = [
-      new filters.Brightness({ brightness: (brightness - 100) / 100 }),
-      new filters.Contrast({ contrast: (contrast - 100) / 100 }),
-      new filters.Saturation({ saturation: (saturation - 100) / 100 }),
-    ];
-
+    this.fabricImage.filters = buildFabricFilters(this.adjustments, this.filter);
     this.fabricImage.applyFilters();
   }
 }

@@ -3,6 +3,7 @@ import { h } from "../h";
 import { createAdjustTool } from "./adjust-tool";
 import { CanvasRenderer } from "./canvas-renderer";
 import { createCropTool } from "./crop-tool";
+import { createFiltersTool } from "./filters-tool";
 import { createPropertiesPanel } from "./properties-panel";
 import { createToolbar } from "./toolbar";
 
@@ -64,10 +65,22 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
   });
 
+  // Filters tool
+  const filtersTool = createFiltersTool({
+    image: entry.image,
+    filter: entry.edits.filter,
+    onChange: (filter) => {
+      entry.edits.filter = filter;
+      renderer.setFilter(filter);
+      renderer.render();
+    },
+  });
+
   // Properties panel (right side)
   const propsPanel = createPropertiesPanel({
     cropTool,
     adjustTool,
+    filtersTool,
     edits: entry.edits,
     onRotationChange: (deg) => {
       entry.edits.rotation = deg;
@@ -120,6 +133,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       abort.abort();
       cropTool.destroy();
       adjustTool.destroy();
+      filtersTool.destroy();
       propsPanel.destroy();
       toolbar.destroy();
       renderer.destroy();

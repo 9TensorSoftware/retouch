@@ -2,10 +2,12 @@ import type { AspectRatioPreset, EditorTool, ImageEdits, ViewHandle } from "../.
 import { h } from "../h";
 import type { AdjustToolHandle } from "./adjust-tool";
 import type { CropToolHandle } from "./crop-tool";
+import type { FiltersToolHandle } from "./filters-tool";
 
 export interface PropertiesPanelOptions {
   cropTool: CropToolHandle;
   adjustTool: AdjustToolHandle;
+  filtersTool: FiltersToolHandle;
   edits: ImageEdits;
   onRotationChange: (degrees: number) => void;
 }
@@ -24,7 +26,7 @@ const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
 ];
 
 export function createPropertiesPanel(options: PropertiesPanelOptions): PropertiesPanelHandle {
-  const { cropTool, adjustTool, edits, onRotationChange } = options;
+  const { cropTool, adjustTool, filtersTool, edits, onRotationChange } = options;
   const abort = new AbortController();
   const signal = abort.signal;
 
@@ -100,13 +102,18 @@ export function createPropertiesPanel(options: PropertiesPanelOptions): Properti
   // ── Adjust properties ──
   const adjustProps = adjustTool.root;
 
+  // ── Filters properties ──
+  const filtersProps = filtersTool.root;
+
   // ── Panel ──
   const content = h("div");
   content.appendChild(cropProps);
   content.appendChild(adjustProps);
+  content.appendChild(filtersProps);
 
   // Initially show crop
   adjustProps.style.display = "none";
+  filtersProps.style.display = "none";
 
   const root = h("div", { class: "rt-props" }, content);
 
@@ -115,6 +122,7 @@ export function createPropertiesPanel(options: PropertiesPanelOptions): Properti
     setActiveTool(tool) {
       cropProps.style.display = tool === "crop" ? "" : "none";
       adjustProps.style.display = tool === "adjust" ? "" : "none";
+      filtersProps.style.display = tool === "filters" ? "" : "none";
     },
     destroy() {
       abort.abort();
