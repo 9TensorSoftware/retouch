@@ -45,22 +45,30 @@ export async function exportVideo(
     const target = new mb.BufferTarget();
     const output = new mb.Output({ format, target });
 
+    // Packet copy is only safe when nothing is cut: a trimmed copy can only
+    // start on a keyframe, which silently shifts the in-point. Any real trim
+    // re-encodes for sample accuracy (without the canvas pipeline when the
+    // frames themselves are untouched).
+    const isFullRange = trim.start <= 0.001 && trim.end >= entry.duration - 0.05;
+    const videoOptions = pipeline.isIdentity
+      ? isFullRange
+        ? { codec }
+        : { codec, forceTranscode: true }
+      : {
+          codec,
+          forceTranscode: true,
+          process: (sample: Parameters<typeof pipeline.processFrame>[0]) =>
+            pipeline.processFrame(sample),
+          processedWidth: pipeline.outWidth,
+          processedHeight: pipeline.outHeight,
+        };
+
     try {
       const conversion = await mb.Conversion.init({
         input,
         output,
         trim: { start: trim.start, end: trim.end },
-        // Identity edits skip the per-frame pipeline so mediabunny can copy
-        // packets without re-encoding (fast, lossless trim).
-        video: pipeline.isIdentity
-          ? { codec }
-          : {
-              codec,
-              forceTranscode: true,
-              process: (sample) => pipeline.processFrame(sample),
-              processedWidth: pipeline.outWidth,
-              processedHeight: pipeline.outHeight,
-            },
+        video: videoOptions,
         audio: mute ? { discard: true } : undefined,
         showWarnings: false,
       });
