@@ -66,6 +66,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "fabric": "^7.2.0"
+    "fabric": "^7.2.0",
+    "mediabunny": "^1.46.0"
   }
 }

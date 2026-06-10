@@ -1,5 +1,6 @@
 import { ACCEPTED_TYPES } from "./constants";
 import { EventEmitter } from "./event-emitter";
+import { exportVideo, extensionForBlob } from "./export/video-export";
 import { StateMachine } from "./state-machine";
 import { injectStyles } from "./styles";
 import type {
@@ -50,6 +51,7 @@ export class Retouch {
 
   private currentView: ViewHandle | null = null;
   private editingImageId: string | null = null;
+  private exportAbort: AbortController | null = null;
 
   constructor(options: RetouchOptions) {
     if (typeof options.target === "string") {
@@ -185,26 +187,67 @@ export class Retouch {
   }
 
   async exportAll(): Promise<Blob[]> {
+    this.exportAbort?.abort();
+    const abort = new AbortController();
+    this.exportAbort = abort;
     const blobs: Blob[] = [];
-    for (const entry of this.media.values()) {
-      if (entry.kind === "image") {
-        blobs.push(await exportImage(entry.image, entry.edits));
-      } else {
-        // Interim until the video export pipeline lands: pass the original through.
-        blobs.push(entry.file);
+
+    try {
+      for (const entry of this.media.values()) {
+        if (abort.signal.aborted) throw new Error("[Retouch] Export canceled");
+        this.emitter.emit("export:start", { id: entry.id, kind: entry.kind });
+        try {
+          const blob =
+            entry.kind === "image"
+              ? await exportImage(entry.image, entry.edits)
+              : await this.exportVideoEntry(entry, abort.signal);
+          this.emitter.emit("export:progress", { id: entry.id, progress: 1 });
+          this.emitter.emit("export:complete", { id: entry.id, blob });
+          blobs.push(blob);
+        } catch (err) {
+          if (abort.signal.aborted) throw err;
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.emitter.emit("export:error", { id: entry.id, error });
+          // Degrade gracefully: deliver the unedited original for this entry.
+          blobs.push(entry.file);
+        }
       }
+    } finally {
+      if (this.exportAbort === abort) this.exportAbort = null;
     }
     return blobs;
   }
 
+  /** Abort an in-flight exportAll()/done() run. */
+  cancelExport(): void {
+    this.exportAbort?.abort();
+  }
+
+  private exportVideoEntry(entry: VideoEntry, signal: AbortSignal): Promise<Blob> {
+    return exportVideo(entry, {
+      signal,
+      onProgress: (progress) => {
+        this.emitter.emit("export:progress", { id: entry.id, progress });
+      },
+    });
+  }
+
   async done(): Promise<void> {
-    const blobs = await this.exportAll();
+    let blobs: Blob[];
+    try {
+      blobs = await this.exportAll();
+    } catch (err) {
+      // A canceled export ends the run without firing done.
+      if (this.exportAbort === null) return;
+      throw err;
+    }
     this.emitter.emit("done", { blobs });
     this.options.onDone?.(blobs);
   }
 
   destroy(): void {
     if (this.sm.state === "destroyed") return;
+    this.cancelExport();
     this.unmountCurrentView();
 
     for (const entry of this.media.values()) {
@@ -267,15 +310,22 @@ export class Retouch {
     const entry = this.media.get(id);
     if (!entry) return;
 
+    const stem = entry.file.name.replace(/\.[^.]+$/, "");
     let blob: Blob;
     let filename: string;
     if (entry.kind === "image") {
       blob = await exportImage(entry.image, entry.edits);
-      filename = `${entry.file.name.replace(/\.[^.]+$/, "")}.png`;
+      filename = `${stem}.png`;
     } else {
-      // Interim until the video export pipeline lands: download the original.
-      blob = entry.file;
-      filename = entry.file.name;
+      try {
+        blob = await this.exportVideoEntry(entry, new AbortController().signal);
+        filename = `${stem}.${extensionForBlob(blob)}`;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.emitter.emit("export:error", { id: entry.id, error });
+        blob = entry.file;
+        filename = entry.file.name;
+      }
     }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
