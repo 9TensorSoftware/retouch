@@ -12,14 +12,29 @@ export interface GalleryOptions {
 // SVG path data for view mode icons
 const VIEW_ICONS: { mode: GalleryViewMode; svg: string; title: string }[] = [
   {
-    mode: "grid",
-    title: "Grid",
-    svg: '<rect x="1" y="1" width="4.5" height="4.5" rx="0.5"/><rect x="7.5" y="1" width="4.5" height="4.5" rx="0.5"/><rect x="1" y="7.5" width="4.5" height="4.5" rx="0.5"/><rect x="7.5" y="7.5" width="4.5" height="4.5" rx="0.5"/>',
+    mode: "cols-2",
+    title: "2 Columns",
+    svg: '<rect x="1" y="1" width="5" height="12" rx="0.5"/><rect x="8" y="1" width="5" height="12" rx="0.5"/>',
   },
   {
-    mode: "masonry",
-    title: "Masonry",
-    svg: '<rect x="1" y="1" width="4.5" height="6" rx="0.5"/><rect x="7.5" y="1" width="4.5" height="3.5" rx="0.5"/><rect x="1" y="8.5" width="4.5" height="3.5" rx="0.5"/><rect x="7.5" y="6" width="4.5" height="6" rx="0.5"/>',
+    mode: "cols-3",
+    title: "3 Columns",
+    svg: '<rect x="0.5" y="1" width="3.5" height="12" rx="0.5"/><rect x="5.25" y="1" width="3.5" height="12" rx="0.5"/><rect x="10" y="1" width="3.5" height="12" rx="0.5"/>',
+  },
+  {
+    mode: "cols-4",
+    title: "4 Columns",
+    svg: '<rect x="0.5" y="1" width="2.5" height="12" rx="0.5"/><rect x="4" y="1" width="2.5" height="12" rx="0.5"/><rect x="7.5" y="1" width="2.5" height="12" rx="0.5"/><rect x="11" y="1" width="2.5" height="12" rx="0.5"/>',
+  },
+  {
+    mode: "width-fit",
+    title: "Width Fit",
+    svg: '<rect x="1" y="3" width="12" height="8" rx="0.5"/>',
+  },
+  {
+    mode: "height-fit",
+    title: "Height Fit",
+    svg: '<rect x="1" y="3.5" width="7" height="7" rx="0.5"/><rect x="9" y="3.5" width="4" height="7" rx="0.5"/>',
   },
   {
     mode: "list",
@@ -28,12 +43,33 @@ const VIEW_ICONS: { mode: GalleryViewMode; svg: string; title: string }[] = [
   },
 ];
 
+type GallerySize = "big" | "medium" | "small";
+
+const SIZE_ICONS: { size: GallerySize; svg: string; title: string }[] = [
+  {
+    size: "big",
+    title: "Big",
+    svg: '<rect x="1.5" y="2.5" width="11" height="9" rx="0.5"/>',
+  },
+  {
+    size: "medium",
+    title: "Medium",
+    svg: '<rect x="3" y="3.5" width="8" height="7" rx="0.5"/>',
+  },
+  {
+    size: "small",
+    title: "Small",
+    svg: '<rect x="4.5" y="5" width="5" height="4" rx="0.5"/>',
+  },
+];
+
 export function createGallery(options: GalleryOptions): ViewHandle {
   const rootAbort = new AbortController();
   const rootSignal = rootAbort.signal;
   let contentAbort: AbortController | null = null;
 
-  let currentMode: GalleryViewMode = "grid";
+  let currentMode: GalleryViewMode = "cols-3";
+  let currentSize: GallerySize = "big";
 
   // Shared hidden file input
   const input = h("input", {
@@ -77,11 +113,36 @@ export function createGallery(options: GalleryOptions): ViewHandle {
     iconBtns.push({ mode: def.mode, el: btn });
   }
 
+  // Size icon buttons
+  const sizeBtns: { size: GallerySize; el: HTMLElement }[] = [];
+  for (const def of SIZE_ICONS) {
+    const btn = h("button", {
+      class: `rt-gallery__view-btn${def.size === currentSize ? " rt-gallery__view-btn--active" : ""}`,
+      title: def.title,
+    });
+    btn.innerHTML = `<svg viewBox="0 0 14 14" fill="currentColor">${def.svg}</svg>`;
+    btn.addEventListener(
+      "click",
+      () => {
+        if (currentSize === def.size) return;
+        currentSize = def.size;
+        for (const b of sizeBtns) {
+          b.el.classList.toggle("rt-gallery__view-btn--active", b.size === currentSize);
+        }
+        root.className = `rt-gallery rt-gallery--${currentSize}`;
+      },
+      { signal: rootSignal },
+    );
+    sizeBtns.push({ size: def.size, el: btn });
+  }
+
   const toolbar = h(
     "div",
     { class: "rt-gallery__toolbar" },
-    h("div", { style: "flex:1" }), // spacer
     h("div", { class: "rt-gallery__views" }, ...iconBtns.map((b) => b.el)),
+    h("div", { style: "flex:1" }), // spacer
+    h("div", { class: "rt-gallery__toolbar-divider" }),
+    h("div", { class: "rt-gallery__views" }, ...sizeBtns.map((b) => b.el)),
   );
 
   const content = h("div", { class: "rt-gallery__content" });
@@ -93,11 +154,20 @@ export function createGallery(options: GalleryOptions): ViewHandle {
     content.innerHTML = "";
 
     switch (currentMode) {
-      case "grid":
-        renderGridView(content, options, input, signal);
+      case "cols-2":
+        renderColumnsView(content, options, input, signal, 2);
         break;
-      case "masonry":
-        renderMasonryView(content, options, input, signal);
+      case "cols-3":
+        renderColumnsView(content, options, input, signal, 3);
+        break;
+      case "cols-4":
+        renderColumnsView(content, options, input, signal, 4);
+        break;
+      case "width-fit":
+        renderWidthFitView(content, options, input, signal);
+        break;
+      case "height-fit":
+        renderHeightFitView(content, options, input, signal);
         break;
       case "list":
         renderListView(content, options, input, signal);
@@ -105,7 +175,13 @@ export function createGallery(options: GalleryOptions): ViewHandle {
     }
   }
 
-  const root = h("div", { class: "rt-gallery" }, toolbar, content, input);
+  const root = h(
+    "div",
+    { class: `rt-gallery rt-gallery--${currentSize}` },
+    toolbar,
+    content,
+    input,
+  );
   renderContent();
 
   return {
@@ -118,47 +194,68 @@ export function createGallery(options: GalleryOptions): ViewHandle {
   };
 }
 
-// ── Grid View ─────────────────────────────────
+// ── Columns View (2, 3, 4 columns) ────────────
 
-function renderGridView(
+function renderColumnsView(
   container: HTMLElement,
   options: GalleryOptions,
   input: HTMLInputElement,
   signal: AbortSignal,
+  columns: number,
 ): void {
-  const grid = h("div", { class: "rt-gallery__grid" });
+  const grid = h("div", {
+    class: `rt-gallery__cols rt-gallery__cols--${columns}`,
+  });
 
   for (const entry of options.images) {
-    grid.appendChild(createItemCard(entry, options, signal));
+    grid.appendChild(createFlowCard(entry, options, signal));
   }
 
   grid.appendChild(createAddCell(input, options, signal));
   container.appendChild(grid);
 }
 
-// ── Masonry View ──────────────────────────────
+// ── Width-Fit View (single column, full width) ─
 
-function renderMasonryView(
+function renderWidthFitView(
   container: HTMLElement,
   options: GalleryOptions,
   input: HTMLInputElement,
   signal: AbortSignal,
 ): void {
-  const masonry = h("div", { class: "rt-gallery__masonry" });
+  const stack = h("div", { class: "rt-gallery__width-fit" });
 
   for (const entry of options.images) {
-    const item = h("div", { class: "rt-gallery__masonry-item" });
+    stack.appendChild(createFlowCard(entry, options, signal));
+  }
+
+  stack.appendChild(createAddCell(input, options, signal));
+  container.appendChild(stack);
+}
+
+// ── Height-Fit View (horizontal filmstrip) ─────
+
+function renderHeightFitView(
+  container: HTMLElement,
+  options: GalleryOptions,
+  input: HTMLInputElement,
+  signal: AbortSignal,
+): void {
+  const strip = h("div", { class: "rt-gallery__height-fit" });
+
+  for (const entry of options.images) {
+    const item = h("div", { class: "rt-gallery__height-fit-item" });
     const img = h("img", { src: entry.thumbnailUrl, alt: entry.file.name });
     const status = createStatusDot(entry);
     const removeBtn = createRemoveButton(entry, item, options, signal);
     const overlay = createOverlay(entry, options, signal);
 
     item.append(img, status, removeBtn, overlay);
-    masonry.appendChild(item);
+    strip.appendChild(item);
   }
 
-  container.appendChild(masonry);
-  container.appendChild(createAddCell(input, options, signal));
+  strip.appendChild(createAddCell(input, options, signal));
+  container.appendChild(strip);
 }
 
 // ── List View ─────────────────────────────────
@@ -186,15 +283,14 @@ function renderListView(
 
 // ── Shared Helpers ────────────────────────────
 
-function createItemCard(
+function createFlowCard(
   entry: ImageEntry,
   options: GalleryOptions,
   signal: AbortSignal,
 ): HTMLElement {
+  const item = h("div", { class: "rt-gallery__flow-item", "data-id": entry.id });
   const img = h("img", { src: entry.thumbnailUrl, alt: entry.file.name });
   const status = createStatusDot(entry);
-
-  const item = h("div", { class: "rt-gallery__item", "data-id": entry.id });
   const removeBtn = createRemoveButton(entry, item, options, signal);
   const overlay = createOverlay(entry, options, signal);
 
@@ -262,6 +358,8 @@ function createRemoveButton(
     (e) => {
       e.stopPropagation();
       parentEl.remove();
+      const idx = options.images.findIndex((img) => img.id === entry.id);
+      if (idx !== -1) options.images.splice(idx, 1);
       options.onRemove(entry.id);
     },
     { signal },
@@ -281,7 +379,7 @@ function createAddCell(
       "div",
       { class: "rt-gallery__add-cell-inner" },
       createUploadIcon(),
-      h("span", null, "Drop images here or browse"),
+      h("span", null, "Drop images here or ", h("strong", null, "browse")),
     ),
   );
 
@@ -378,6 +476,8 @@ function createNameRow(
     "click",
     () => {
       row.remove();
+      const idx = options.images.findIndex((img) => img.id === entry.id);
+      if (idx !== -1) options.images.splice(idx, 1);
       options.onRemove(entry.id);
     },
     { signal },

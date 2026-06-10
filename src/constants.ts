@@ -16,6 +16,7 @@ export const DEFAULT_EDITS: ImageEdits = {
   crop: { ...DEFAULT_CROP },
   rotation: 0,
   adjustments: { ...DEFAULT_ADJUSTMENTS },
+  filter: "none",
 };
 
 export const ASPECT_RATIOS: Record<string, number | null> = {

@@ -87,6 +87,9 @@ export class Retouch {
 
     if (this.sm.state === "dropzone") {
       this.sm.transition("gallery");
+    } else if (this.sm.state === "gallery") {
+      this.unmountCurrentView();
+      this.mountGallery();
     }
   }
 

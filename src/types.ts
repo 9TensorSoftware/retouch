@@ -1,8 +1,10 @@
 export type AppState = "idle" | "dropzone" | "gallery" | "editor" | "destroyed";
 
-export type EditorTool = "crop" | "adjust";
+export type EditorTool = "crop" | "adjust" | "filters";
 
-export type GalleryViewMode = "grid" | "masonry" | "list";
+export type FilterPreset = "none" | "bw" | "sepia" | "warm" | "cool" | "vintage" | "vivid";
+
+export type GalleryViewMode = "cols-2" | "cols-3" | "cols-4" | "width-fit" | "height-fit" | "list";
 
 export type AspectRatioPreset = "free" | "16:9" | "4:3" | "1:1" | "3:2" | "9:16";
 
@@ -42,6 +44,8 @@ export interface ImageEdits {
   /** Degrees, -45 to 45. */
   rotation: number;
   adjustments: Adjustments;
+  /** Preset filter applied beneath the adjustments. */
+  filter: FilterPreset;
 }
 
 export interface ImageEntry {
