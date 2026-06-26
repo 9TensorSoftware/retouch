@@ -52,6 +52,7 @@ export class Retouch {
   > & {
     onDone?: RetouchOptions["onDone"];
     ai?: RetouchOptions["ai"];
+    export?: RetouchOptions["export"];
   };
 
   private currentView: ViewHandle | null = null;
@@ -78,6 +79,7 @@ export class Retouch {
       maxVideoDuration: options.maxVideoDuration ?? Number.POSITIVE_INFINITY,
       onDone: options.onDone,
       ai: options.ai,
+      export: options.export,
     };
 
     injectStyles();
@@ -224,7 +226,7 @@ export class Retouch {
         try {
           const blob =
             entry.kind === "image"
-              ? await exportImage(entry.image, entry.edits)
+              ? await exportImage(entry.image, entry.edits, this.options.export)
               : await this.exportVideoEntry(entry, abort.signal, overlay);
           overlay?.setComplete(entry.id);
           this.emitter.emit("export:progress", { id: entry.id, progress: 1 });
@@ -348,8 +350,9 @@ export class Retouch {
     let blob: Blob;
     let filename: string;
     if (entry.kind === "image") {
-      blob = await exportImage(entry.image, entry.edits);
-      filename = `${stem}.png`;
+      blob = await exportImage(entry.image, entry.edits, this.options.export);
+      const format = this.options.export?.format ?? "png";
+      filename = `${stem}.${format === "jpeg" ? "jpg" : format}`;
     } else {
       try {
         blob = await this.exportVideoEntry(entry, new AbortController().signal);

@@ -14,6 +14,7 @@ export type {
   GalleryViewMode,
   ImageEdits,
   ImageEntry,
+  ImageExportOptions,
   MediaEntry,
   MediaKind,
   RetouchEventMap,

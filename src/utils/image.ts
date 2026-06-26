@@ -1,6 +1,6 @@
 import { FabricImage, StaticCanvas } from "fabric";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../constants";
-import type { FileRejectionReason, ImageEdits, MediaEntry } from "../types";
+import type { FileRejectionReason, ImageEdits, ImageExportOptions, MediaEntry } from "../types";
 import { buildFabricFilters } from "./filters";
 import { capturePoster, createSeekQueue, loadVideo, releaseVideo } from "./video";
 
@@ -128,7 +128,11 @@ export async function processFiles(
   return { entries, rejected };
 }
 
-export async function exportImage(image: HTMLImageElement, edits: ImageEdits): Promise<Blob> {
+export async function exportImage(
+  image: HTMLImageElement,
+  edits: ImageEdits,
+  options: ImageExportOptions = {},
+): Promise<Blob> {
   const { crop, rotation, adjustments } = edits;
 
   // Source region in original image coordinates
@@ -180,11 +184,14 @@ export async function exportImage(image: HTMLImageElement, edits: ImageEdits): P
   exportCanvas.add(fabricImg);
   exportCanvas.renderAll();
 
-  // Export to blob
-  const dataUrl = exportCanvas.toDataURL({ format: "png", multiplier: 1 });
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
+  // Export to blob, optionally downscaling the long edge to maxDimension.
+  const format = options.format ?? "png";
+  const longEdge = Math.max(outWidth, outHeight);
+  const multiplier =
+    options.maxDimension && options.maxDimension < longEdge ? options.maxDimension / longEdge : 1;
+  const blob = await exportCanvas.toBlob({ format, quality: options.quality ?? 0.92, multiplier });
 
   exportCanvas.dispose();
+  if (!blob) throw new Error("[Retouch] Failed to export image");
   return blob;
 }

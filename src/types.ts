@@ -60,6 +60,15 @@ export type GalleryViewMode = "cols-2" | "cols-3" | "cols-4" | "width-fit" | "he
 
 export type AspectRatioPreset = "free" | "16:9" | "4:3" | "1:1" | "3:2" | "9:16";
 
+export interface ImageExportOptions {
+  /** Output format. Defaults to "png". */
+  format?: "png" | "jpeg" | "webp";
+  /** Quality 0–1 for lossy formats (jpeg/webp). Defaults to 0.92. */
+  quality?: number;
+  /** Cap the exported image's long edge in pixels. No cap by default. */
+  maxDimension?: number;
+}
+
 export interface RetouchOptions {
   /** Target DOM element or CSS selector to mount into. */
   target: string | HTMLElement;
@@ -75,6 +84,8 @@ export interface RetouchOptions {
   maxVideoDuration?: number;
   /** Enables the AI command bar in the editor when configured. */
   ai?: AiOptions;
+  /** Image export format/quality/sizing. Videos always export as MP4/WebM. */
+  export?: ImageExportOptions;
   /** Called when the user clicks Done in the gallery with all exported blobs. */
   onDone?: (blobs: Blob[]) => void;
 }
