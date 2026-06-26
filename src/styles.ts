@@ -1456,6 +1456,51 @@ const CSS = /* css */ `
   color: rgba(255,255,255,0.9);
 }
 
+/* ── Toasts ────────────────────────────────── */
+
+.rt-toasts {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.rt-toast {
+  pointer-events: auto;
+  max-width: min(440px, 90vw);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #2A2723;
+  color: rgba(255,255,255,0.92);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.rt-toast--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.rt-toast--error {
+  border-left: 3px solid #e07a6a;
+}
+
+.rt-toast--info {
+  border-left: 3px solid var(--rt-accent);
+}
+
 /* ── AI command bar ────────────────────────── */
 
 .rt-ai-bar {

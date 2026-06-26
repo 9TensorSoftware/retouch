@@ -18,6 +18,8 @@ import type { ExportOverlayHandle } from "./ui/export-overlay";
 import { createExportOverlay } from "./ui/export-overlay";
 import { createGallery } from "./ui/gallery";
 import { h } from "./ui/h";
+import type { ToastHost } from "./ui/toast";
+import { createToastHost, rejectionMessage } from "./ui/toast";
 import {
   createThumbnailUrl,
   exportImage,
@@ -55,6 +57,7 @@ export class Retouch {
   private currentView: ViewHandle | null = null;
   private editingImageId: string | null = null;
   private exportAbort: AbortController | null = null;
+  private readonly toasts: ToastHost;
 
   constructor(options: RetouchOptions) {
     if (typeof options.target === "string") {
@@ -81,6 +84,15 @@ export class Retouch {
 
     this.root = h("div", { class: "rt-root" });
     this.container.appendChild(this.root);
+
+    // Default feedback for rejected files and failed exports.
+    this.toasts = createToastHost();
+    this.emitter.on("file:rejected", ({ file, reason }) => {
+      this.toasts.show(rejectionMessage(file.name, reason), "error");
+    });
+    this.emitter.on("export:error", ({ error }) => {
+      this.toasts.show(error.message.replace("[Retouch] ", ""), "error");
+    });
 
     this.sm = new StateMachine<AppState>("idle", STATE_TRANSITIONS);
     this.sm.onChange(({ to }) => {
@@ -280,6 +292,7 @@ export class Retouch {
     }
     this.media.clear();
 
+    this.toasts.destroy();
     this.root.remove();
     this.sm.transition("destroyed");
     this.sm.destroy();
