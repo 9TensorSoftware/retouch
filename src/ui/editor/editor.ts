@@ -33,6 +33,8 @@ const UNDO_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-1"/></svg>';
 const REDO_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 7l5 5-5 5M20 12H9a5 5 0 000 10h1"/></svg>';
+const EYE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
 
 /** True for elements that own text-editing keystrokes (so global shortcuts skip them). */
 function isTextInput(target: EventTarget | null): boolean {
@@ -130,10 +132,24 @@ export function createEditor(options: EditorOptions): ViewHandle {
   }
   topbarRight.append(cancelBtn, doneBtn);
 
+  const compareBtn = h("button", {
+    class: "rt-editor__icon-btn",
+    title: "Hold to compare with the original",
+    "aria-label": "Compare with original",
+  });
+  compareBtn.innerHTML = EYE_ICON;
+  const resetBtn = h("button", { class: "rt-editor__text-btn", title: "Reset all edits" }, "Reset");
+
   const topbar = h(
     "div",
     { class: "rt-editor__topbar" },
-    h("div", { class: "rt-editor__topbar-left" }, filenameEl, dimsEl),
+    h(
+      "div",
+      { class: "rt-editor__topbar-left" },
+      filenameEl,
+      dimsEl,
+      h("div", { class: "rt-editor__actions" }, compareBtn, resetBtn),
+    ),
     topbarRight,
   );
 
@@ -285,6 +301,50 @@ export function createEditor(options: EditorOptions): ViewHandle {
   undoBtn.addEventListener("click", () => history?.undo(), { signal });
   redoBtn.addEventListener("click", () => history?.redo(), { signal });
   transport?.onTrimChange(recordEdit);
+
+  // ── Compare (hold) + reset ──
+
+  let comparing = false;
+  function startCompare(): void {
+    if (comparing) return;
+    comparing = true;
+    cropTool.setVisible(false);
+    renderer.setAdjustments(DEFAULT_EDITS.adjustments);
+    renderer.setFilter(DEFAULT_EDITS.filter);
+    renderer.setRotation(DEFAULT_EDITS.rotation);
+    renderer.render();
+  }
+  function endCompare(): void {
+    if (!comparing) return;
+    comparing = false;
+    renderer.setAdjustments(entry.edits.adjustments);
+    renderer.setFilter(entry.edits.filter);
+    renderer.setRotation(entry.edits.rotation);
+    renderer.render();
+    cropTool.setVisible(activeTool === "crop");
+  }
+  compareBtn.addEventListener(
+    "pointerdown",
+    (e) => {
+      e.preventDefault();
+      compareBtn.setPointerCapture(e.pointerId);
+      startCompare();
+    },
+    { signal },
+  );
+  compareBtn.addEventListener("pointerup", endCompare, { signal });
+  compareBtn.addEventListener("pointercancel", endCompare, { signal });
+
+  function resetEdits(): void {
+    const defaults =
+      entry.kind === "video"
+        ? createDefaultVideoEdits(entry.duration)
+        : structuredClone(DEFAULT_EDITS);
+    Object.assign(entry.edits, defaults);
+    syncToolsFromEdits();
+    history?.record();
+  }
+  resetBtn.addEventListener("click", resetEdits, { signal });
 
   // ── AI command bar ──
 
