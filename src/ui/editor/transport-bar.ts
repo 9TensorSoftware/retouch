@@ -22,6 +22,8 @@ export interface TransportBarHandle extends ViewHandle {
   setTrimEditable(editable: boolean): void;
   /** Reposition trim visuals after an external change (e.g. reset). */
   setTrim(range: TrimRange): void;
+  /** Sync the mute button + element after an external change. */
+  setMuted(mute: boolean): void;
   /** Subscribe to handle-drag trim changes. Returns unsubscribe. */
   onTrimChange(fn: (range: TrimRange) => void): () => void;
 }
@@ -325,6 +327,10 @@ export function createTransportBar(options: TransportBarOptions): TransportBarHa
       edits.trim.start = clamped.start;
       edits.trim.end = clamped.end;
       notifyTrim();
+    },
+    setMuted(mute) {
+      video.muted = mute;
+      muteBtn.innerHTML = mute ? MUTED_ICON : SOUND_ICON;
     },
     onTrimChange(fn) {
       trimListeners.add(fn);

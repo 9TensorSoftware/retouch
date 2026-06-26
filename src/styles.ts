@@ -762,6 +762,41 @@ const CSS = /* css */ `
   height: 15px;
 }
 
+.rt-editor__history {
+  display: flex;
+  gap: 2px;
+  margin-right: 4px;
+}
+
+.rt-editor__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--rt-radius-sm);
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: var(--rt-transition);
+}
+
+.rt-editor__icon-btn:hover:not([disabled]) {
+  border-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.95);
+}
+
+.rt-editor__icon-btn[disabled] {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.rt-editor__icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
 .rt-editor__btn-cancel:hover {
   border-color: rgba(255,255,255,0.25);
   color: rgba(255,255,255,0.85);

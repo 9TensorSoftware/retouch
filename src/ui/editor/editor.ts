@@ -1,8 +1,18 @@
 import type { AiContext } from "../../ai/interpreter";
 import { interpretCommand } from "../../ai/interpreter";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../../constants";
-import type { AiEditOps, AiOptions, EditorTool, MediaEntry, ViewHandle } from "../../types";
+import type {
+  AiEditOps,
+  AiOptions,
+  EditorTool,
+  ImageEdits,
+  MediaEntry,
+  VideoEdits,
+  ViewHandle,
+} from "../../types";
 import { createCanvas } from "../../utils/canvas";
+import type { HistoryController } from "../../utils/history";
+import { createHistory } from "../../utils/history";
 import type { SeekQueue } from "../../utils/video";
 import { captureFrame, createSeekQueue, formatDuration } from "../../utils/video";
 import { h } from "../h";
@@ -18,6 +28,18 @@ import type { TransportBarHandle } from "./transport-bar";
 import { createTransportBar } from "./transport-bar";
 import type { TrimToolHandle } from "./trim-tool";
 import { createTrimTool } from "./trim-tool";
+
+const UNDO_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-1"/></svg>';
+const REDO_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 7l5 5-5 5M20 12H9a5 5 0 000 10h1"/></svg>';
+
+/** True for elements that own text-editing keystrokes (so global shortcuts skip them). */
+function isTextInput(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+}
 
 export type EditorAiEvent =
   | { type: "start"; prompt: string }
@@ -42,6 +64,15 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   // Snapshot edits so cancel can restore them
   const editSnapshot = structuredClone(entry.edits);
+
+  // Undo/redo plumbing. `recordEdit` is wired into every tool's onChange;
+  // `suppressRecord` blocks it while we sync the UI from a restored snapshot.
+  let suppressRecord = false;
+  let history: HistoryController | null = null;
+  const recordEdit = (): void => {
+    if (!suppressRecord) history?.record();
+  };
+
   const tools: EditorTool[] =
     entry.kind === "video" ? ["trim", "crop", "adjust", "filters"] : ["crop", "adjust", "filters"];
   let activeTool: EditorTool = tools[0];
@@ -56,7 +87,21 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const cancelBtn = h("button", { class: "rt-editor__btn-cancel" }, "Cancel");
   const doneBtn = h("button", { class: "rt-editor__btn-done" }, "Done");
 
-  const topbarRight = h("div", { class: "rt-editor__topbar-right" });
+  const undoBtn = h("button", {
+    class: "rt-editor__icon-btn",
+    title: "Undo (⌘/Ctrl+Z)",
+    "aria-label": "Undo",
+  });
+  undoBtn.innerHTML = UNDO_ICON;
+  const redoBtn = h("button", {
+    class: "rt-editor__icon-btn",
+    title: "Redo (⌘/Ctrl+⇧Z)",
+    "aria-label": "Redo",
+  });
+  redoBtn.innerHTML = REDO_ICON;
+  const historyGroup = h("div", { class: "rt-editor__history" }, undoBtn, redoBtn);
+
+  const topbarRight = h("div", { class: "rt-editor__topbar-right" }, historyGroup);
   if (entry.kind === "video" && options.onCaptureFrame) {
     const captureBtn = h("button", {
       class: "rt-editor__btn-capture",
@@ -118,6 +163,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       videoHeight: entry.height,
       onMuteChange: (mute) => {
         videoEdits.mute = mute;
+        recordEdit();
       },
     });
     trimTool = createTrimTool({
@@ -137,6 +183,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     onChange: (crop) => {
       entry.edits.crop = crop;
       renderer.render();
+      recordEdit();
     },
   });
 
@@ -147,6 +194,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.adjustments = adj;
       renderer.setAdjustments(adj);
       renderer.render();
+      recordEdit();
     },
   });
 
@@ -158,6 +206,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.filter = filter;
       renderer.setFilter(filter);
       renderer.render();
+      recordEdit();
     },
   });
 
@@ -172,6 +221,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.rotation = deg;
       renderer.setRotation(deg);
       renderer.render();
+      recordEdit();
     },
   });
 
@@ -192,6 +242,53 @@ export function createEditor(options: EditorOptions): ViewHandle {
   transport?.setTrimEditable(activeTool === "trim");
   propsPanel.setActiveTool(activeTool);
 
+  // ── Undo / redo ──
+
+  /** Push the current edit state into every tool UI + the renderer. */
+  function syncToolsFromEdits(): void {
+    suppressRecord = true;
+    renderer.setAdjustments(entry.edits.adjustments);
+    renderer.setRotation(entry.edits.rotation);
+    renderer.setFilter(entry.edits.filter);
+    adjustTool.setAdjustments(entry.edits.adjustments);
+    filtersTool.setFilter(entry.edits.filter);
+    propsPanel.setRotation(entry.edits.rotation);
+    cropTool.setCrop(entry.edits.crop);
+    if (entry.kind === "video") {
+      transport?.setTrim(entry.edits.trim);
+      transport?.setMuted(entry.edits.mute);
+    }
+    renderer.render();
+    suppressRecord = false;
+  }
+
+  history = createHistory<ImageEdits | VideoEdits>({
+    snapshot: () => structuredClone(entry.edits),
+    restore: (state) => {
+      entry.edits.crop = { ...state.crop };
+      entry.edits.rotation = state.rotation;
+      entry.edits.adjustments = { ...state.adjustments };
+      entry.edits.filter = state.filter;
+      if (entry.kind === "video" && "trim" in state) {
+        const v = entry.edits as VideoEdits;
+        v.trim = { ...state.trim };
+        v.mute = state.mute;
+      }
+      syncToolsFromEdits();
+    },
+  });
+
+  function syncHistoryButtons(): void {
+    undoBtn.toggleAttribute("disabled", !history?.canUndo());
+    redoBtn.toggleAttribute("disabled", !history?.canRedo());
+  }
+  history.onChange(syncHistoryButtons);
+  syncHistoryButtons();
+
+  undoBtn.addEventListener("click", () => history?.undo(), { signal });
+  redoBtn.addEventListener("click", () => history?.redo(), { signal });
+  transport?.onTrimChange(recordEdit);
+
   // ── AI command bar ──
 
   /** Apply validated AI ops through the same setters the manual tools use. */
@@ -210,27 +307,18 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (ops.rotation !== undefined) entry.edits.rotation = ops.rotation;
     if (ops.crop) entry.edits.crop = { ...ops.crop };
     if (entry.kind === "video") {
-      const range = ops.trim ?? (ops.reset ? entry.edits.trim : undefined);
-      if (range) transport?.setTrim(range);
-      if (ops.mute !== undefined) {
-        entry.edits.mute = ops.mute;
-        entry.video.muted = ops.mute;
-      }
+      const v = entry.edits as VideoEdits;
+      if (ops.trim) v.trim = { ...ops.trim };
+      if (ops.mute !== undefined) v.mute = ops.mute;
     }
 
-    // Sync renderer + tool UIs
-    renderer.setAdjustments(entry.edits.adjustments);
-    renderer.setRotation(entry.edits.rotation);
-    renderer.setFilter(entry.edits.filter);
-    adjustTool.setAdjustments(entry.edits.adjustments);
-    filtersTool.setFilter(entry.edits.filter);
-    propsPanel.setRotation(entry.edits.rotation);
+    syncToolsFromEdits();
     if (ops.aspect) {
+      // setAspectRatio recomputes the crop and records via its own onChange.
       cropTool.setAspectRatio(ops.aspect);
     } else {
-      cropTool.setCrop(entry.edits.crop);
+      history?.record();
     }
-    renderer.render();
   }
 
   /** Downscaled JPEG of the current frame for content-aware commands. */
@@ -320,6 +408,25 @@ export function createEditor(options: EditorOptions): ViewHandle {
     { signal },
   );
 
+  // ── Keyboard shortcuts ──
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && (e.key === "z" || e.key === "Z")) {
+        if (isTextInput(e.target)) return;
+        e.preventDefault();
+        if (e.shiftKey) history?.redo();
+        else history?.undo();
+      } else if (mod && (e.key === "y" || e.key === "Y")) {
+        if (isTextInput(e.target)) return;
+        e.preventDefault();
+        history?.redo();
+      }
+    },
+    { signal },
+  );
+
   // Initial render
   renderer.render();
 
@@ -328,6 +435,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     destroy() {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();
+      history?.destroy();
       aiBar?.destroy();
       trimTool?.destroy();
       transport?.destroy();
