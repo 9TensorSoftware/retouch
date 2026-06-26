@@ -687,6 +687,10 @@ const CSS = /* css */ `
   flex-direction: column;
 }
 
+.rt-editor-overlay:focus {
+  outline: none;
+}
+
 .rt-editor__topbar {
   display: flex;
   align-items: center;

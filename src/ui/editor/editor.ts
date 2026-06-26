@@ -225,22 +225,19 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
   });
 
+  /** Apply a tool's side effects (crop overlay visibility, panel section). */
+  function selectTool(tool: EditorTool): void {
+    activeTool = tool;
+    cropTool.setVisible(tool === "crop");
+    transport?.setTrimEditable(tool === "trim");
+    propsPanel.setActiveTool(tool);
+  }
+
   // Toolbar (left side)
-  const toolbar = createToolbar({
-    tools,
-    activeTool,
-    onToolChange: (tool) => {
-      activeTool = tool;
-      cropTool.setVisible(tool === "crop");
-      transport?.setTrimEditable(tool === "trim");
-      propsPanel.setActiveTool(tool);
-    },
-  });
+  const toolbar = createToolbar({ tools, activeTool, onToolChange: selectTool });
 
   // Sync initial tool state (video opens on Trim, image on Crop).
-  cropTool.setVisible(activeTool === "crop");
-  transport?.setTrimEditable(activeTool === "trim");
-  propsPanel.setActiveTool(activeTool);
+  selectTool(activeTool);
 
   // ── Undo / redo ──
 
@@ -387,45 +384,112 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const rootChildren: HTMLElement[] = [topbar];
   if (aiBar) rootChildren.push(aiBar.root);
   rootChildren.push(body);
-  const root = h("div", { class: "rt-editor-overlay" }, ...rootChildren);
+  const root = h(
+    "div",
+    {
+      class: "rt-editor-overlay",
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-label": `Editing ${entry.file.name}`,
+      tabindex: -1,
+    },
+    ...rootChildren,
+  );
 
   // Button handlers
-  cancelBtn.addEventListener(
-    "click",
-    () => {
-      // Restore snapshot
-      Object.assign(entry.edits, editSnapshot);
-      onCancel();
-    },
-    { signal },
-  );
+  function cancel(): void {
+    Object.assign(entry.edits, editSnapshot);
+    onCancel();
+  }
+  cancelBtn.addEventListener("click", cancel, { signal });
+  doneBtn.addEventListener("click", () => onDone(), { signal });
 
-  doneBtn.addEventListener(
-    "click",
-    () => {
-      onDone();
-    },
-    { signal },
-  );
+  // ── Keyboard shortcuts + focus trap ──
+  function focusables(): HTMLElement[] {
+    return Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => el.offsetParent !== null);
+  }
 
-  // ── Keyboard shortcuts ──
   document.addEventListener(
     "keydown",
     (e) => {
       const mod = e.metaKey || e.ctrlKey;
+      const inText = isTextInput(e.target);
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (inText) (e.target as HTMLElement).blur();
+        else cancel();
+        return;
+      }
+      if (mod && e.key === "Enter") {
+        e.preventDefault();
+        onDone();
+        return;
+      }
       if (mod && (e.key === "z" || e.key === "Z")) {
-        if (isTextInput(e.target)) return;
+        if (inText) return;
         e.preventDefault();
         if (e.shiftKey) history?.redo();
         else history?.undo();
-      } else if (mod && (e.key === "y" || e.key === "Y")) {
-        if (isTextInput(e.target)) return;
+        return;
+      }
+      if (mod && (e.key === "y" || e.key === "Y")) {
+        if (inText) return;
         e.preventDefault();
         history?.redo();
+        return;
+      }
+      if (mod) return; // leave other ⌘/Ctrl combos to the browser
+
+      if (e.key === "Tab") {
+        const items = focusables();
+        if (items.length === 0) {
+          e.preventDefault();
+          root.focus();
+          return;
+        }
+        const first = items[0];
+        const last = items[items.length - 1];
+        const active = document.activeElement;
+        if (!root.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        } else if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+
+      if (inText) return;
+
+      const num = Number(e.key);
+      if (Number.isInteger(num) && num >= 1 && num <= tools.length) {
+        e.preventDefault();
+        const tool = tools[num - 1];
+        toolbar.setActiveTool(tool);
+        selectTool(tool);
+        return;
+      }
+      if (e.key === " " && transport && (e.target as HTMLElement).tagName !== "BUTTON") {
+        e.preventDefault();
+        transport.togglePlay();
       }
     },
     { signal },
   );
+
+  // Move focus into the modal once the caller has attached it.
+  requestAnimationFrame(() => {
+    if (!signal.aborted) root.focus();
+  });
 
   // Initial render
   renderer.render();

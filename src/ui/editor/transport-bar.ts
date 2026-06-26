@@ -24,6 +24,8 @@ export interface TransportBarHandle extends ViewHandle {
   setTrim(range: TrimRange): void;
   /** Sync the mute button + element after an external change. */
   setMuted(mute: boolean): void;
+  /** Toggle play/pause (keyboard shortcut). */
+  togglePlay(): void;
   /** Subscribe to handle-drag trim changes. Returns unsubscribe. */
   onTrimChange(fn: (range: TrimRange) => void): () => void;
 }
@@ -53,10 +55,14 @@ export function createTransportBar(options: TransportBarOptions): TransportBarHa
 
   // ── Controls ──
 
-  const playBtn = h("button", { class: "rt-video-bar__btn", title: "Play/Pause (Space)" });
+  const playBtn = h("button", {
+    class: "rt-video-bar__btn",
+    title: "Play/Pause (Space)",
+    "aria-label": "Play/pause",
+  });
   playBtn.innerHTML = PLAY_ICON;
 
-  const muteBtn = h("button", { class: "rt-video-bar__btn", title: "Mute" });
+  const muteBtn = h("button", { class: "rt-video-bar__btn", title: "Mute", "aria-label": "Mute" });
   video.muted = edits.mute;
   muteBtn.innerHTML = edits.mute ? MUTED_ICON : SOUND_ICON;
 
@@ -331,6 +337,10 @@ export function createTransportBar(options: TransportBarOptions): TransportBarHa
     setMuted(mute) {
       video.muted = mute;
       muteBtn.innerHTML = mute ? MUTED_ICON : SOUND_ICON;
+    },
+    togglePlay() {
+      if (video.paused) play();
+      else video.pause();
     },
     onTrimChange(fn) {
       trimListeners.add(fn);
