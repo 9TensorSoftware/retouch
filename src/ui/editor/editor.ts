@@ -546,9 +546,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
     { signal },
   );
 
-  // Move focus into the modal once the caller has attached it.
-  requestAnimationFrame(() => {
-    if (!signal.aborted) root.focus();
+  // Move focus into the modal once the caller has attached it. A microtask
+  // runs right after the synchronous mount (and isn't throttled in hidden tabs
+  // the way requestAnimationFrame is).
+  queueMicrotask(() => {
+    if (!signal.aborted && root.isConnected) root.focus();
   });
 
   // Initial render

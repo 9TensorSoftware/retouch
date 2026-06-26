@@ -185,6 +185,29 @@ via `baseUrl` or `complete` in production. Events: `ai:start`, `ai:applied`,
 
 <br />
 
+## Editing UX
+
+The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap, focus moves in on open):
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl+Z` · `Cmd/Ctrl+Shift+Z` | Undo · redo (also toolbar buttons) |
+| `Esc` | Cancel · `Cmd/Ctrl+Enter` | Done |
+| `1`–`4` | Switch tool · `Space` | Play/pause (video) |
+
+Plus **hold-to-compare** with the original, **Reset** to clear all edits, and **toasts** for rejected files (the `file:rejected` event still fires for custom handling).
+
+**Export options** — choose the image output format and sizing (videos always export MP4/WebM):
+
+```ts
+new Retouch({
+  target: "#editor",
+  export: { format: "jpeg", quality: 0.85, maxDimension: 2048 },
+});
+```
+
+<br />
+
 ## API
 
 ### `RetouchEditor` Props
