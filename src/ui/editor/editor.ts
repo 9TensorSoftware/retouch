@@ -111,7 +111,23 @@ export function createEditor(options: EditorOptions): ViewHandle {
   redoBtn.innerHTML = REDO_ICON;
   const historyGroup = h("div", { class: "rt-editor__history" }, undoBtn, redoBtn);
 
-  const topbarRight = h("div", { class: "rt-editor__topbar-right" }, historyGroup);
+  const compareBtn = h("button", {
+    class: "rt-editor__icon-btn",
+    title: "Hold to compare with the original",
+    "aria-label": "Compare with original",
+  });
+  compareBtn.innerHTML = EYE_ICON;
+  const resetBtn = h("button", { class: "rt-editor__text-btn", title: "Reset all edits" }, "Reset");
+
+  const divider = () => h("div", { class: "rt-editor__divider" });
+  const topbarRight = h(
+    "div",
+    { class: "rt-editor__topbar-right" },
+    historyGroup,
+    divider(),
+    compareBtn,
+    resetBtn,
+  );
   if (entry.kind === "video" && options.onCaptureFrame) {
     const captureBtn = h("button", {
       class: "rt-editor__btn-capture",
@@ -138,26 +154,12 @@ export function createEditor(options: EditorOptions): ViewHandle {
     );
     topbarRight.appendChild(captureBtn);
   }
-  topbarRight.append(cancelBtn, doneBtn);
-
-  const compareBtn = h("button", {
-    class: "rt-editor__icon-btn",
-    title: "Hold to compare with the original",
-    "aria-label": "Compare with original",
-  });
-  compareBtn.innerHTML = EYE_ICON;
-  const resetBtn = h("button", { class: "rt-editor__text-btn", title: "Reset all edits" }, "Reset");
+  topbarRight.append(divider(), cancelBtn, doneBtn);
 
   const topbar = h(
     "div",
     { class: "rt-editor__topbar" },
-    h(
-      "div",
-      { class: "rt-editor__topbar-left" },
-      filenameEl,
-      dimsEl,
-      h("div", { class: "rt-editor__actions" }, compareBtn, resetBtn),
-    ),
+    h("div", { class: "rt-editor__topbar-left" }, filenameEl, dimsEl),
     topbarRight,
   );
 

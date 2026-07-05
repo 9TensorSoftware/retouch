@@ -29,9 +29,9 @@ export function getStoredAiKey(): string | null {
 }
 
 /**
- * Floating AI entry point: a sparkle button hovering over the canvas that
- * expands into a pill-shaped prompt when summoned (click or ⌘K), and gets out
- * of the way otherwise.
+ * Floating AI entry point: a labeled "✦ Ask AI ⌘K" pill hovering over the
+ * canvas that expands into a prompt input when summoned (click or ⌘K), and
+ * gets out of the way otherwise.
  */
 export function createAiFab(options: AiFabOptions): AiFabHandle {
   const abort = new AbortController();
@@ -46,7 +46,7 @@ export function createAiFab(options: AiFabOptions): AiFabHandle {
     title: "Ask AI (⌘K)",
     "aria-label": "Ask AI to edit",
   });
-  trigger.innerHTML = SPARKLE_ICON;
+  trigger.innerHTML = `${SPARKLE_ICON}<span>Ask AI</span><kbd class="rt-ai-fab__kbd">⌘K</kbd>`;
 
   const icon = h("span", { class: "rt-ai-fab__icon" });
   icon.innerHTML = SPARKLE_ICON;

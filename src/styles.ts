@@ -1,7 +1,9 @@
 const STYLE_ID = "rt-styles";
 
 const CSS = /* css */ `
-.rt-root {
+/* Tokens live on every mount point — .rt-root plus the overlays that attach
+   straight to <body> (editor, export progress, toasts). */
+.rt-root, .rt-editor-overlay, .rt-export-overlay, .rt-toasts {
   --rt-bg: #F7F5F2;
   --rt-bg-elevated: #FFFFFF;
   --rt-bg-subtle: #EEEAE5;
@@ -10,10 +12,15 @@ const CSS = /* css */ `
   --rt-text: #1A1815;
   --rt-text-secondary: #6B6560;
   --rt-text-tertiary: #9E9890;
-  --rt-accent: #D4572A;
-  --rt-accent-hover: #BF4D24;
-  --rt-accent-soft: rgba(212, 87, 42, 0.08);
-  --rt-accent-glow: rgba(212, 87, 42, 0.15);
+  --rt-accent: #E8703C;
+  --rt-accent-hover: #D4572A;
+  --rt-accent-soft: rgba(232, 112, 60, 0.1);
+  --rt-accent-glow: rgba(232, 112, 60, 0.16);
+  /* Editor (dark) chrome — neutral grays, Lightroom-style stage/panel split */
+  --rt-dark-stage: #171717;
+  --rt-dark-chrome: #232323;
+  --rt-dark-elevated: #2E2E2E;
+  --rt-dark-line: rgba(255,255,255,0.08);
   --rt-shadow-sm: 0 1px 3px rgba(26,24,21,0.06);
   --rt-shadow-md: 0 4px 16px rgba(26,24,21,0.08);
   --rt-shadow-lg: 0 12px 48px rgba(26,24,21,0.12);
@@ -24,14 +31,20 @@ const CSS = /* css */ `
   --rt-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  color: var(--rt-text);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+.rt-root {
+  color: var(--rt-text);
   position: relative;
   width: 100%;
 }
 
-.rt-root *, .rt-root *::before, .rt-root *::after {
+.rt-root *, .rt-root *::before, .rt-root *::after,
+.rt-editor-overlay *, .rt-editor-overlay *::before, .rt-editor-overlay *::after,
+.rt-export-overlay *, .rt-export-overlay *::before, .rt-export-overlay *::after,
+.rt-toasts *, .rt-toasts *::before, .rt-toasts *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -682,7 +695,7 @@ const CSS = /* css */ `
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #1A1815;
+  background: var(--rt-dark-chrome, #232323);
   display: flex;
   flex-direction: column;
 }
@@ -695,10 +708,18 @@ const CSS = /* css */ `
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
-  background: #222019;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  height: 48px;
+  padding: 0 14px;
+  background: var(--rt-dark-chrome, #232323);
+  border-bottom: 1px solid var(--rt-dark-line);
   flex-shrink: 0;
+}
+
+.rt-editor__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--rt-dark-line);
+  margin: 0 6px;
 }
 
 .rt-editor__topbar-left {
@@ -724,15 +745,15 @@ const CSS = /* css */ `
 .rt-editor__topbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
 }
 
 .rt-editor__btn-cancel {
-  padding: 7px 16px;
-  border: 1px solid rgba(255,255,255,0.12);
+  padding: 7px 14px;
+  border: none;
   border-radius: var(--rt-radius-sm);
   background: transparent;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.65);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -744,11 +765,11 @@ const CSS = /* css */ `
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 14px;
-  border: 1px solid rgba(255,255,255,0.12);
+  padding: 7px 12px;
+  border: none;
   border-radius: var(--rt-radius-sm);
   background: transparent;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.65);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -757,8 +778,8 @@ const CSS = /* css */ `
 }
 
 .rt-editor__btn-capture:hover {
-  border-color: rgba(255,255,255,0.3);
-  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.95);
 }
 
 .rt-editor__btn-capture svg {
@@ -772,19 +793,12 @@ const CSS = /* css */ `
   margin-right: 4px;
 }
 
-.rt-editor__actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 4px;
-}
-
 .rt-editor__text-btn {
   padding: 6px 12px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: none;
   border-radius: var(--rt-radius-sm);
   background: transparent;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.65);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -793,12 +807,12 @@ const CSS = /* css */ `
 }
 
 .rt-editor__text-btn:hover {
-  border-color: rgba(255,255,255,0.3);
-  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.95);
 }
 
 .rt-editor__icon-btn.rt-editor__icon-btn--active {
-  border-color: var(--rt-accent);
+  background: var(--rt-accent-glow);
   color: var(--rt-accent);
 }
 
@@ -806,18 +820,18 @@ const CSS = /* css */ `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid rgba(255,255,255,0.12);
+  width: 30px;
+  height: 30px;
+  border: none;
   border-radius: var(--rt-radius-sm);
   background: transparent;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255,255,255,0.65);
   cursor: pointer;
   transition: var(--rt-transition);
 }
 
 .rt-editor__icon-btn:hover:not([disabled]) {
-  border-color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.08);
   color: rgba(255,255,255,0.95);
 }
 
@@ -832,8 +846,8 @@ const CSS = /* css */ `
 }
 
 .rt-editor__btn-cancel:hover {
-  border-color: rgba(255,255,255,0.25);
-  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.95);
 }
 
 .rt-editor__btn-done {
@@ -863,12 +877,12 @@ const CSS = /* css */ `
 
 .rt-toolbar {
   width: 64px;
-  background: #1E1C18;
-  border-right: 1px solid rgba(255,255,255,0.06);
+  background: var(--rt-dark-chrome, #232323);
+  border-right: 1px solid var(--rt-dark-line);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 0;
+  padding: 12px 0;
   gap: 4px;
   flex-shrink: 0;
 }
@@ -896,7 +910,7 @@ const CSS = /* css */ `
 }
 
 .rt-toolbar__btn--active {
-  background: rgba(212, 87, 42, 0.15);
+  background: var(--rt-accent-glow);
   color: var(--rt-accent);
 }
 
@@ -932,12 +946,7 @@ const CSS = /* css */ `
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background:
-    repeating-conic-gradient(
-      rgba(255,255,255,0.03) 0% 25%,
-      transparent 0% 50%
-    )
-    0 0 / 24px 24px;
+  background: var(--rt-dark-stage, #171717);
 }
 
 .rt-editor__canvas-container {
@@ -1022,9 +1031,9 @@ const CSS = /* css */ `
 
 .rt-props {
   width: 260px;
-  background: #1E1C18;
-  border-left: 1px solid rgba(255,255,255,0.06);
-  padding: 20px 16px;
+  background: var(--rt-dark-chrome, #232323);
+  border-left: 1px solid var(--rt-dark-line);
+  padding: 18px 16px;
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -1090,10 +1099,10 @@ const CSS = /* css */ `
 
 .rt-props__aspect-btn {
   padding: 8px 4px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: none;
   border-radius: var(--rt-radius-sm);
-  background: transparent;
-  color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.55);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -1103,13 +1112,12 @@ const CSS = /* css */ `
 }
 
 .rt-props__aspect-btn:hover {
-  border-color: rgba(255,255,255,0.2);
-  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.9);
 }
 
 .rt-props__aspect-btn--active {
-  border-color: var(--rt-accent);
-  background: rgba(212, 87, 42, 0.12);
+  background: var(--rt-accent-glow);
   color: var(--rt-accent);
 }
 
@@ -1137,17 +1145,17 @@ const CSS = /* css */ `
   align-items: center;
   justify-content: center;
   height: 32px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: none;
   border-radius: var(--rt-radius-sm);
-  background: transparent;
+  background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.6);
   cursor: pointer;
   transition: var(--rt-transition);
 }
 
 .rt-props__transform-btn:hover {
-  border-color: rgba(255,255,255,0.25);
-  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.95);
 }
 
 .rt-props__transform-btn svg {
@@ -1256,9 +1264,9 @@ const CSS = /* css */ `
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
-  background: #1E1C18;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 8px 14px;
+  background: var(--rt-dark-stage, #171717);
+  border-top: 1px solid var(--rt-dark-line);
   flex-shrink: 0;
 }
 
@@ -1302,9 +1310,9 @@ const CSS = /* css */ `
   min-width: 44px;
   height: 30px;
   padding: 0 8px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: none;
   border-radius: var(--rt-radius-sm);
-  background: transparent;
+  background: rgba(255,255,255,0.08);
   color: rgba(255,255,255,0.7);
   font-size: 12px;
   font-weight: 500;
@@ -1315,7 +1323,7 @@ const CSS = /* css */ `
 }
 
 .rt-video-bar__speed:hover {
-  border-color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.16);
   color: rgba(255,255,255,0.95);
 }
 
@@ -1326,8 +1334,8 @@ const CSS = /* css */ `
   right: 0;
   z-index: 10;
   flex-direction: column;
-  background: #2A2723;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--rt-dark-elevated, #2E2E2E);
+  border: 1px solid var(--rt-dark-line);
   border-radius: 8px;
   padding: 4px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
@@ -1392,7 +1400,7 @@ const CSS = /* css */ `
   position: absolute;
   top: 0;
   bottom: 0;
-  background: rgba(10,9,8,0.72);
+  background: rgba(0,0,0,0.7);
   pointer-events: none;
 }
 
@@ -1473,7 +1481,7 @@ const CSS = /* css */ `
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: rgba(10,9,8,0.8);
+  background: rgba(0,0,0,0.75);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -1482,8 +1490,8 @@ const CSS = /* css */ `
 
 .rt-export-overlay__card {
   width: min(420px, 90vw);
-  background: #1E1C18;
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--rt-dark-elevated, #2E2E2E);
+  border: 1px solid var(--rt-dark-line);
   border-radius: 12px;
   padding: 24px;
   color: #fff;
@@ -1577,7 +1585,7 @@ const CSS = /* css */ `
   max-width: min(440px, 90vw);
   padding: 10px 16px;
   border-radius: 8px;
-  background: #2A2723;
+  background: var(--rt-dark-elevated, #2E2E2E);
   color: rgba(255,255,255,0.92);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 13px;
@@ -1617,29 +1625,46 @@ const CSS = /* css */ `
 }
 
 .rt-ai-fab__trigger {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(26,24,21,0.85);
-  color: var(--rt-accent);
-  cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(30,30,30,0.88);
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
   box-shadow: 0 4px 20px rgba(0,0,0,0.45);
   backdrop-filter: blur(8px);
   transition: var(--rt-transition);
 }
 
 .rt-ai-fab__trigger:hover {
-  transform: scale(1.07);
-  border-color: var(--rt-accent);
+  border-color: rgba(255,255,255,0.3);
+  background: rgba(40,40,40,0.92);
+  color: #fff;
 }
 
 .rt-ai-fab__trigger svg {
-  width: 20px;
-  height: 20px;
+  width: 15px;
+  height: 15px;
+  color: var(--rt-accent);
+}
+
+.rt-ai-fab__kbd {
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.45);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.2;
 }
 
 .rt-ai-fab--open .rt-ai-fab__trigger {
@@ -1654,7 +1679,7 @@ const CSS = /* css */ `
   padding: 6px 6px 6px 14px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(26,24,21,0.92);
+  background: rgba(30,30,30,0.92);
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   backdrop-filter: blur(12px);
 }
@@ -1732,7 +1757,7 @@ const CSS = /* css */ `
   max-width: min(520px, 78vw);
   padding: 6px 14px;
   border-radius: 10px;
-  background: rgba(42,39,35,0.95);
+  background: rgba(46,46,46,0.95);
   color: rgba(255,255,255,0.85);
   font-size: 12px;
   line-height: 1.4;
@@ -1749,8 +1774,8 @@ const CSS = /* css */ `
 
 .rt-ai-fab__popover {
   width: min(460px, 78vw);
-  background: #1E1C18;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--rt-dark-elevated, #2E2E2E);
+  border: 1px solid var(--rt-dark-line);
   border-radius: 12px;
   padding: 14px;
   box-shadow: 0 8px 30px rgba(0,0,0,0.4);
