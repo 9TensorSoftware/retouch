@@ -2,6 +2,7 @@ import { FabricImage, StaticCanvas } from "fabric";
 import type { ImageEdits } from "../types";
 import { createCanvas } from "../utils/canvas";
 import { buildFabricFilters, drawVignette, isNeutral } from "../utils/filters";
+import { applySourceTransform, orientedDims } from "../utils/transform";
 
 /**
  * Long-edge cap for exported video. Stays under fabric's default WebGL
@@ -49,13 +50,14 @@ export function createFramePipeline(
   srcWidth: number,
   srcHeight: number,
 ): FramePipeline {
-  const { crop, rotation, adjustments, filter, filterStrength } = edits;
+  const { crop, rotation, orientation, flipH, flipV, adjustments, filter, filterStrength } = edits;
 
-  // Source crop region in pixels
-  const sx = crop.x * srcWidth;
-  const sy = crop.y * srcHeight;
-  const sw = Math.max(1, crop.width * srcWidth);
-  const sh = Math.max(1, crop.height * srcHeight);
+  // Crop region in oriented (rotated/flipped) source pixels
+  const { width: orientedW, height: orientedH } = orientedDims(srcWidth, srcHeight, orientation);
+  const sx = crop.x * orientedW;
+  const sy = crop.y * orientedH;
+  const sw = Math.max(1, crop.width * orientedW);
+  const sh = Math.max(1, crop.height * orientedH);
 
   // Cap output resolution
   const k = Math.min(EXPORT_MAX_DIM / sw, EXPORT_MAX_DIM / sh, 1);
@@ -69,6 +71,7 @@ export function createFramePipeline(
   const outW = even(cropW * cos + cropH * sin);
   const outH = even(cropH * cos + cropW * sin);
 
+  const untransformed = orientation === 0 && !flipH && !flipV;
   const neutralVisual =
     isNeutral(adjustments, filter, filterStrength) && adjustments.vignette === 0 && rotation === 0;
   const fullFrame = crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
@@ -76,6 +79,17 @@ export function createFramePipeline(
   const cropCanvas = createCanvas(cropW, cropH);
   const cropCtx = cropCanvas.getContext("2d");
   if (!cropCtx) throw new Error("[Retouch] Failed to create export crop context");
+  // The orientation/flip/crop transform is fixed for the pipeline's lifetime.
+  applySourceTransform(cropCtx, {
+    sourceWidth: srcWidth,
+    sourceHeight: srcHeight,
+    orientation,
+    flipH,
+    flipV,
+    scale: k,
+    offsetX: sx * k,
+    offsetY: sy * k,
+  });
 
   // fabric is only involved when rotation or filters actually apply
   let staticCanvas: StaticCanvas | null = null;
@@ -106,9 +120,19 @@ export function createFramePipeline(
   return {
     outWidth: neutralVisual ? cropW : outW,
     outHeight: neutralVisual ? cropH : outH,
-    isIdentity: neutralVisual && fullFrame && k === 1,
+    isIdentity: neutralVisual && fullFrame && untransformed && k === 1,
     processFrame(sample) {
-      sample.draw(cropCtx, sx, sy, sw, sh, 0, 0, cropW, cropH);
+      sample.draw(
+        cropCtx,
+        0,
+        0,
+        srcWidth,
+        srcHeight,
+        -srcWidth / 2,
+        -srcHeight / 2,
+        srcWidth,
+        srcHeight,
+      );
       if (neutralVisual || !staticCanvas || !fabricImg) return cropCanvas;
       fabricImg.applyFilters();
       staticCanvas.renderAll();

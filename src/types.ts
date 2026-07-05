@@ -18,6 +18,9 @@ export type FilterPreset =
 
 export type MediaKind = "image" | "video";
 
+/** Coarse rotation applied to the source before cropping, clockwise degrees. */
+export type Orientation = 0 | 90 | 180 | 270;
+
 export interface TrimRange {
   /** Seconds from media start, >= 0. */
   start: number;
@@ -141,9 +144,16 @@ export interface Adjustments {
 }
 
 export interface ImageEdits {
+  /** Normalized over the oriented (rotated/flipped) source. */
   crop: CropRect;
-  /** Degrees, -45 to 45. */
+  /** Fine straighten angle in degrees, -45 to 45, applied after crop. */
   rotation: number;
+  /** 90°-step rotation applied to the source before cropping. */
+  orientation: Orientation;
+  /** Mirror the source horizontally (before orientation). */
+  flipH: boolean;
+  /** Mirror the source vertically (before orientation). */
+  flipV: boolean;
   adjustments: Adjustments;
   /** Preset filter applied beneath the adjustments. */
   filter: FilterPreset;

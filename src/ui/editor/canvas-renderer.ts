@@ -1,8 +1,9 @@
 import { Canvas, FabricImage } from "fabric";
-import { PREVIEW_MAX_DIM } from "../../constants";
-import type { Adjustments, FilterPreset, ImageEdits } from "../../types";
+import { IMAGE_PREVIEW_MAX_DIM, PREVIEW_MAX_DIM } from "../../constants";
+import type { Adjustments, FilterPreset, ImageEdits, Orientation } from "../../types";
 import { createCanvas } from "../../utils/canvas";
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
+import { applySourceTransform, orientedDims } from "../../utils/transform";
 
 export interface ImageRect {
   x: number;
@@ -21,19 +22,25 @@ export class CanvasRenderer {
   private readonly fabricCanvas: Canvas;
   private readonly fabricImage: FabricImage;
   private readonly container: HTMLElement;
+  private readonly source: RenderSource;
   private readonly video: HTMLVideoElement | null;
   /**
-   * Video frames are copied into this capped-size canvas and fabric wraps the
-   * canvas, not the element. That bounds per-frame filter cost, stays inside
-   * the WebGL texture limit, and keeps crop-overlay math source-agnostic.
+   * Every source renders through this capped intermediate canvas: it bounds
+   * per-frame filter cost, stays inside the WebGL texture limit, and bakes
+   * the orientation/flip transform in so crop-overlay math stays
+   * source-agnostic.
    */
-  private readonly frameCanvas: HTMLCanvasElement | null;
-  private readonly frameCtx: CanvasRenderingContext2D | null;
-  private readonly sourceWidth: number;
-  private readonly sourceHeight: number;
+  private frameCanvas: HTMLCanvasElement;
+  private frameCtx: CanvasRenderingContext2D;
+  private readonly rawWidth: number;
+  private readonly rawHeight: number;
+  private readonly previewCap: number;
   private readonly abort = new AbortController();
   private adjustments: Adjustments;
   private rotation = 0;
+  private orientation: Orientation;
+  private flipH: boolean;
+  private flipV: boolean;
   private filter: FilterPreset;
   private filterStrength: number;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
@@ -41,32 +48,31 @@ export class CanvasRenderer {
 
   constructor(container: HTMLElement, source: RenderSource, edits: ImageEdits) {
     this.container = container;
+    this.source = source;
     this.adjustments = { ...edits.adjustments };
     this.rotation = edits.rotation;
+    this.orientation = edits.orientation;
+    this.flipH = edits.flipH;
+    this.flipV = edits.flipV;
     this.filter = edits.filter;
     this.filterStrength = edits.filterStrength;
 
     this.video = "videoWidth" in source ? source : null;
     if (this.video) {
-      this.sourceWidth = this.video.videoWidth;
-      this.sourceHeight = this.video.videoHeight;
-      const cap = Math.min(
-        PREVIEW_MAX_DIM / this.sourceWidth,
-        PREVIEW_MAX_DIM / this.sourceHeight,
-        1,
-      );
-      this.frameCanvas = createCanvas(
-        Math.max(1, Math.round(this.sourceWidth * cap)),
-        Math.max(1, Math.round(this.sourceHeight * cap)),
-      );
-      this.frameCtx = this.frameCanvas.getContext("2d");
-      this.drawFrame();
+      this.rawWidth = this.video.videoWidth;
+      this.rawHeight = this.video.videoHeight;
+      this.previewCap = PREVIEW_MAX_DIM;
     } else {
-      this.sourceWidth = (source as HTMLImageElement).naturalWidth;
-      this.sourceHeight = (source as HTMLImageElement).naturalHeight;
-      this.frameCanvas = null;
-      this.frameCtx = null;
+      const image = source as HTMLImageElement;
+      this.rawWidth = image.naturalWidth;
+      this.rawHeight = image.naturalHeight;
+      this.previewCap = IMAGE_PREVIEW_MAX_DIM;
     }
+
+    const { canvas, ctx } = this.buildFrameCanvas();
+    this.frameCanvas = canvas;
+    this.frameCtx = ctx;
+    this.drawFrame();
 
     const canvasEl = document.createElement("canvas");
     this.container.appendChild(canvasEl);
@@ -77,23 +83,23 @@ export class CanvasRenderer {
       skipTargetFind: true,
     });
 
-    this.fabricImage = new FabricImage(this.frameCanvas ?? (source as HTMLImageElement), {
+    this.fabricImage = new FabricImage(this.frameCanvas, {
       selectable: false,
       evented: false,
       hasControls: false,
       hasBorders: false,
       originX: "center",
       originY: "center",
-      ...(this.video ? { objectCaching: false } : {}),
+      objectCaching: false,
     });
 
     this.fabricCanvas.add(this.fabricImage);
 
     // Vignette is a 2D pass over the composed frame, not a fabric filter.
-    this.fabricCanvas.on("after:render", ({ ctx }) => {
-      if (this.adjustments.vignette > 0 && ctx) {
+    this.fabricCanvas.on("after:render", ({ ctx: renderCtx }) => {
+      if (this.adjustments.vignette > 0 && renderCtx) {
         const el = this.fabricCanvas.getElement();
-        drawVignette(ctx, el.width, el.height, this.adjustments.vignette);
+        drawVignette(renderCtx, el.width, el.height, this.adjustments.vignette);
       }
     });
 
@@ -142,6 +148,20 @@ export class CanvasRenderer {
     this.filterStrength = strength;
   }
 
+  /** Update orientation/mirroring; the frame canvas is rebuilt to the new dims. */
+  setTransform(orientation: Orientation, flipH: boolean, flipV: boolean): void {
+    this.orientation = orientation;
+    this.flipH = flipH;
+    this.flipV = flipV;
+    const { width, height } = this.frameDims();
+    if (this.frameCanvas.width !== width || this.frameCanvas.height !== height) {
+      this.frameCanvas.width = width;
+      this.frameCanvas.height = height;
+      this.fabricImage.set({ width, height });
+    }
+    this.drawFrame();
+  }
+
   getImageRect(): ImageRect {
     return { ...this.imageRect };
   }
@@ -159,30 +179,23 @@ export class CanvasRenderer {
     const availWidth = (area?.clientWidth ?? this.container.clientWidth) || 800;
     const availHeight = (area?.clientHeight ?? this.container.clientHeight) || 600;
 
-    if (this.sourceWidth === 0 || this.sourceHeight === 0) return;
+    const { width: sourceW, height: sourceH } = this.orientedSize();
+    if (sourceW === 0 || sourceH === 0) return;
 
-    // Fit the source within the available area, with a small margin.
-    const scale = Math.min(
-      (availWidth * 0.9) / this.sourceWidth,
-      (availHeight * 0.9) / this.sourceHeight,
-      1,
-    );
+    // Fit the oriented source within the available area, with a small margin.
+    const scale = Math.min((availWidth * 0.9) / sourceW, (availHeight * 0.9) / sourceH, 1);
 
-    const drawW = Math.round(this.sourceWidth * scale);
-    const drawH = Math.round(this.sourceHeight * scale);
+    const drawW = Math.round(sourceW * scale);
+    const drawH = Math.round(sourceH * scale);
 
     // Size the fabric canvas to the drawn image dimensions
     this.fabricCanvas.setDimensions({ width: drawW, height: drawH });
 
-    // The fabric element may be the capped frame canvas rather than the source.
-    const elementW = this.frameCanvas?.width ?? this.sourceWidth;
-    const elementH = this.frameCanvas?.height ?? this.sourceHeight;
-
     this.fabricImage.set({
       left: drawW / 2,
       top: drawH / 2,
-      scaleX: drawW / elementW,
-      scaleY: drawH / elementH,
+      scaleX: drawW / this.frameCanvas.width,
+      scaleY: drawH / this.frameCanvas.height,
       angle: this.rotation,
     });
 
@@ -195,7 +208,7 @@ export class CanvasRenderer {
 
   /** Redraw the current frame (and re-filter it when filters are active). */
   renderFrame(): void {
-    if (this.video) this.drawFrame();
+    this.drawFrame();
     if (!isNeutral(this.adjustments, this.filter, this.filterStrength)) {
       this.fabricImage.applyFilters();
     }
@@ -226,9 +239,49 @@ export class CanvasRenderer {
     this.fabricCanvas.dispose();
   }
 
+  /** Oriented source dimensions (raw, uncapped). */
+  private orientedSize(): { width: number; height: number } {
+    return orientedDims(this.rawWidth, this.rawHeight, this.orientation);
+  }
+
+  private frameDims(): { width: number; height: number } {
+    const { width, height } = this.orientedSize();
+    const cap = Math.min(this.previewCap / width, this.previewCap / height, 1);
+    return {
+      width: Math.max(1, Math.round(width * cap)),
+      height: Math.max(1, Math.round(height * cap)),
+    };
+  }
+
+  private buildFrameCanvas(): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+    const { width, height } = this.frameDims();
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("[Retouch] Failed to create preview frame context");
+    return { canvas, ctx };
+  }
+
   private drawFrame(): void {
-    if (!this.video || !this.frameCtx || !this.frameCanvas) return;
-    this.frameCtx.drawImage(this.video, 0, 0, this.frameCanvas.width, this.frameCanvas.height);
+    const { width: orientedW } = this.orientedSize();
+    const scale = this.frameCanvas.width / orientedW;
+    const ctx = this.frameCtx;
+    ctx.save();
+    applySourceTransform(ctx, {
+      sourceWidth: this.rawWidth,
+      sourceHeight: this.rawHeight,
+      orientation: this.orientation,
+      flipH: this.flipH,
+      flipV: this.flipV,
+      scale,
+    });
+    ctx.drawImage(
+      this.source,
+      -this.rawWidth / 2,
+      -this.rawHeight / 2,
+      this.rawWidth,
+      this.rawHeight,
+    );
+    ctx.restore();
   }
 
   private startLoop(): void {

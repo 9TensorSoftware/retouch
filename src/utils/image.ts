@@ -2,6 +2,7 @@ import { FabricImage, StaticCanvas } from "fabric";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../constants";
 import type { FileRejectionReason, ImageEdits, ImageExportOptions, MediaEntry } from "../types";
 import { buildFabricFilters, drawVignette } from "./filters";
+import { applySourceTransform, orientedDims } from "./transform";
 import { capturePoster, createSeekQueue, loadVideo, releaseVideo } from "./video";
 
 export function generateId(): string {
@@ -133,28 +134,42 @@ export async function exportImage(
   edits: ImageEdits,
   options: ImageExportOptions = {},
 ): Promise<Blob> {
-  const { crop, rotation, adjustments } = edits;
+  const { crop, rotation, orientation, flipH, flipV, adjustments } = edits;
 
-  // Source region in original image coordinates
-  const sx = crop.x * image.naturalWidth;
-  const sy = crop.y * image.naturalHeight;
-  const sw = crop.width * image.naturalWidth;
-  const sh = crop.height * image.naturalHeight;
+  // Crop region in oriented (rotated/flipped) source coordinates
+  const rawW = image.naturalWidth;
+  const rawH = image.naturalHeight;
+  const { width: orientedW, height: orientedH } = orientedDims(rawW, rawH, orientation);
+  const sx = crop.x * orientedW;
+  const sy = crop.y * orientedH;
+  const sw = crop.width * orientedW;
+  const sh = crop.height * orientedH;
 
-  // Calculate output dimensions accounting for rotation
+  // Calculate output dimensions accounting for the fine rotation
   const radians = (rotation * Math.PI) / 180;
   const cos = Math.abs(Math.cos(radians));
   const sin = Math.abs(Math.sin(radians));
   const outWidth = Math.round(sw * cos + sh * sin);
   const outHeight = Math.round(sh * cos + sw * sin);
 
-  // Extract the crop region onto a temp canvas
+  // Extract the oriented crop region onto a temp canvas
   const cropCanvas = document.createElement("canvas");
   cropCanvas.width = sw;
   cropCanvas.height = sh;
   const cropCtx = cropCanvas.getContext("2d");
   if (!cropCtx) throw new Error("[Retouch] Failed to create crop canvas context");
-  cropCtx.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
+  applySourceTransform(cropCtx, {
+    sourceWidth: rawW,
+    sourceHeight: rawH,
+    orientation,
+    flipH,
+    flipV,
+    scale: 1,
+    offsetX: sx,
+    offsetY: sy,
+  });
+  cropCtx.drawImage(image, -rawW / 2, -rawH / 2, rawW, rawH);
+  cropCtx.setTransform(1, 0, 0, 1, 0, 0);
 
   // Load the cropped region as an image for fabric
   const croppedImg = new Image();

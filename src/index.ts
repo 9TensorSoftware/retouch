@@ -17,6 +17,7 @@ export type {
   ImageExportOptions,
   MediaEntry,
   MediaKind,
+  Orientation,
   RetouchEventMap,
   RetouchOptions,
   TrimRange,

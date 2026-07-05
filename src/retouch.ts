@@ -433,14 +433,15 @@ export class Retouch {
     }
 
     const image = await loadImage(file);
-    const { crop, rotation, adjustments, filter, filterStrength } = structuredClone(source.edits);
+    const { crop, rotation, orientation, flipH, flipV, adjustments, filter, filterStrength } =
+      structuredClone(source.edits);
     const entry: ImageEntry = {
       kind: "image",
       id: generateId(),
       file,
       image,
       thumbnailUrl: createThumbnailUrl(file),
-      edits: { crop, rotation, adjustments, filter, filterStrength },
+      edits: { crop, rotation, orientation, flipH, flipV, adjustments, filter, filterStrength },
       edited: false,
     };
     this.media.set(entry.id, entry);

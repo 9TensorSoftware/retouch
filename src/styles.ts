@@ -1126,6 +1126,35 @@ const CSS = /* css */ `
   margin-bottom: 16px;
 }
 
+.rt-props__transform {
+  display: flex;
+  gap: 6px;
+}
+
+.rt-props__transform-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--rt-radius-sm);
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  transition: var(--rt-transition);
+}
+
+.rt-props__transform-btn:hover {
+  border-color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.9);
+}
+
+.rt-props__transform-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
 .rt-props__subtitle {
   font-size: 10px;
   font-weight: 600;

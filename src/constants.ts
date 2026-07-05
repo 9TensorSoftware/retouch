@@ -12,6 +12,9 @@ export const MIN_TRIM_DURATION = 0.1;
 /** Long-edge cap for the editor's video preview canvas. */
 export const PREVIEW_MAX_DIM = 1280;
 
+/** Long-edge cap for the editor's image preview canvas (static — filtered per edit, not per frame). */
+export const IMAGE_PREVIEW_MAX_DIM = 2048;
+
 export const FILMSTRIP_THUMB_HEIGHT = 48;
 export const FILMSTRIP_MAX_THUMBS = 20;
 
@@ -35,6 +38,9 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
 export const DEFAULT_EDITS: ImageEdits = {
   crop: { ...DEFAULT_CROP },
   rotation: 0,
+  orientation: 0,
+  flipH: false,
+  flipV: false,
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   filter: "none",
   filterStrength: 100,

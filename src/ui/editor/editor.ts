@@ -13,6 +13,13 @@ import type {
 import { createCanvas } from "../../utils/canvas";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
+import {
+  flipCropX,
+  flipCropY,
+  rotateCropCCW,
+  rotateCropCW,
+  rotateOrientation,
+} from "../../utils/transform";
 import type { SeekQueue } from "../../utils/video";
 import { captureFrame, createSeekQueue, formatDuration } from "../../utils/video";
 import { h } from "../h";
@@ -22,6 +29,7 @@ import { createAiBar, getStoredAiKey } from "./ai-bar";
 import { CanvasRenderer } from "./canvas-renderer";
 import { createCropTool } from "./crop-tool";
 import { createFiltersTool } from "./filters-tool";
+import type { TransformOp } from "./properties-panel";
 import { createPropertiesPanel } from "./properties-panel";
 import { createToolbar } from "./toolbar";
 import type { TransportBarHandle } from "./transport-bar";
@@ -233,6 +241,32 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
   });
 
+  /** Rotate/flip in display space, remapping the crop so it tracks the content. */
+  function applyTransformOp(op: TransformOp): void {
+    const e = entry.edits;
+    if (op === "rotate-cw") {
+      e.orientation = rotateOrientation(e.orientation, 1);
+      e.crop = rotateCropCW(e.crop);
+    } else if (op === "rotate-ccw") {
+      e.orientation = rotateOrientation(e.orientation, -1);
+      e.crop = rotateCropCCW(e.crop);
+    } else if (op === "flip-h") {
+      // A screen-space horizontal flip mirrors the source's other axis when
+      // the source is rotated onto its side.
+      if (e.orientation % 180 === 0) e.flipH = !e.flipH;
+      else e.flipV = !e.flipV;
+      e.crop = flipCropX(e.crop);
+    } else {
+      if (e.orientation % 180 === 0) e.flipV = !e.flipV;
+      else e.flipH = !e.flipH;
+      e.crop = flipCropY(e.crop);
+    }
+    renderer.setTransform(e.orientation, e.flipH, e.flipV);
+    cropTool.setCrop(e.crop);
+    renderer.render();
+    recordEdit();
+  }
+
   // Properties panel (right side)
   const propsPanel = createPropertiesPanel({
     cropTool,
@@ -246,6 +280,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       renderer.render();
       recordEdit();
     },
+    onTransform: applyTransformOp,
   });
 
   /** Apply a tool's side effects (crop overlay visibility, panel section). */
@@ -269,6 +304,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     suppressRecord = true;
     renderer.setAdjustments(entry.edits.adjustments);
     renderer.setRotation(entry.edits.rotation);
+    renderer.setTransform(entry.edits.orientation, entry.edits.flipH, entry.edits.flipV);
     renderer.setFilter(entry.edits.filter);
     renderer.setFilterStrength(entry.edits.filterStrength);
     adjustTool.setAdjustments(entry.edits.adjustments);

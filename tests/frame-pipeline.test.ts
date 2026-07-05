@@ -40,7 +40,7 @@ describe("frame pipeline geometry", () => {
     p.dispose();
   });
 
-  it("processFrame draws the crop region through the identity fast path", () => {
+  it("processFrame draws the full source through the crop transform", () => {
     const edits = createDefaultVideoEdits(5);
     edits.crop = { x: 0.5, y: 0, width: 0.5, height: 1 };
     const p = createFramePipeline(edits, 200, 100);
@@ -52,9 +52,10 @@ describe("frame pipeline geometry", () => {
     };
     const result = p.processFrame(sample);
     expect(result).toBeInstanceOf(HTMLCanvasElement);
+    // The crop is realized by the canvas transform + the 100px-wide target,
+    // so the sample is asked for its full 200×100 frame.
     expect(result.width).toBe(100);
-    // draw(sx, sy, sw, sh, dx, dy, dw, dh) — source crop starts at x=100
-    expect(calls[0].slice(0, 4)).toEqual([100, 0, 100, 100]);
+    expect(calls[0].slice(0, 4)).toEqual([0, 0, 200, 100]);
     p.dispose();
   });
 });

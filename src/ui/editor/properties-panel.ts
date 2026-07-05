@@ -5,6 +5,8 @@ import type { CropToolHandle } from "./crop-tool";
 import type { FiltersToolHandle } from "./filters-tool";
 import type { TrimToolHandle } from "./trim-tool";
 
+export type TransformOp = "rotate-ccw" | "rotate-cw" | "flip-h" | "flip-v";
+
 export interface PropertiesPanelOptions {
   cropTool: CropToolHandle;
   adjustTool: AdjustToolHandle;
@@ -13,6 +15,7 @@ export interface PropertiesPanelOptions {
   trimTool?: TrimToolHandle;
   edits: ImageEdits;
   onRotationChange: (degrees: number) => void;
+  onTransform: (op: TransformOp) => void;
 }
 
 export interface PropertiesPanelHandle extends ViewHandle {
@@ -30,10 +33,48 @@ const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
   { id: "9:16", label: "9:16" },
 ];
 
+const TRANSFORM_BUTTONS: { op: TransformOp; label: string; icon: string }[] = [
+  {
+    op: "rotate-ccw",
+    label: "Rotate left",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10a8 8 0 108-8"/><path d="M4 3v7h7"/></svg>',
+  },
+  {
+    op: "rotate-cw",
+    label: "Rotate right",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 10a8 8 0 10-8-8"/><path d="M20 3v7h-7"/></svg>',
+  },
+  {
+    op: "flip-h",
+    label: "Flip horizontal",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2v20M8 7H4v10h4zM16 7h4v10h-4z"/></svg>',
+  },
+  {
+    op: "flip-v",
+    label: "Flip vertical",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12h20M7 8V4h10v4zM7 16v4h10v-4z"/></svg>',
+  },
+];
+
 export function createPropertiesPanel(options: PropertiesPanelOptions): PropertiesPanelHandle {
-  const { cropTool, adjustTool, filtersTool, trimTool, edits, onRotationChange } = options;
+  const { cropTool, adjustTool, filtersTool, trimTool, edits, onRotationChange, onTransform } =
+    options;
   const abort = new AbortController();
   const signal = abort.signal;
+
+  // ── Transform buttons ──
+
+  const transformRow = h("div", { class: "rt-props__transform" });
+  for (const def of TRANSFORM_BUTTONS) {
+    const btn = h("button", {
+      class: "rt-props__transform-btn",
+      title: def.label,
+      "aria-label": def.label,
+    });
+    btn.innerHTML = def.icon;
+    btn.addEventListener("click", () => onTransform(def.op), { signal });
+    transformRow.appendChild(btn);
+  }
 
   // ── Crop properties ──
 
@@ -89,6 +130,12 @@ export function createPropertiesPanel(options: PropertiesPanelOptions): Properti
     "div",
     null,
     h("div", { class: "rt-props__title" }, "Crop"),
+    h(
+      "div",
+      { class: "rt-props__row" },
+      h("div", { class: "rt-props__label" }, "Transform"),
+      transformRow,
+    ),
     h(
       "div",
       { class: "rt-props__row" },
