@@ -1121,8 +1121,18 @@ const CSS = /* css */ `
 
 .rt-props__filters-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+  margin-bottom: 16px;
+}
+
+.rt-props__subtitle {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+  margin: 14px 0 10px;
 }
 
 .rt-props__filter-btn {

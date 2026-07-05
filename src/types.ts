@@ -2,7 +2,19 @@ export type AppState = "idle" | "dropzone" | "gallery" | "editor" | "destroyed";
 
 export type EditorTool = "trim" | "crop" | "adjust" | "filters";
 
-export type FilterPreset = "none" | "bw" | "sepia" | "warm" | "cool" | "vintage" | "vivid";
+export type FilterPreset =
+  | "none"
+  | "bw"
+  | "sepia"
+  | "warm"
+  | "cool"
+  | "vivid"
+  | "vintage"
+  | "kodachrome"
+  | "technicolor"
+  | "polaroid"
+  | "brownie"
+  | "invert";
 
 export type MediaKind = "image" | "video";
 
@@ -108,6 +120,24 @@ export interface Adjustments {
   contrast: number;
   /** 0–200, default 100. */
   saturation: number;
+  /** -100–100 (≈ ±2 EV), default 0. */
+  exposure: number;
+  /** -100 (cool) – 100 (warm), default 0. */
+  temperature: number;
+  /** -100 (green) – 100 (magenta), default 0. */
+  tint: number;
+  /** Hue rotation in degrees, -180–180, default 0. */
+  hue: number;
+  /** -100–100, default 0. Boosts muted colors more than saturated ones. */
+  vibrance: number;
+  /** 0–100, default 0. */
+  sharpen: number;
+  /** 0–100, default 0. */
+  blur: number;
+  /** Film grain, 0–100, default 0. */
+  grain: number;
+  /** Edge darkening, 0–100, default 0. */
+  vignette: number;
 }
 
 export interface ImageEdits {
@@ -117,6 +147,8 @@ export interface ImageEdits {
   adjustments: Adjustments;
   /** Preset filter applied beneath the adjustments. */
   filter: FilterPreset;
+  /** Preset intensity, 0–100. */
+  filterStrength: number;
 }
 
 export interface VideoEdits extends ImageEdits {

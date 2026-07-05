@@ -218,9 +218,16 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const filtersTool = createFiltersTool({
     image: entry.kind === "video" ? captureFrame(entry.video, 240) : entry.image,
     filter: entry.edits.filter,
+    strength: entry.edits.filterStrength,
     onChange: (filter) => {
       entry.edits.filter = filter;
       renderer.setFilter(filter);
+      renderer.render();
+      recordEdit();
+    },
+    onStrengthChange: (strength) => {
+      entry.edits.filterStrength = strength;
+      renderer.setFilterStrength(strength);
       renderer.render();
       recordEdit();
     },
@@ -263,8 +270,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setAdjustments(entry.edits.adjustments);
     renderer.setRotation(entry.edits.rotation);
     renderer.setFilter(entry.edits.filter);
+    renderer.setFilterStrength(entry.edits.filterStrength);
     adjustTool.setAdjustments(entry.edits.adjustments);
     filtersTool.setFilter(entry.edits.filter);
+    filtersTool.setStrength(entry.edits.filterStrength);
     propsPanel.setRotation(entry.edits.rotation);
     cropTool.setCrop(entry.edits.crop);
     if (entry.kind === "video") {

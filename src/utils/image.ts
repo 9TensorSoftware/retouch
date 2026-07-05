@@ -1,7 +1,7 @@
 import { FabricImage, StaticCanvas } from "fabric";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../constants";
 import type { FileRejectionReason, ImageEdits, ImageExportOptions, MediaEntry } from "../types";
-import { buildFabricFilters } from "./filters";
+import { buildFabricFilters, drawVignette } from "./filters";
 import { capturePoster, createSeekQueue, loadVideo, releaseVideo } from "./video";
 
 export function generateId(): string {
@@ -178,20 +178,29 @@ export async function exportImage(
   });
 
   // Same filter stack as the live CanvasRenderer (preset beneath adjustments)
-  fabricImg.filters = buildFabricFilters(adjustments, edits.filter);
+  fabricImg.filters = buildFabricFilters(adjustments, edits.filter, edits.filterStrength);
   fabricImg.applyFilters();
 
   exportCanvas.add(fabricImg);
   exportCanvas.renderAll();
 
-  // Export to blob, optionally downscaling the long edge to maxDimension.
+  // Render to a plain canvas (fabric's toBlob would re-render and drop the
+  // vignette pass), optionally downscaling the long edge to maxDimension.
   const format = options.format ?? "png";
   const longEdge = Math.max(outWidth, outHeight);
   const multiplier =
     options.maxDimension && options.maxDimension < longEdge ? options.maxDimension / longEdge : 1;
-  const blob = await exportCanvas.toBlob({ format, quality: options.quality ?? 0.92, multiplier });
-
+  const outCanvas = exportCanvas.toCanvasElement(multiplier);
   exportCanvas.dispose();
+
+  if (adjustments.vignette > 0) {
+    const outCtx = outCanvas.getContext("2d");
+    if (outCtx) drawVignette(outCtx, outCanvas.width, outCanvas.height, adjustments.vignette);
+  }
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    outCanvas.toBlob(resolve, `image/${format}`, options.quality ?? 0.92),
+  );
   if (!blob) throw new Error("[Retouch] Failed to export image");
   return blob;
 }

@@ -14,77 +14,128 @@ export interface AdjustToolHandle {
   destroy(): void;
 }
 
+interface SliderDef {
+  key: keyof Adjustments;
+  label: string;
+  min: number;
+  max: number;
+  neutral: number;
+}
+
+const GROUPS: { title: string; sliders: SliderDef[] }[] = [
+  {
+    title: "Light",
+    sliders: [
+      { key: "exposure", label: "Exposure", min: -100, max: 100, neutral: 0 },
+      { key: "brightness", label: "Brightness", min: 0, max: 200, neutral: 100 },
+      { key: "contrast", label: "Contrast", min: 0, max: 200, neutral: 100 },
+    ],
+  },
+  {
+    title: "Color",
+    sliders: [
+      { key: "temperature", label: "Temperature", min: -100, max: 100, neutral: 0 },
+      { key: "tint", label: "Tint", min: -100, max: 100, neutral: 0 },
+      { key: "hue", label: "Hue", min: -180, max: 180, neutral: 0 },
+      { key: "saturation", label: "Saturation", min: 0, max: 200, neutral: 100 },
+      { key: "vibrance", label: "Vibrance", min: -100, max: 100, neutral: 0 },
+    ],
+  },
+  {
+    title: "Effects",
+    sliders: [
+      { key: "sharpen", label: "Sharpen", min: 0, max: 100, neutral: 0 },
+      { key: "blur", label: "Blur", min: 0, max: 100, neutral: 0 },
+      { key: "grain", label: "Grain", min: 0, max: 100, neutral: 0 },
+      { key: "vignette", label: "Vignette", min: 0, max: 100, neutral: 0 },
+    ],
+  },
+];
+
+/** Signed offset from neutral: "0", "+12", "-45". */
+function formatValue(value: number, neutral: number): string {
+  const diff = value - neutral;
+  if (diff === 0) return "0";
+  return diff > 0 ? `+${diff}` : `${diff}`;
+}
+
 export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
   const adj: Adjustments = { ...options.adjustments };
   const abort = new AbortController();
   const signal = abort.signal;
-  const controls = new Map<keyof Adjustments, { input: HTMLInputElement; valueEl: HTMLElement }>();
+  const controls = new Map<
+    keyof Adjustments,
+    { input: HTMLInputElement; valueEl: HTMLElement; neutral: number }
+  >();
 
-  function createSlider(
-    label: string,
-    key: keyof Adjustments,
-    min: number,
-    max: number,
-  ): HTMLElement {
-    const valueEl = h("span", { class: "rt-props__slider-value" }, formatValue(adj[key], key));
+  function createSlider(def: SliderDef): HTMLElement {
+    const valueEl = h(
+      "span",
+      { class: "rt-props__slider-value" },
+      formatValue(adj[def.key], def.neutral),
+    );
     const input = h("input", {
       type: "range",
-      min,
-      max,
+      min: def.min,
+      max: def.max,
       step: 1,
-      value: adj[key],
+      value: adj[def.key],
+      "aria-label": def.label,
     }) as HTMLInputElement;
 
     input.addEventListener(
       "input",
       () => {
-        adj[key] = Number(input.value);
-        valueEl.textContent = formatValue(adj[key], key);
+        adj[def.key] = Number(input.value);
+        valueEl.textContent = formatValue(adj[def.key], def.neutral);
         options.onChange({ ...adj });
       },
       { signal },
     );
 
-    controls.set(key, { input, valueEl });
+    // Double-click the label to snap the slider back to neutral.
+    const label = h("div", { class: "rt-props__label", title: "Double-click to reset" }, def.label);
+    label.addEventListener(
+      "dblclick",
+      () => {
+        adj[def.key] = def.neutral;
+        input.value = String(def.neutral);
+        valueEl.textContent = formatValue(def.neutral, def.neutral);
+        options.onChange({ ...adj });
+      },
+      { signal },
+    );
+
+    controls.set(def.key, { input, valueEl, neutral: def.neutral });
 
     return h(
       "div",
       { class: "rt-props__row" },
-      h("div", { class: "rt-props__label" }, label),
+      label,
       h("div", { class: "rt-props__slider" }, input, valueEl),
     );
   }
 
-  const root = h(
-    "div",
-    null,
-    h("div", { class: "rt-props__title" }, "Adjustments"),
-    createSlider("Brightness", "brightness", 0, 200),
-    createSlider("Contrast", "contrast", 0, 200),
-    createSlider("Saturation", "saturation", 0, 200),
-  );
+  const root = h("div", null, h("div", { class: "rt-props__title" }, "Adjustments"));
+  for (const group of GROUPS) {
+    root.appendChild(h("div", { class: "rt-props__subtitle" }, group.title));
+    for (const def of group.sliders) {
+      root.appendChild(createSlider(def));
+    }
+  }
 
   return {
     root,
     getAdjustments: () => ({ ...adj }),
     setAdjustments(next) {
-      for (const key of ["brightness", "contrast", "saturation"] as const) {
+      for (const [key, control] of controls) {
         adj[key] = next[key];
-        const control = controls.get(key);
-        if (control) {
-          control.input.value = String(next[key]);
-          control.valueEl.textContent = formatValue(next[key], key);
-        }
+        control.input.value = String(next[key]);
+        control.valueEl.textContent = formatValue(next[key], control.neutral);
       }
     },
     destroy() {
       abort.abort();
     },
   };
-}
-
-function formatValue(value: number, _key: keyof Adjustments): string {
-  const diff = value - 100;
-  if (diff === 0) return "0";
-  return diff > 0 ? `+${diff}` : `${diff}`;
 }

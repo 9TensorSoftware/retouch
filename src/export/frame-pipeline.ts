@@ -1,7 +1,7 @@
 import { FabricImage, StaticCanvas } from "fabric";
 import type { ImageEdits } from "../types";
 import { createCanvas } from "../utils/canvas";
-import { buildFabricFilters, isNeutral } from "../utils/filters";
+import { buildFabricFilters, drawVignette, isNeutral } from "../utils/filters";
 
 /**
  * Long-edge cap for exported video. Stays under fabric's default WebGL
@@ -49,7 +49,7 @@ export function createFramePipeline(
   srcWidth: number,
   srcHeight: number,
 ): FramePipeline {
-  const { crop, rotation, adjustments, filter } = edits;
+  const { crop, rotation, adjustments, filter, filterStrength } = edits;
 
   // Source crop region in pixels
   const sx = crop.x * srcWidth;
@@ -69,7 +69,8 @@ export function createFramePipeline(
   const outW = even(cropW * cos + cropH * sin);
   const outH = even(cropH * cos + cropW * sin);
 
-  const neutralVisual = isNeutral(adjustments, filter) && rotation === 0;
+  const neutralVisual =
+    isNeutral(adjustments, filter, filterStrength) && adjustments.vignette === 0 && rotation === 0;
   const fullFrame = crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
 
   const cropCanvas = createCanvas(cropW, cropH);
@@ -98,9 +99,7 @@ export function createFramePipeline(
       angle: rotation,
       objectCaching: false,
     });
-    fabricImg.filters = isNeutral(adjustments, filter)
-      ? []
-      : buildFabricFilters(adjustments, filter);
+    fabricImg.filters = buildFabricFilters(adjustments, filter, filterStrength);
     staticCanvas.add(fabricImg);
   }
 
@@ -113,7 +112,12 @@ export function createFramePipeline(
       if (neutralVisual || !staticCanvas || !fabricImg) return cropCanvas;
       fabricImg.applyFilters();
       staticCanvas.renderAll();
-      return staticCanvas.getElement();
+      const element = staticCanvas.getElement();
+      if (adjustments.vignette > 0) {
+        const ctx = element.getContext("2d");
+        if (ctx) drawVignette(ctx, element.width, element.height, adjustments.vignette);
+      }
+      return element;
     },
     dispose() {
       staticCanvas?.dispose();

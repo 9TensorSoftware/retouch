@@ -7,13 +7,17 @@ export interface FiltersToolOptions {
   /** Preview source — the image itself, or a captured frame canvas for video. */
   image: HTMLImageElement | HTMLCanvasElement;
   filter: FilterPreset;
+  strength: number;
   onChange: (filter: FilterPreset) => void;
+  onStrengthChange: (strength: number) => void;
 }
 
 export interface FiltersToolHandle {
   root: HTMLElement;
   getFilter(): FilterPreset;
   setFilter(filter: FilterPreset): void;
+  /** Sync the intensity slider after an external change (does not fire onStrengthChange). */
+  setStrength(strength: number): void;
   destroy(): void;
 }
 
@@ -27,6 +31,35 @@ export function createFiltersTool(options: FiltersToolOptions): FiltersToolHandl
 
   const buttons = new Map<FilterPreset, HTMLElement>();
   const grid = h("div", { class: "rt-props__filters-grid" });
+
+  // Intensity slider — only meaningful while a preset is active.
+  const strengthValue = h("span", { class: "rt-props__slider-value" }, String(options.strength));
+  const strengthInput = h("input", {
+    type: "range",
+    min: 0,
+    max: 100,
+    step: 1,
+    value: options.strength,
+    "aria-label": "Filter intensity",
+  }) as HTMLInputElement;
+  strengthInput.addEventListener(
+    "input",
+    () => {
+      strengthValue.textContent = strengthInput.value;
+      options.onStrengthChange(Number(strengthInput.value));
+    },
+    { signal },
+  );
+  const strengthRow = h(
+    "div",
+    { class: "rt-props__row" },
+    h("div", { class: "rt-props__label" }, "Intensity"),
+    h("div", { class: "rt-props__slider" }, strengthInput, strengthValue),
+  );
+
+  function updateStrengthVisibility(): void {
+    strengthRow.style.display = active === "none" ? "none" : "";
+  }
 
   for (const preset of FILTER_PRESETS) {
     const thumb = h("img", {
@@ -52,6 +85,7 @@ export function createFiltersTool(options: FiltersToolOptions): FiltersToolHandl
         buttons.get(active)?.classList.remove("rt-props__filter-btn--active");
         btn.classList.add("rt-props__filter-btn--active");
         active = preset.id;
+        updateStrengthVisibility();
         options.onChange(preset.id);
       },
       { signal },
@@ -61,7 +95,8 @@ export function createFiltersTool(options: FiltersToolOptions): FiltersToolHandl
     grid.appendChild(btn);
   }
 
-  const root = h("div", null, h("div", { class: "rt-props__title" }, "Filters"), grid);
+  updateStrengthVisibility();
+  const root = h("div", null, h("div", { class: "rt-props__title" }, "Filters"), grid, strengthRow);
 
   return {
     root,
@@ -70,6 +105,11 @@ export function createFiltersTool(options: FiltersToolOptions): FiltersToolHandl
       buttons.get(active)?.classList.remove("rt-props__filter-btn--active");
       buttons.get(filter)?.classList.add("rt-props__filter-btn--active");
       active = filter;
+      updateStrengthVisibility();
+    },
+    setStrength(strength) {
+      strengthInput.value = String(strength);
+      strengthValue.textContent = String(strength);
     },
     destroy() {
       abort.abort();

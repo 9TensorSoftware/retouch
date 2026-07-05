@@ -2,7 +2,7 @@ import { Canvas, FabricImage } from "fabric";
 import { PREVIEW_MAX_DIM } from "../../constants";
 import type { Adjustments, FilterPreset, ImageEdits } from "../../types";
 import { createCanvas } from "../../utils/canvas";
-import { buildFabricFilters, isNeutral } from "../../utils/filters";
+import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
 
 export interface ImageRect {
   x: number;
@@ -35,6 +35,7 @@ export class CanvasRenderer {
   private adjustments: Adjustments;
   private rotation = 0;
   private filter: FilterPreset;
+  private filterStrength: number;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
   private looping = false;
 
@@ -43,6 +44,7 @@ export class CanvasRenderer {
     this.adjustments = { ...edits.adjustments };
     this.rotation = edits.rotation;
     this.filter = edits.filter;
+    this.filterStrength = edits.filterStrength;
 
     this.video = "videoWidth" in source ? source : null;
     if (this.video) {
@@ -87,6 +89,14 @@ export class CanvasRenderer {
 
     this.fabricCanvas.add(this.fabricImage);
 
+    // Vignette is a 2D pass over the composed frame, not a fabric filter.
+    this.fabricCanvas.on("after:render", ({ ctx }) => {
+      if (this.adjustments.vignette > 0 && ctx) {
+        const el = this.fabricCanvas.getElement();
+        drawVignette(ctx, el.width, el.height, this.adjustments.vignette);
+      }
+    });
+
     if (this.video) {
       const signal = this.abort.signal;
       this.video.addEventListener("play", () => this.startLoop(), { signal });
@@ -126,6 +136,10 @@ export class CanvasRenderer {
 
   setFilter(preset: FilterPreset): void {
     this.filter = preset;
+  }
+
+  setFilterStrength(strength: number): void {
+    this.filterStrength = strength;
   }
 
   getImageRect(): ImageRect {
@@ -182,7 +196,7 @@ export class CanvasRenderer {
   /** Redraw the current frame (and re-filter it when filters are active). */
   renderFrame(): void {
     if (this.video) this.drawFrame();
-    if (!isNeutral(this.adjustments, this.filter)) {
+    if (!isNeutral(this.adjustments, this.filter, this.filterStrength)) {
       this.fabricImage.applyFilters();
     }
     this.fabricCanvas.requestRenderAll();
@@ -242,9 +256,11 @@ export class CanvasRenderer {
   }
 
   private applyFilters(): void {
-    this.fabricImage.filters = isNeutral(this.adjustments, this.filter)
-      ? []
-      : buildFabricFilters(this.adjustments, this.filter);
+    this.fabricImage.filters = buildFabricFilters(
+      this.adjustments,
+      this.filter,
+      this.filterStrength,
+    );
     this.fabricImage.applyFilters();
   }
 }

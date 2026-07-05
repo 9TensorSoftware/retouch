@@ -21,6 +21,15 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
   brightness: 100,
   contrast: 100,
   saturation: 100,
+  exposure: 0,
+  temperature: 0,
+  tint: 0,
+  hue: 0,
+  vibrance: 0,
+  sharpen: 0,
+  blur: 0,
+  grain: 0,
+  vignette: 0,
 };
 
 export const DEFAULT_EDITS: ImageEdits = {
@@ -28,6 +37,7 @@ export const DEFAULT_EDITS: ImageEdits = {
   rotation: 0,
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   filter: "none",
+  filterStrength: 100,
 };
 
 export function createDefaultVideoEdits(duration: number): VideoEdits {
