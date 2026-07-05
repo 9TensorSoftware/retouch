@@ -2,7 +2,7 @@ import type { AiContext } from "../src/ai/interpreter";
 import { buildSchema, buildSystem, interpretCommand, validateAiOps } from "../src/ai/interpreter";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../src/constants";
 import type { AiRequest } from "../src/types";
-import { createAiBar } from "../src/ui/editor/ai-bar";
+import { createAiFab } from "../src/ui/editor/ai-fab";
 
 const IMAGE_CTX: AiContext = {
   kind: "image",
@@ -166,60 +166,102 @@ describe("interpretCommand with a custom transport", () => {
   });
 });
 
-describe("AI bar", () => {
+describe("AI floating input", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     localStorage.clear();
   });
 
-  it("submits on Enter and shows the explanation", async () => {
-    const onSubmit = vi.fn(async () => "Made it B&W");
-    const bar = createAiBar({ ai: { complete: async () => ({}) }, onSubmit });
-    document.body.appendChild(bar.root);
+  function makeFab(
+    onSubmit = vi.fn(async () => "ok"),
+    ai: import("../src/types").AiOptions = { apiKey: "sk-test" },
+  ) {
+    const fab = createAiFab({ ai, onSubmit });
+    document.body.appendChild(fab.root);
+    return { fab, onSubmit };
+  }
 
-    const input = bar.root.querySelector(".rt-ai-bar__input") as HTMLInputElement;
-    input.value = "make it bw";
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith("make it bw"));
-    await vi.waitFor(() =>
-      expect(bar.root.querySelector(".rt-ai-bar__status")?.textContent).toBe("Made it B&W"),
-    );
-    expect(input.value).toBe("");
-    bar.destroy();
+  it("starts collapsed and expands via the trigger or open()", () => {
+    const { fab } = makeFab();
+    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(false);
+    (fab.root.querySelector(".rt-ai-fab__trigger") as HTMLElement).click();
+    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(true);
+    fab.destroy();
+
+    const { fab: fab2 } = makeFab();
+    fab2.open();
+    expect(fab2.root.classList.contains("rt-ai-fab--open")).toBe(true);
+    fab2.destroy();
   });
 
-  it("shows an error state when the command fails", async () => {
+  it("submits on Enter, shows the explanation chip, and collapses after", async () => {
+    vi.useFakeTimers();
+    const onSubmit = vi.fn(async () => "Made it moody");
+    const { fab } = makeFab(onSubmit);
+    fab.open();
+    const input = fab.root.querySelector(".rt-ai-fab__input") as HTMLInputElement;
+    input.value = "make it moody";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await vi.advanceTimersByTimeAsync(0); // flush the submit promise chain
+    expect(onSubmit).toHaveBeenCalledWith("make it moody");
+    expect(fab.root.querySelector(".rt-ai-fab__chip--ok")?.textContent).toBe("Made it moody");
+    expect(input.value).toBe("");
+    vi.advanceTimersByTime(2600);
+    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(false);
+    fab.destroy();
+    vi.useRealTimers();
+  });
+
+  it("shows an error chip and stays open on failure", async () => {
     const onSubmit = vi.fn(async () => {
       throw new Error("[Retouch] Invalid API key");
     });
-    const bar = createAiBar({ ai: { apiKey: "sk-test" }, onSubmit });
-    document.body.appendChild(bar.root);
-    const input = bar.root.querySelector(".rt-ai-bar__input") as HTMLInputElement;
+    const { fab } = makeFab(onSubmit);
+    fab.open();
+    const input = fab.root.querySelector(".rt-ai-fab__input") as HTMLInputElement;
     input.value = "do a thing";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await vi.waitFor(() =>
-      expect(bar.root.querySelector(".rt-ai-bar__status--error")?.textContent).toBe(
+      expect(fab.root.querySelector(".rt-ai-fab__chip--error")?.textContent).toBe(
         "Invalid API key",
       ),
     );
-    bar.destroy();
+    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(true);
+    fab.destroy();
+  });
+
+  it("collapses on Escape (consuming the event) and on outside pointerdown", () => {
+    const { fab } = makeFab();
+    fab.open();
+    const input = fab.root.querySelector(".rt-ai-fab__input") as HTMLInputElement;
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    const documentSpy = vi.fn();
+    document.addEventListener("keydown", documentSpy, { once: true });
+    input.dispatchEvent(escape);
+    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(false);
+    expect(documentSpy).not.toHaveBeenCalled(); // stopPropagation kept it from the editor
+
+    fab.open();
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(false);
+    fab.destroy();
   });
 
   it("opens the key popover instead of submitting when allowUserKey has no stored key", () => {
     const onSubmit = vi.fn(async () => "ok");
-    const bar = createAiBar({ ai: { allowUserKey: true }, onSubmit });
-    document.body.appendChild(bar.root);
-    const input = bar.root.querySelector(".rt-ai-bar__input") as HTMLInputElement;
+    const { fab } = makeFab(onSubmit, { allowUserKey: true });
+    fab.open();
+    const input = fab.root.querySelector(".rt-ai-fab__input") as HTMLInputElement;
     input.value = "anything";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(bar.root.querySelector(".rt-ai-bar__popover")).not.toBeNull();
+    expect(fab.root.querySelector(".rt-ai-fab__popover")).not.toBeNull();
 
-    const keyInput = bar.root.querySelector(".rt-ai-bar__key-input") as HTMLInputElement;
+    const keyInput = fab.root.querySelector(".rt-ai-fab__key-input") as HTMLInputElement;
     keyInput.value = "sk-ant-test";
-    (bar.root.querySelector(".rt-ai-bar__popover .rt-ai-bar__submit") as HTMLElement).click();
+    (fab.root.querySelector(".rt-ai-fab__save") as HTMLElement).click();
     expect(localStorage.getItem("rt-ai-key")).toBe("sk-ant-test");
-    expect(bar.root.querySelector(".rt-ai-bar__popover")).toBeNull();
-    bar.destroy();
+    expect(fab.root.querySelector(".rt-ai-fab__popover")).toBeNull();
+    fab.destroy();
   });
 });

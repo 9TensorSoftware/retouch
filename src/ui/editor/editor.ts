@@ -24,8 +24,8 @@ import type { SeekQueue } from "../../utils/video";
 import { captureFrame, createSeekQueue, formatDuration } from "../../utils/video";
 import { h } from "../h";
 import { createAdjustTool } from "./adjust-tool";
-import type { AiBarHandle } from "./ai-bar";
-import { createAiBar, getStoredAiKey } from "./ai-bar";
+import type { AiFabHandle } from "./ai-fab";
+import { createAiFab, getStoredAiKey } from "./ai-fab";
 import { CanvasRenderer } from "./canvas-renderer";
 import { createCropTool } from "./crop-tool";
 import { createFiltersTool } from "./filters-tool";
@@ -465,10 +465,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
     }
   }
 
-  let aiBar: AiBarHandle | null = null;
+  let aiFab: AiFabHandle | null = null;
   const aiOptions = options.ai;
   if (aiOptions && (aiOptions.apiKey || aiOptions.complete || aiOptions.allowUserKey)) {
-    aiBar = createAiBar({
+    aiFab = createAiFab({
       ai: aiOptions,
       onSubmit: async (prompt) => {
         options.onAiEvent?.({ type: "start", prompt });
@@ -497,6 +497,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
         }
       },
     });
+    // Floats over the canvas, Grok-style — summoned on demand, not a fixed bar.
+    canvasArea.appendChild(aiFab.root);
   }
 
   // Body — canvas and transport share a center column
@@ -506,9 +508,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const body = h("div", { class: "rt-editor__body" }, toolbar.root, center, propsPanel.root);
 
   // Root overlay
-  const rootChildren: HTMLElement[] = [topbar];
-  if (aiBar) rootChildren.push(aiBar.root);
-  rootChildren.push(body);
+  const rootChildren: HTMLElement[] = [topbar, body];
   const root = h(
     "div",
     {
@@ -553,6 +553,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
       if (mod && e.key === "Enter") {
         e.preventDefault();
         onDone();
+        return;
+      }
+      if (mod && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        aiFab?.open();
         return;
       }
       if (mod && (e.key === "z" || e.key === "Z")) {
@@ -627,7 +632,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();
       history?.destroy();
-      aiBar?.destroy();
+      aiFab?.destroy();
       trimTool?.destroy();
       transport?.destroy();
       seekQueue?.destroy();
