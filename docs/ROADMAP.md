@@ -14,17 +14,19 @@ Status: ✅ shipped · 🚧 in progress · ⬜ planned.
 | ✅ | P1 | Before/after compare (hold button) · Reset-all |
 | ⬜ | P2 | Zoom & pan canvas (wheel/pinch, fit/100%) |
 | ✅ | P2 | EXIF orientation (handled by the browser's default `image-orientation: from-image`) |
-| ⬜ | P2 | Filter intensity slider (0–100% preset blend) |
-| ⬜ | P2 | More adjustments: exposure, temperature/tint, hue, gamma, sharpen, blur, vignette, grain |
-| ⬜ | P2 | Rotate 90° + flip H/V buttons · pixel-size readout on crop |
+| ✅ | P2 | Filter intensity slider (0–100% preset blend) |
+| ✅ | P2 | 12 adjustments: exposure, temperature/tint, hue, vibrance, sharpen, blur, grain, vignette |
+| ✅ | P2 | Rotate 90° + flip H/V buttons (crop-tracking transforms) |
 | ⬜ | P2 | Mobile: responsive editor (panel → bottom sheet), touch-size hit targets |
-| ⬜ | P3 | Histogram · straighten-with-grid · loading skeletons |
+| ⬜ | P3 | Curves editor · per-color HSL mixer · highlights/shadows recovery (researched: Lightroom/Snapseed baseline) |
+| ⬜ | P3 | Clarity/dehaze · denoise · custom LUT import · auto-enhance |
+| ⬜ | P3 | Histogram · straighten-with-grid · loading skeletons · pixel-size readout on crop |
 
 ## B. Editor tools
 
 | Status | P | Feature |
 |--------|---|---------|
-| ✅ | — | Crop (aspect presets, rotation) · Adjust (brightness/contrast/saturation) · Filters (7 presets, live thumbnails) |
+| ✅ | — | Crop (aspect presets, straighten, rotate 90°/flip) · Adjust (12 controls in Light/Color/Effects) · Filters (12 presets with intensity, live thumbnails) |
 | ⬜ | P2 | Draw tool (PencilBrush: size/color/opacity, eraser) |
 | ⬜ | P2 | Text tool (Textbox: font/size/color/align, drag/scale/rotate) |
 | ⬜ | P2 | Sticker/shapes tool (built-in set + custom images) |
@@ -62,7 +64,9 @@ Status: ✅ shipped · 🚧 in progress · ⬜ planned.
 | 🚧 | P1 | A4: frame capture → image entry |
 | 🚧 | P1 | B1: re-encoded MP4 export (mediabunny/WebCodecs), audio + mute, progress + cancel |
 | 🚧 | P1 | B2: MediaRecorder fallback · export progress overlay · video on by default |
-| ⬜ | P3 | Playback speed · audio gain/fade · GIF-of-range export · poster pick |
+| ✅ | — | Playback speed 0.25–4× (preview + retimed export; audio dropped at non-1×) |
+| ⬜ | P3 | Audio gain/fade · pitch-preserving speed audio · GIF-of-range export · poster pick |
+| ⬜ | P3 | Researched (CapCut baseline, need multi-clip/object layers): transitions · text & auto-captions · keyframe animation · speed curves · stabilization · chroma key |
 
 ## G. AI
 

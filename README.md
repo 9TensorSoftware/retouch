@@ -138,10 +138,10 @@ Opens as a modal overlay with dark chrome to keep focus on the image. Tool sideb
 
 | Tool | Description |
 |------|-------------|
-| **Crop** | Free-form or fixed aspect ratio (16:9, 4:3, 1:1, 3:2, 9:16). Rule-of-thirds grid overlay. Rotation control. Works on video too. |
-| **Adjust** | Brightness, contrast, saturation sliders with real-time preview — live on playing video. |
-| **Filters** | Quick presets — Warm, Cool, B&W, and more. One-tap application with live thumbnails. |
-| **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging. |
+| **Crop** | Free-form or fixed aspect ratio (16:9, 4:3, 1:1, 3:2, 9:16). Rule-of-thirds grid. Straighten slider plus rotate-90° and flip H/V that keep the crop over your content. Works on video too. |
+| **Adjust** | 12 controls in Light / Color / Effects groups: exposure, brightness, contrast, temperature, tint, hue, saturation, vibrance, sharpen, blur, grain, vignette — real-time, live on playing video. Double-click a label to reset it. |
+| **Filters** | 12 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — with an intensity slider and live thumbnails. |
+| **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging, and 0.25–4× playback speed. |
 | **Draw** | _Planned._ Freehand drawing and annotation directly on the canvas. |
 | **Text** | _Planned._ Add and position text overlays with font and color controls. |
 | **Sticker** | _Planned._ Place image overlays and shapes onto the canvas. |
@@ -159,12 +159,13 @@ transport. Everything is non-destructive until export:
 - **Export** — MP4 (WebM fallback) via WebCodecs + lazily-loaded [mediabunny](https://mediabunny.dev/); browsers without WebCodecs fall back to a realtime MediaRecorder pipeline
 - Progress is reported per file (`export:progress` events) with cancellation via `cancelExport()`
 
-### AI command bar
+### AI edits
 
-Let users type what they want — *"make it B&W and crop to a square"*, *"trim to
-the first 5 seconds"* — and have a vision model map it onto the same
-non-destructive edit operations the manual tools use. Token-gated and off by
-default:
+A floating ✦ button hovers over the canvas — click it (or press **⌘K**) and it
+expands into a prompt. Type what you want — *"moody and cinematic, crop to a
+square"*, *"rotate it upright and speed it up 2×"* — and a vision model maps it
+onto the same non-destructive edit operations the manual tools use, applied as
+a single undoable step. Token-gated and off by default:
 
 ```ts
 new Retouch({
