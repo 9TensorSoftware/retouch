@@ -21,11 +21,14 @@ export function exportWithMediaRecorder(
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const { trim, mute } = entry.edits;
+    const speed = entry.edits.speed ?? 1;
     const trimmed = Math.max(0.05, trim.end - trim.start);
     const pipeline = createFramePipeline(entry.edits, entry.width, entry.height);
 
     const video = document.createElement("video");
     video.playsInline = true;
+    // Realtime recording at the target rate bakes the speed change in.
+    video.playbackRate = speed;
     video.src = entry.videoUrl;
 
     const sample: DrawableSample = {
@@ -84,7 +87,7 @@ export function exportWithMediaRecorder(
       const canvas = pipeline.processFrame(sample);
       const stream = canvas.captureStream(30);
 
-      if (!mute && typeof AudioContext !== "undefined") {
+      if (!mute && speed === 1 && typeof AudioContext !== "undefined") {
         // Element output routes into the graph (inaudible) and out to the stream.
         audioCtx = new AudioContext();
         const source = audioCtx.createMediaElementSource(video);

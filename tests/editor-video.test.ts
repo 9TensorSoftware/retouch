@@ -6,6 +6,7 @@ function makeTransport(duration = 10) {
   const video = document.createElement("video");
   const edits = createDefaultVideoEdits(duration);
   const seekQueue = { seek: vi.fn(async () => {}), destroy: vi.fn() };
+  const onSpeedChange = vi.fn();
   const transport = createTransportBar({
     video,
     edits,
@@ -15,9 +16,10 @@ function makeTransport(duration = 10) {
     videoWidth: 640,
     videoHeight: 360,
     onMuteChange: vi.fn(),
+    onSpeedChange,
   });
   document.body.appendChild(transport.root);
-  return { video, edits, transport, seekQueue };
+  return { video, edits, transport, seekQueue, onSpeedChange };
 }
 
 function key(el: Element, keyName: string, shiftKey = false): void {
@@ -85,6 +87,28 @@ describe("transport bar trim handles", () => {
     expect(strip?.classList.contains("rt-filmstrip--editable")).toBe(false);
     transport.setTrimEditable(true);
     expect(strip?.classList.contains("rt-filmstrip--editable")).toBe(true);
+  });
+
+  it("selects playback speed from the menu and syncs edits + rate", () => {
+    const { video, edits, transport, onSpeedChange } = makeTransport(10);
+    const speedBtn = transport.root.querySelector(".rt-video-bar__speed") as HTMLElement;
+    expect(speedBtn.textContent).toBe("1×");
+    speedBtn.click();
+    const menu = transport.root.querySelector(".rt-video-bar__speed-menu");
+    expect(menu?.classList.contains("rt-video-bar__speed-menu--open")).toBe(true);
+    const twoX = [...transport.root.querySelectorAll(".rt-video-bar__speed-option")].find(
+      (b) => b.textContent === "2×",
+    ) as HTMLElement;
+    twoX.click();
+    expect(edits.speed).toBe(2);
+    expect(video.playbackRate).toBe(2);
+    expect(speedBtn.textContent).toBe("2×");
+    expect(onSpeedChange).toHaveBeenCalledWith(2);
+    expect(menu?.classList.contains("rt-video-bar__speed-menu--open")).toBe(false);
+
+    transport.setSpeed(0.5);
+    expect(video.playbackRate).toBe(0.5);
+    expect(speedBtn.textContent).toBe("0.5×");
   });
 });
 

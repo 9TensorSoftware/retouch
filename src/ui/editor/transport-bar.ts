@@ -15,6 +15,7 @@ export interface TransportBarOptions {
   videoWidth: number;
   videoHeight: number;
   onMuteChange: (mute: boolean) => void;
+  onSpeedChange: (speed: number) => void;
 }
 
 export interface TransportBarHandle extends ViewHandle {
@@ -26,6 +27,8 @@ export interface TransportBarHandle extends ViewHandle {
   setMuted(mute: boolean): void;
   /** Toggle play/pause (keyboard shortcut). */
   togglePlay(): void;
+  /** Sync the speed control + playback rate after an external change. */
+  setSpeed(speed: number): void;
   /** Subscribe to handle-drag trim changes. Returns unsubscribe. */
   onTrimChange(fn: (range: TrimRange) => void): () => void;
 }
@@ -46,6 +49,12 @@ const LOOP_EPSILON = 0.03;
 const NUDGE = 0.1;
 const NUDGE_LARGE = 1;
 
+const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+
+function formatSpeed(speed: number): string {
+  return `${speed}×`;
+}
+
 export function createTransportBar(options: TransportBarOptions): TransportBarHandle {
   const { video, edits, seekQueue, duration } = options;
   const abort = new AbortController();
@@ -65,6 +74,55 @@ export function createTransportBar(options: TransportBarOptions): TransportBarHa
   const muteBtn = h("button", { class: "rt-video-bar__btn", title: "Mute", "aria-label": "Mute" });
   video.muted = edits.mute;
   muteBtn.innerHTML = edits.mute ? MUTED_ICON : SOUND_ICON;
+
+  // ── Playback speed ──
+
+  const speedBtn = h(
+    "button",
+    {
+      class: "rt-video-bar__speed",
+      title: "Playback speed (audio is removed at non-1× export)",
+      "aria-label": "Playback speed",
+    },
+    formatSpeed(edits.speed),
+  );
+  video.playbackRate = edits.speed;
+
+  const speedMenu = h("div", { class: "rt-video-bar__speed-menu" });
+  for (const option of SPEED_OPTIONS) {
+    const item = h("button", { class: "rt-video-bar__speed-option" }, formatSpeed(option));
+    item.addEventListener(
+      "click",
+      (e) => {
+        e.stopPropagation();
+        edits.speed = option;
+        video.playbackRate = option;
+        speedBtn.textContent = formatSpeed(option);
+        speedMenu.classList.remove("rt-video-bar__speed-menu--open");
+        options.onSpeedChange(option);
+      },
+      { signal },
+    );
+    speedMenu.appendChild(item);
+  }
+  speedBtn.addEventListener(
+    "click",
+    (e) => {
+      e.stopPropagation();
+      speedMenu.classList.toggle("rt-video-bar__speed-menu--open");
+    },
+    { signal },
+  );
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (!speedMenu.contains(e.target as Node) && e.target !== speedBtn) {
+        speedMenu.classList.remove("rt-video-bar__speed-menu--open");
+      }
+    },
+    { signal },
+  );
+  const speedWrap = h("div", { class: "rt-video-bar__speed-wrap" }, speedBtn, speedMenu);
 
   const timeEl = h("span", { class: "rt-video-bar__time" });
 
@@ -113,7 +171,7 @@ export function createTransportBar(options: TransportBarOptions): TransportBarHa
     },
   );
 
-  const root = h("div", { class: "rt-video-bar" }, playBtn, strip, timeEl, muteBtn);
+  const root = h("div", { class: "rt-video-bar" }, playBtn, strip, timeEl, speedWrap, muteBtn);
 
   // ── Visual sync ──
 
@@ -341,6 +399,10 @@ export function createTransportBar(options: TransportBarOptions): TransportBarHa
     togglePlay() {
       if (video.paused) play();
       else video.pause();
+    },
+    setSpeed(speed) {
+      video.playbackRate = speed;
+      speedBtn.textContent = formatSpeed(speed);
     },
     onTrimChange(fn) {
       trimListeners.add(fn);

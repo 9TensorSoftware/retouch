@@ -189,6 +189,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
         videoEdits.mute = mute;
         recordEdit();
       },
+      onSpeedChange: (speed) => {
+        videoEdits.speed = speed;
+        recordEdit();
+      },
     });
     trimTool = createTrimTool({
       edits: videoEdits,
@@ -315,6 +319,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (entry.kind === "video") {
       transport?.setTrim(entry.edits.trim);
       transport?.setMuted(entry.edits.mute);
+      transport?.setSpeed(entry.edits.speed);
     }
     renderer.render();
     suppressRecord = false;

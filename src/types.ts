@@ -164,6 +164,8 @@ export interface ImageEdits {
 export interface VideoEdits extends ImageEdits {
   trim: TrimRange;
   mute: boolean;
+  /** Playback rate, 0.25–4. Audio is dropped on export when ≠ 1. */
+  speed: number;
 }
 
 interface MediaEntryBase {

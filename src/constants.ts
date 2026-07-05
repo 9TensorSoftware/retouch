@@ -51,6 +51,7 @@ export function createDefaultVideoEdits(duration: number): VideoEdits {
     ...structuredClone(DEFAULT_EDITS),
     trim: { start: 0, end: duration },
     mute: false,
+    speed: 1,
   };
 }
 

@@ -28,6 +28,7 @@ export async function exportVideo(
 
   const mb = await import("mediabunny");
   const { trim, mute } = entry.edits;
+  const speed = entry.edits.speed ?? 1;
 
   // Container preference: MP4, then WebM if the browser can't encode for MP4.
   const formats = [new mb.Mp4OutputFormat(), new mb.WebMOutputFormat()];
@@ -45,20 +46,39 @@ export async function exportVideo(
     const target = new mb.BufferTarget();
     const output = new mb.Output({ format, target });
 
-    // Packet copy is only safe when nothing is cut: a trimmed copy can only
-    // start on a keyframe, which silently shifts the in-point. Any real trim
-    // re-encodes for sample accuracy (without the canvas pipeline when the
-    // frames themselves are untouched).
+    // Packet copy is only safe when nothing is cut or retimed: a trimmed copy
+    // can only start on a keyframe, which silently shifts the in-point. Any
+    // real trim or speed change re-encodes for sample accuracy (without the
+    // canvas pipeline when the frames themselves are untouched).
     const isFullRange = trim.start <= 0.001 && trim.end >= entry.duration - 0.05;
+
+    // Samples reach `process` already rebased to the trim start, so a speed
+    // change is a straight division of the timestamps.
+    type ConversionSample = InstanceType<typeof mb.VideoSample>;
+    const retime = (sample: ConversionSample): ConversionSample => {
+      sample.setTimestamp(sample.timestamp / speed);
+      sample.setDuration(sample.duration / speed);
+      return sample;
+    };
+    const processPixels = (sample: ConversionSample) => {
+      const frame = pipeline.processFrame(sample);
+      if (speed === 1) return frame;
+      return new mb.VideoSample(frame, {
+        timestamp: sample.timestamp / speed,
+        duration: sample.duration / speed,
+      });
+    };
+
     const videoOptions = pipeline.isIdentity
-      ? isFullRange
+      ? isFullRange && speed === 1
         ? { codec }
-        : { codec, forceTranscode: true }
+        : speed === 1
+          ? { codec, forceTranscode: true }
+          : { codec, forceTranscode: true, process: retime }
       : {
           codec,
           forceTranscode: true,
-          process: (sample: Parameters<typeof pipeline.processFrame>[0]) =>
-            pipeline.processFrame(sample),
+          process: processPixels,
           processedWidth: pipeline.outWidth,
           processedHeight: pipeline.outHeight,
         };
@@ -69,7 +89,9 @@ export async function exportVideo(
         output,
         trim: { start: trim.start, end: trim.end },
         video: videoOptions,
-        audio: mute ? { discard: true } : undefined,
+        // Speed changes drop audio: resampling without pitch artifacts is out
+        // of scope for the in-browser pipeline.
+        audio: mute || speed !== 1 ? { discard: true } : undefined,
         showWarnings: false,
       });
 

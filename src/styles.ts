@@ -1293,6 +1293,68 @@ const CSS = /* css */ `
   white-space: nowrap;
 }
 
+.rt-video-bar__speed-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rt-video-bar__speed {
+  min-width: 44px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--rt-radius-sm);
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: var(--rt-transition);
+  font-family: inherit;
+}
+
+.rt-video-bar__speed:hover {
+  border-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.95);
+}
+
+.rt-video-bar__speed-menu {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  flex-direction: column;
+  background: #2A2723;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.rt-video-bar__speed-menu--open {
+  display: flex;
+}
+
+.rt-video-bar__speed-option {
+  padding: 6px 18px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255,255,255,0.75);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+}
+
+.rt-video-bar__speed-option:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+
 /* ── Filmstrip scrubber ────────────────────── */
 
 .rt-filmstrip {
