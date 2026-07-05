@@ -78,6 +78,44 @@ describe("validateAiOps clamping", () => {
     );
     expect(Object.keys(ops)).toEqual(["explanation"]);
   });
+
+  it("clamps the expanded adjustment set per its range", () => {
+    const ops = validateAiOps(
+      {
+        adjustments: { temperature: -999, hue: 500, blur: 400, vignette: -5, vibrance: 60 },
+        explanation: "x",
+      },
+      IMAGE_CTX,
+    );
+    expect(ops.adjustments).toEqual({
+      temperature: -100,
+      hue: 180,
+      blur: 100,
+      vignette: 0,
+      vibrance: 60,
+    });
+  });
+
+  it("clamps filter strength and validates orientation/flips", () => {
+    const ops = validateAiOps(
+      { filter: "kodachrome", filterStrength: 250, orientation: 90, flipH: true, explanation: "x" },
+      IMAGE_CTX,
+    );
+    expect(ops.filterStrength).toBe(100);
+    expect(ops.orientation).toBe(90);
+    expect(ops.flipH).toBe(true);
+    expect(ops.flipV).toBeUndefined();
+    // 45 is not a legal orientation
+    expect(
+      validateAiOps({ orientation: 45, explanation: "x" }, IMAGE_CTX).orientation,
+    ).toBeUndefined();
+  });
+
+  it("clamps speed for video and ignores it for images", () => {
+    expect(validateAiOps({ speed: 100, explanation: "x" }, VIDEO_CTX).speed).toBe(4);
+    expect(validateAiOps({ speed: 0.01, explanation: "x" }, VIDEO_CTX).speed).toBe(0.25);
+    expect(validateAiOps({ speed: 2, explanation: "x" }, IMAGE_CTX).speed).toBeUndefined();
+  });
 });
 
 describe("AI request building", () => {

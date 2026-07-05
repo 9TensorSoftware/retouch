@@ -63,10 +63,18 @@ export interface AiEditOps {
   crop?: CropRect;
   aspect?: AspectRatioPreset;
   rotation?: number;
+  /** Absolute target orientation. */
+  orientation?: Orientation;
+  /** Toggle: mirror the displayed image horizontally. */
+  flipH?: boolean;
+  /** Toggle: mirror the displayed image vertically. */
+  flipV?: boolean;
   adjustments?: Partial<Adjustments>;
   filter?: FilterPreset;
+  filterStrength?: number;
   trim?: TrimRange;
   mute?: boolean;
+  speed?: number;
   reset?: boolean;
   explanation: string;
 }

@@ -8,6 +8,7 @@ import type {
   CropRect,
   FilterPreset,
   ImageEdits,
+  Orientation,
   VideoEdits,
 } from "../types";
 import { FILTER_PRESETS } from "../utils/filters";
@@ -27,6 +28,24 @@ const DEFAULT_MODEL = "claude-haiku-4-5";
 const DEFAULT_BASE_URL = "https://api.anthropic.com";
 const FILTER_IDS = FILTER_PRESETS.map((p) => p.id);
 const ASPECT_IDS = Object.keys(ASPECT_RATIOS).filter((id) => id !== "free");
+const ORIENTATIONS = [0, 90, 180, 270];
+
+/** [min, max] per adjustment; used for both the schema and clamping. */
+const ADJUSTMENT_RANGES: Record<keyof Adjustments, [number, number]> = {
+  brightness: [0, 200],
+  contrast: [0, 200],
+  saturation: [0, 200],
+  exposure: [-100, 100],
+  temperature: [-100, 100],
+  tint: [-100, 100],
+  hue: [-180, 180],
+  vibrance: [-100, 100],
+  sharpen: [0, 100],
+  blur: [0, 100],
+  grain: [0, 100],
+  vignette: [0, 100],
+};
+const ADJUSTMENT_KEYS = Object.keys(ADJUSTMENT_RANGES) as (keyof Adjustments)[];
 
 // ── Request building ──────────────────────────
 
@@ -55,20 +74,36 @@ export function buildSchema(context: AiContext): Record<string, unknown> {
       description: "Centered crop to a fixed aspect ratio. Prefer this for 'make it square' etc.",
     },
     rotation: { type: "number", description: "Straighten angle in degrees, -45 to 45." },
+    orientation: {
+      type: "number",
+      enum: ORIENTATIONS,
+      description: "Absolute 90°-step rotation of the whole image, clockwise degrees.",
+    },
+    flipH: { type: "boolean", description: "True to mirror the image horizontally (a toggle)." },
+    flipV: { type: "boolean", description: "True to mirror the image vertically (a toggle)." },
     adjustments: {
       type: "object",
-      description: "Absolute values 0-200 where 100 is neutral. Only include keys you change.",
-      properties: {
-        brightness: { type: "number" },
-        contrast: { type: "number" },
-        saturation: { type: "number" },
-      },
+      description:
+        "Absolute values; only include keys you change. brightness/contrast/saturation are 0-200 (100 neutral); every other key's neutral is 0.",
+      properties: Object.fromEntries(
+        ADJUSTMENT_KEYS.map((key) => [
+          key,
+          {
+            type: "number",
+            description: `${ADJUSTMENT_RANGES[key][0]} to ${ADJUSTMENT_RANGES[key][1]}`,
+          },
+        ]),
+      ),
       additionalProperties: false,
     },
     filter: {
       type: "string",
       enum: FILTER_IDS,
       description: "Preset filter. 'none' removes the current filter.",
+    },
+    filterStrength: {
+      type: "number",
+      description: "Preset intensity 0-100 (100 = full effect).",
     },
     reset: { type: "boolean", description: "True to reset every edit to defaults first." },
   };
@@ -82,6 +117,10 @@ export function buildSchema(context: AiContext): Record<string, unknown> {
       additionalProperties: false,
     };
     properties.mute = { type: "boolean", description: "Discard the audio track on export." };
+    properties.speed = {
+      type: "number",
+      description: "Playback rate 0.25-4 (1 = normal). Audio is dropped when not 1.",
+    };
   }
 
   return {
@@ -101,7 +140,8 @@ export function buildSystem(context: AiContext): string {
   const lines = [
     `You translate a user's natural-language request into edit operations for ${media} via the apply_edits tool.`,
     `Current edits: ${JSON.stringify(context.edits)}.`,
-    "Only include fields the request asks to change. Adjustment values are absolute (100 = neutral); 'a bit' ≈ ±15, 'much more' ≈ ±40.",
+    "Only include fields the request asks to change. Adjustment values are absolute; brightness/contrast/saturation are 100-neutral ('a bit' ≈ ±15, 'much more' ≈ ±40), every other adjustment is 0-neutral.",
+    "Use `orientation` (absolute 0/90/180/270 clockwise) for whole-image rotation and `rotation` only for small straightening; `flipH`/`flipV` mirror the current view.",
     "Crop coordinates are normalized 0-1 over the full frame. When asked to crop to a subject, look at the attached frame and return a tight region around it.",
     "If the request is unrelated to editing, return only an explanation saying you can't help with that.",
   ];
@@ -134,15 +174,28 @@ export function validateAiOps(raw: unknown, context: AiContext): AiEditOps {
     ops.filter = r.filter as FilterPreset;
   }
 
+  const filterStrength = toNumber(r.filterStrength);
+  if (filterStrength !== undefined) ops.filterStrength = clamp(filterStrength, 0, 100);
+
   const rotation = toNumber(r.rotation);
   if (rotation !== undefined) ops.rotation = clamp(rotation, -45, 45);
+
+  const orientation = toNumber(r.orientation);
+  if (orientation !== undefined && ORIENTATIONS.includes(orientation)) {
+    ops.orientation = orientation as Orientation;
+  }
+  if (r.flipH === true) ops.flipH = true;
+  if (r.flipV === true) ops.flipV = true;
 
   if (r.adjustments && typeof r.adjustments === "object") {
     const adj = r.adjustments as Record<string, unknown>;
     const out: Partial<Adjustments> = {};
-    for (const key of ["brightness", "contrast", "saturation"] as const) {
+    for (const key of ADJUSTMENT_KEYS) {
       const value = toNumber(adj[key]);
-      if (value !== undefined) out[key] = clamp(value, 0, 200);
+      if (value !== undefined) {
+        const [min, max] = ADJUSTMENT_RANGES[key];
+        out[key] = clamp(value, min, max);
+      }
     }
     if (Object.keys(out).length > 0) ops.adjustments = out;
   }
@@ -178,6 +231,8 @@ export function validateAiOps(raw: unknown, context: AiContext): AiEditOps {
       }
     }
     if (typeof r.mute === "boolean") ops.mute = r.mute;
+    const speed = toNumber(r.speed);
+    if (speed !== undefined) ops.speed = clamp(speed, 0.25, 4);
   }
 
   return ops;

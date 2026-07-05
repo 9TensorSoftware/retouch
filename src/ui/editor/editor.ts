@@ -245,8 +245,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
   });
 
-  /** Rotate/flip in display space, remapping the crop so it tracks the content. */
-  function applyTransformOp(op: TransformOp): void {
+  /** Mutate orientation/flips in display space, remapping the crop so it tracks content. */
+  function transformStep(op: TransformOp): void {
     const e = entry.edits;
     if (op === "rotate-cw") {
       e.orientation = rotateOrientation(e.orientation, 1);
@@ -265,8 +265,12 @@ export function createEditor(options: EditorOptions): ViewHandle {
       else e.flipH = !e.flipH;
       e.crop = flipCropY(e.crop);
     }
-    renderer.setTransform(e.orientation, e.flipH, e.flipV);
-    cropTool.setCrop(e.crop);
+  }
+
+  function applyTransformOp(op: TransformOp): void {
+    transformStep(op);
+    renderer.setTransform(entry.edits.orientation, entry.edits.flipH, entry.edits.flipV);
+    cropTool.setCrop(entry.edits.crop);
     renderer.render();
     recordEdit();
   }
@@ -407,7 +411,17 @@ export function createEditor(options: EditorOptions): ViewHandle {
           : structuredClone(DEFAULT_EDITS);
       Object.assign(entry.edits, defaults);
     }
+    // Coarse transforms first — they remap the crop, and an explicit AI crop
+    // (below) is expressed in the final display space.
+    if (ops.orientation !== undefined) {
+      const turns = ((((ops.orientation - entry.edits.orientation) / 90) % 4) + 4) % 4;
+      for (let i = 0; i < turns; i++) transformStep("rotate-cw");
+    }
+    if (ops.flipH) transformStep("flip-h");
+    if (ops.flipV) transformStep("flip-v");
+
     if (ops.filter !== undefined) entry.edits.filter = ops.filter;
+    if (ops.filterStrength !== undefined) entry.edits.filterStrength = ops.filterStrength;
     if (ops.adjustments) {
       entry.edits.adjustments = { ...entry.edits.adjustments, ...ops.adjustments };
     }
@@ -417,6 +431,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       const v = entry.edits as VideoEdits;
       if (ops.trim) v.trim = { ...ops.trim };
       if (ops.mute !== undefined) v.mute = ops.mute;
+      if (ops.speed !== undefined) v.speed = ops.speed;
     }
 
     syncToolsFromEdits();
