@@ -27,10 +27,10 @@ import { createAdjustTool } from "./adjust-tool";
 import type { AiFabHandle } from "./ai-fab";
 import { createAiFab, getStoredAiKey } from "./ai-fab";
 import { CanvasRenderer } from "./canvas-renderer";
+import type { TransformOp } from "./context-dock";
+import { createContextDock } from "./context-dock";
 import { createCropTool } from "./crop-tool";
 import { createFiltersTool } from "./filters-tool";
-import type { TransformOp } from "./properties-panel";
-import { createPropertiesPanel } from "./properties-panel";
 import { createToolbar } from "./toolbar";
 import type { TransportBarHandle } from "./transport-bar";
 import { createTransportBar } from "./transport-bar";
@@ -124,7 +124,6 @@ export function createEditor(options: EditorOptions): ViewHandle {
     "div",
     { class: "rt-editor__topbar-right" },
     historyGroup,
-    divider(),
     compareBtn,
     resetBtn,
   );
@@ -154,12 +153,13 @@ export function createEditor(options: EditorOptions): ViewHandle {
     );
     topbarRight.appendChild(captureBtn);
   }
-  topbarRight.append(divider(), cancelBtn, doneBtn);
+  topbarRight.append(divider(), doneBtn);
 
   const topbar = h(
     "div",
     { class: "rt-editor__topbar" },
-    h("div", { class: "rt-editor__topbar-left" }, filenameEl, dimsEl),
+    h("div", { class: "rt-editor__topbar-left" }, cancelBtn),
+    h("div", { class: "rt-editor__topbar-title" }, filenameEl, dimsEl),
     topbarRight,
   );
 
@@ -277,8 +277,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     recordEdit();
   }
 
-  // Properties panel (right side)
-  const propsPanel = createPropertiesPanel({
+  // Contextual controls strip (below the canvas)
+  const dock = createContextDock({
     cropTool,
     adjustTool,
     filtersTool,
@@ -293,15 +293,15 @@ export function createEditor(options: EditorOptions): ViewHandle {
     onTransform: applyTransformOp,
   });
 
-  /** Apply a tool's side effects (crop overlay visibility, panel section). */
+  /** Apply a tool's side effects (crop overlay visibility, dock pane). */
   function selectTool(tool: EditorTool): void {
     activeTool = tool;
     cropTool.setVisible(tool === "crop");
     transport?.setTrimEditable(tool === "trim");
-    propsPanel.setActiveTool(tool);
+    dock.setActiveTool(tool);
   }
 
-  // Toolbar (left side)
+  // Tool tabs (bottom)
   const toolbar = createToolbar({ tools, activeTool, onToolChange: selectTool });
 
   // Sync initial tool state (video opens on Trim, image on Crop).
@@ -320,7 +320,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     adjustTool.setAdjustments(entry.edits.adjustments);
     filtersTool.setFilter(entry.edits.filter);
     filtersTool.setStrength(entry.edits.filterStrength);
-    propsPanel.setRotation(entry.edits.rotation);
+    dock.setRotation(entry.edits.rotation);
     cropTool.setCrop(entry.edits.crop);
     if (entry.kind === "video") {
       transport?.setTrim(entry.edits.trim);
@@ -503,14 +503,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
     canvasArea.appendChild(aiFab.root);
   }
 
-  // Body — canvas and transport share a center column
-  const centerChildren: HTMLElement[] = [canvasArea];
-  if (transport) centerChildren.push(transport.root);
-  const center = h("div", { class: "rt-editor__center" }, ...centerChildren);
-  const body = h("div", { class: "rt-editor__body" }, toolbar.root, center, propsPanel.root);
-
-  // Root overlay
-  const rootChildren: HTMLElement[] = [topbar, body];
+  // Single-surface stack: canvas dominates; transport (video), contextual
+  // controls, and tool tabs sit under it — no side rails.
+  const rootChildren: HTMLElement[] = [topbar, canvasArea];
+  if (transport) rootChildren.push(transport.root);
+  rootChildren.push(dock.root, toolbar.root);
   const root = h(
     "div",
     {
@@ -641,7 +638,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       cropTool.destroy();
       adjustTool.destroy();
       filtersTool.destroy();
-      propsPanel.destroy();
+      dock.destroy();
       toolbar.destroy();
       renderer.destroy();
       root.remove();

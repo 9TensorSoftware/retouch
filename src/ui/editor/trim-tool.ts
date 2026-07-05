@@ -24,9 +24,9 @@ export function createTrimTool(options: TrimToolOptions): TrimToolHandle {
   const abort = new AbortController();
   const signal = abort.signal;
 
-  const inValue = h("span", { class: "rt-props__slider-value rt-props__trim-value" });
-  const outValue = h("span", { class: "rt-props__slider-value rt-props__trim-value" });
-  const lengthValue = h("span", { class: "rt-props__slider-value rt-props__trim-value" });
+  const inValue = h("span", { class: "rt-dock__stat-value" });
+  const outValue = h("span", { class: "rt-dock__stat-value" });
+  const lengthValue = h("span", { class: "rt-dock__stat-value" });
 
   function refresh(): void {
     inValue.textContent = formatTime(edits.trim.start);
@@ -36,7 +36,7 @@ export function createTrimTool(options: TrimToolOptions): TrimToolHandle {
 
   const unsubscribe = transport.onTrimChange(refresh);
 
-  const resetBtn = h("button", { class: "rt-props__aspect-btn" }, "Reset trim");
+  const resetBtn = h("button", { class: "rt-dock__chip" }, "Reset trim");
   resetBtn.addEventListener(
     "click",
     () => {
@@ -45,26 +45,21 @@ export function createTrimTool(options: TrimToolOptions): TrimToolHandle {
     { signal },
   );
 
-  const row = (label: string, value: HTMLElement) =>
-    h(
-      "div",
-      { class: "rt-props__row rt-props__trim-row" },
-      h("div", { class: "rt-props__label" }, label),
-      value,
-    );
+  const stat = (label: string, value: HTMLElement) =>
+    h("div", { class: "rt-dock__stat" }, h("span", { class: "rt-dock__stat-label" }, label), value);
 
   const root = h(
     "div",
-    null,
-    h("div", { class: "rt-props__title" }, "Trim"),
-    row("In", inValue),
-    row("Out", outValue),
-    row("Length", lengthValue),
-    h("div", { class: "rt-props__row" }, resetBtn),
+    { class: "rt-dock__row rt-trim" },
+    stat("In", inValue),
+    stat("Out", outValue),
+    stat("Length", lengthValue),
+    h("div", { class: "rt-dock__divider" }),
+    resetBtn,
     h(
-      "div",
-      { class: "rt-props__hint" },
-      "Drag the handles on the filmstrip. Arrow keys nudge by 0.1s, Shift for 1s.",
+      "span",
+      { class: "rt-dock__hint" },
+      "Drag the handles on the filmstrip · arrows nudge 0.1s, Shift 1s",
     ),
   );
 

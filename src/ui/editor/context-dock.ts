@@ -7,7 +7,7 @@ import type { TrimToolHandle } from "./trim-tool";
 
 export type TransformOp = "rotate-ccw" | "rotate-cw" | "flip-h" | "flip-v";
 
-export interface PropertiesPanelOptions {
+export interface ContextDockOptions {
   cropTool: CropToolHandle;
   adjustTool: AdjustToolHandle;
   filtersTool: FiltersToolHandle;
@@ -18,9 +18,9 @@ export interface PropertiesPanelOptions {
   onTransform: (op: TransformOp) => void;
 }
 
-export interface PropertiesPanelHandle extends ViewHandle {
+export interface ContextDockHandle extends ViewHandle {
   setActiveTool(tool: EditorTool): void;
-  /** Sync the rotation slider after an external change (does not fire onRotationChange). */
+  /** Sync the straighten slider after an external change (does not fire onRotationChange). */
   setRotation(degrees: number): void;
 }
 
@@ -56,131 +56,125 @@ const TRANSFORM_BUTTONS: { op: TransformOp; label: string; icon: string }[] = [
   },
 ];
 
-export function createPropertiesPanel(options: PropertiesPanelOptions): PropertiesPanelHandle {
+/**
+ * Contextual controls strip below the canvas (Pintura-style): one horizontal
+ * pane per tool, only the active tool's pane visible.
+ */
+export function createContextDock(options: ContextDockOptions): ContextDockHandle {
   const { cropTool, adjustTool, filtersTool, trimTool, edits, onRotationChange, onTransform } =
     options;
   const abort = new AbortController();
   const signal = abort.signal;
 
-  // ── Transform buttons ──
+  // ── Crop pane: transforms · aspect chips · straighten ──
 
-  const transformRow = h("div", { class: "rt-props__transform" });
+  const transformGroup = h("div", { class: "rt-dock__group" });
   for (const def of TRANSFORM_BUTTONS) {
     const btn = h("button", {
-      class: "rt-props__transform-btn",
+      class: "rt-dock__icon-btn",
       title: def.label,
       "aria-label": def.label,
     });
     btn.innerHTML = def.icon;
     btn.addEventListener("click", () => onTransform(def.op), { signal });
-    transformRow.appendChild(btn);
+    transformGroup.appendChild(btn);
   }
 
-  // ── Crop properties ──
-
   const aspectBtns = new Map<AspectRatioPreset, HTMLElement>();
-  const aspectGrid = h("div", { class: "rt-props__aspect-grid" });
-
+  const aspectGroup = h("div", { class: "rt-dock__group" });
   for (const preset of ASPECT_PRESETS) {
     const isActive = cropTool.getAspectRatio() === preset.id;
     const btn = h(
       "button",
-      {
-        class: `rt-props__aspect-btn${isActive ? " rt-props__aspect-btn--active" : ""}`,
-      },
+      { class: `rt-dock__chip${isActive ? " rt-dock__chip--active" : ""}` },
       preset.label,
     );
-
     btn.addEventListener(
       "click",
       () => {
-        for (const b of aspectBtns.values()) {
-          b.classList.remove("rt-props__aspect-btn--active");
-        }
-        btn.classList.add("rt-props__aspect-btn--active");
+        for (const b of aspectBtns.values()) b.classList.remove("rt-dock__chip--active");
+        btn.classList.add("rt-dock__chip--active");
         cropTool.setAspectRatio(preset.id);
       },
       { signal },
     );
-
     aspectBtns.set(preset.id, btn);
-    aspectGrid.appendChild(btn);
+    aspectGroup.appendChild(btn);
   }
 
-  const rotationValue = h("span", { class: "rt-props__slider-value" }, `${edits.rotation}\u00b0`);
+  const rotationValue = h("span", { class: "rt-dock__slider-value" }, `${edits.rotation}°`);
   const rotationInput = h("input", {
     type: "range",
     min: -45,
     max: 45,
     step: 1,
     value: edits.rotation,
+    "aria-label": "Straighten",
   }) as HTMLInputElement;
-
   rotationInput.addEventListener(
     "input",
     () => {
       const deg = Number(rotationInput.value);
-      rotationValue.textContent = `${deg}\u00b0`;
+      rotationValue.textContent = `${deg}°`;
       onRotationChange(deg);
     },
     { signal },
   );
-
-  const cropProps = h(
+  const straightenLabel = h(
+    "span",
+    { class: "rt-dock__slider-label", title: "Double-click to reset" },
+    "Straighten",
+  );
+  straightenLabel.addEventListener(
+    "dblclick",
+    () => {
+      rotationInput.value = "0";
+      rotationValue.textContent = "0°";
+      onRotationChange(0);
+    },
+    { signal },
+  );
+  const straightenGroup = h(
     "div",
-    null,
-    h("div", { class: "rt-props__title" }, "Crop"),
-    h(
-      "div",
-      { class: "rt-props__row" },
-      h("div", { class: "rt-props__label" }, "Transform"),
-      transformRow,
-    ),
-    h(
-      "div",
-      { class: "rt-props__row" },
-      h("div", { class: "rt-props__label" }, "Aspect Ratio"),
-      aspectGrid,
-    ),
-    h(
-      "div",
-      { class: "rt-props__row" },
-      h("div", { class: "rt-props__label" }, "Rotation"),
-      h("div", { class: "rt-props__slider" }, rotationInput, rotationValue),
-    ),
-    h("div", { class: "rt-props__divider" }),
+    { class: "rt-dock__group rt-dock__slider" },
+    straightenLabel,
+    rotationInput,
+    rotationValue,
   );
 
-  // ── Adjust properties ──
-  const adjustProps = adjustTool.root;
+  const divider = () => h("div", { class: "rt-dock__divider" });
+  const cropPane = h(
+    "div",
+    { class: "rt-dock__pane rt-dock__row" },
+    transformGroup,
+    divider(),
+    aspectGroup,
+    divider(),
+    straightenGroup,
+  );
 
-  // ── Filters properties ──
-  const filtersProps = filtersTool.root;
+  // ── Tool panes ──
 
-  // ── Trim properties (video only) ──
-  const trimProps = trimTool?.root ?? null;
+  const adjustPane = h("div", { class: "rt-dock__pane" }, adjustTool.root);
+  const filtersPane = h("div", { class: "rt-dock__pane" }, filtersTool.root);
+  const trimPane = trimTool ? h("div", { class: "rt-dock__pane" }, trimTool.root) : null;
 
-  // ── Panel ──
-  const content = h("div");
-  if (trimProps) content.appendChild(trimProps);
-  content.appendChild(cropProps);
-  content.appendChild(adjustProps);
-  content.appendChild(filtersProps);
+  const root = h("div", { class: "rt-dock" }, cropPane, adjustPane, filtersPane);
+  if (trimPane) root.appendChild(trimPane);
 
-  // Initially show crop (the editor immediately sets the real active tool)
-  adjustProps.style.display = "none";
-  filtersProps.style.display = "none";
-  if (trimProps) trimProps.style.display = "none";
-
-  const root = h("div", { class: "rt-props" }, content);
+  const panes: Partial<Record<EditorTool, HTMLElement>> = {
+    crop: cropPane,
+    adjust: adjustPane,
+    filters: filtersPane,
+    ...(trimPane ? { trim: trimPane } : {}),
+  };
 
   return {
     root,
     setActiveTool(tool) {
-      cropProps.style.display = tool === "crop" ? "" : "none";
-      adjustProps.style.display = tool === "adjust" ? "" : "none";
-      filtersProps.style.display = tool === "filters" ? "" : "none";
-      if (trimProps) trimProps.style.display = tool === "trim" ? "" : "none";
+      for (const [id, pane] of Object.entries(panes)) {
+        pane.style.display = id === tool ? "" : "none";
+      }
     },
     setRotation(degrees) {
       rotationInput.value = String(degrees);

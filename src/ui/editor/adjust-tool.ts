@@ -9,7 +9,7 @@ export interface AdjustToolOptions {
 export interface AdjustToolHandle {
   root: HTMLElement;
   getAdjustments(): Adjustments;
-  /** Sync sliders after an external change (does not fire onChange). */
+  /** Sync the UI after an external change (does not fire onChange). */
   setAdjustments(adjustments: Adjustments): void;
   destroy(): void;
 }
@@ -22,34 +22,19 @@ interface SliderDef {
   neutral: number;
 }
 
-const GROUPS: { title: string; sliders: SliderDef[] }[] = [
-  {
-    title: "Light",
-    sliders: [
-      { key: "exposure", label: "Exposure", min: -100, max: 100, neutral: 0 },
-      { key: "brightness", label: "Brightness", min: 0, max: 200, neutral: 100 },
-      { key: "contrast", label: "Contrast", min: 0, max: 200, neutral: 100 },
-    ],
-  },
-  {
-    title: "Color",
-    sliders: [
-      { key: "temperature", label: "Temperature", min: -100, max: 100, neutral: 0 },
-      { key: "tint", label: "Tint", min: -100, max: 100, neutral: 0 },
-      { key: "hue", label: "Hue", min: -180, max: 180, neutral: 0 },
-      { key: "saturation", label: "Saturation", min: 0, max: 200, neutral: 100 },
-      { key: "vibrance", label: "Vibrance", min: -100, max: 100, neutral: 0 },
-    ],
-  },
-  {
-    title: "Effects",
-    sliders: [
-      { key: "sharpen", label: "Sharpen", min: 0, max: 100, neutral: 0 },
-      { key: "blur", label: "Blur", min: 0, max: 100, neutral: 0 },
-      { key: "grain", label: "Grain", min: 0, max: 100, neutral: 0 },
-      { key: "vignette", label: "Vignette", min: 0, max: 100, neutral: 0 },
-    ],
-  },
+const DEFS: SliderDef[] = [
+  { key: "exposure", label: "Exposure", min: -100, max: 100, neutral: 0 },
+  { key: "brightness", label: "Brightness", min: 0, max: 200, neutral: 100 },
+  { key: "contrast", label: "Contrast", min: 0, max: 200, neutral: 100 },
+  { key: "temperature", label: "Temperature", min: -100, max: 100, neutral: 0 },
+  { key: "tint", label: "Tint", min: -100, max: 100, neutral: 0 },
+  { key: "hue", label: "Hue", min: -180, max: 180, neutral: 0 },
+  { key: "saturation", label: "Saturation", min: 0, max: 200, neutral: 100 },
+  { key: "vibrance", label: "Vibrance", min: -100, max: 100, neutral: 0 },
+  { key: "sharpen", label: "Sharpen", min: 0, max: 100, neutral: 0 },
+  { key: "blur", label: "Blur", min: 0, max: 100, neutral: 0 },
+  { key: "grain", label: "Grain", min: 0, max: 100, neutral: 0 },
+  { key: "vignette", label: "Vignette", min: 0, max: 100, neutral: 0 },
 ];
 
 /** Signed offset from neutral: "0", "+12", "-45". */
@@ -59,80 +44,110 @@ function formatValue(value: number, neutral: number): string {
   return diff > 0 ? `+${diff}` : `${diff}`;
 }
 
+/**
+ * One slider + a horizontal chip per adjustment (the Pintura/Apple Photos
+ * finetune pattern). Selecting a chip retargets the slider; a dot on the chip
+ * marks values away from neutral. Double-click a chip or the slider label to
+ * reset that adjustment.
+ */
 export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
   const adj: Adjustments = { ...options.adjustments };
   const abort = new AbortController();
   const signal = abort.signal;
-  const controls = new Map<
-    keyof Adjustments,
-    { input: HTMLInputElement; valueEl: HTMLElement; neutral: number }
-  >();
 
-  function createSlider(def: SliderDef): HTMLElement {
-    const valueEl = h(
-      "span",
-      { class: "rt-props__slider-value" },
-      formatValue(adj[def.key], def.neutral),
-    );
-    const input = h("input", {
-      type: "range",
-      min: def.min,
-      max: def.max,
-      step: 1,
-      value: adj[def.key],
-      "aria-label": def.label,
-    }) as HTMLInputElement;
+  let selected: SliderDef = DEFS[0];
+  const chips = new Map<keyof Adjustments, HTMLElement>();
 
-    input.addEventListener(
-      "input",
-      () => {
-        adj[def.key] = Number(input.value);
-        valueEl.textContent = formatValue(adj[def.key], def.neutral);
-        options.onChange({ ...adj });
+  // ── Slider row (retargeted by the chips) ──
+
+  const label = h(
+    "span",
+    { class: "rt-dock__slider-label", title: "Double-click to reset" },
+    selected.label,
+  );
+  const valueEl = h(
+    "span",
+    { class: "rt-dock__slider-value" },
+    formatValue(adj[selected.key], selected.neutral),
+  );
+  const input = h("input", {
+    type: "range",
+    min: selected.min,
+    max: selected.max,
+    step: 1,
+    value: adj[selected.key],
+    "aria-label": selected.label,
+  }) as HTMLInputElement;
+
+  function syncChipDot(key: keyof Adjustments): void {
+    const def = DEFS.find((d) => d.key === key);
+    chips.get(key)?.classList.toggle("rt-dock__chip--touched", adj[key] !== def?.neutral);
+  }
+
+  function setValue(value: number): void {
+    adj[selected.key] = value;
+    input.value = String(value);
+    valueEl.textContent = formatValue(value, selected.neutral);
+    syncChipDot(selected.key);
+    options.onChange({ ...adj });
+  }
+
+  input.addEventListener("input", () => setValue(Number(input.value)), { signal });
+  label.addEventListener("dblclick", () => setValue(selected.neutral), { signal });
+
+  const sliderRow = h("div", { class: "rt-dock__row rt-dock__slider" }, label, input, valueEl);
+
+  // ── Chip row ──
+
+  function select(def: SliderDef): void {
+    chips.get(selected.key)?.classList.remove("rt-dock__chip--active");
+    selected = def;
+    chips.get(def.key)?.classList.add("rt-dock__chip--active");
+    label.textContent = def.label;
+    input.min = String(def.min);
+    input.max = String(def.max);
+    input.value = String(adj[def.key]);
+    input.setAttribute("aria-label", def.label);
+    valueEl.textContent = formatValue(adj[def.key], def.neutral);
+  }
+
+  const chipRow = h("div", { class: "rt-dock__row rt-dock__chips" });
+  for (const def of DEFS) {
+    const chip = h(
+      "button",
+      {
+        class: `rt-dock__chip${def === selected ? " rt-dock__chip--active" : ""}`,
+        title: `${def.label} — double-click to reset`,
       },
-      { signal },
+      def.label,
     );
-
-    // Double-click the label to snap the slider back to neutral.
-    const label = h("div", { class: "rt-props__label", title: "Double-click to reset" }, def.label);
-    label.addEventListener(
+    chip.addEventListener("click", () => select(def), { signal });
+    chip.addEventListener(
       "dblclick",
       () => {
-        adj[def.key] = def.neutral;
-        input.value = String(def.neutral);
-        valueEl.textContent = formatValue(def.neutral, def.neutral);
-        options.onChange({ ...adj });
+        select(def);
+        setValue(def.neutral);
       },
       { signal },
     );
-
-    controls.set(def.key, { input, valueEl, neutral: def.neutral });
-
-    return h(
-      "div",
-      { class: "rt-props__row" },
-      label,
-      h("div", { class: "rt-props__slider" }, input, valueEl),
-    );
+    chips.set(def.key, chip);
+    chipRow.appendChild(chip);
   }
 
-  const root = h("div", null, h("div", { class: "rt-props__title" }, "Adjustments"));
-  for (const group of GROUPS) {
-    root.appendChild(h("div", { class: "rt-props__subtitle" }, group.title));
-    for (const def of group.sliders) {
-      root.appendChild(createSlider(def));
-    }
-  }
+  for (const def of DEFS) syncChipDot(def.key);
+
+  const root = h("div", { class: "rt-adjust" }, sliderRow, chipRow);
 
   return {
     root,
     getAdjustments: () => ({ ...adj }),
     setAdjustments(next) {
-      for (const [key, control] of controls) {
-        adj[key] = next[key];
-        control.input.value = String(next[key]);
-        control.valueEl.textContent = formatValue(next[key], control.neutral);
+      for (const def of DEFS) {
+        adj[def.key] = next[def.key];
+        syncChipDot(def.key);
       }
+      input.value = String(adj[selected.key]);
+      valueEl.textContent = formatValue(adj[selected.key], selected.neutral);
     },
     destroy() {
       abort.abort();

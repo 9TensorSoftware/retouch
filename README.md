@@ -130,7 +130,7 @@ Once images are loaded they appear in a responsive grid (or list). Each thumbnai
 
 ### 3. Editor
 
-Opens as a modal overlay with dark chrome to keep focus on the image. Tool sidebar on the left, properties panel on the right, canvas center stage. Everything from cropping to drawing to filters — all non-destructive until you hit **Done**.
+Opens as a modal overlay on a single dark surface that keeps focus on the image. The canvas dominates; the active tool's controls sit in a horizontal strip directly below it (aspect chips, one-slider adjustments, a filter filmstrip), with the tool tabs underneath — no sidebars. Everything is non-destructive until you hit **Done**.
 
 <br />
 
