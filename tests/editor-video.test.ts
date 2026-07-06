@@ -1,4 +1,5 @@
 import { createDefaultVideoEdits } from "../src/constants";
+import { getCustomTools, registerEditorTool, resolveToolDef } from "../src/ui/editor/tool-registry";
 import { createToolbar } from "../src/ui/editor/toolbar";
 import { createTransportBar } from "../src/ui/editor/transport-bar";
 
@@ -133,5 +134,52 @@ describe("toolbar tool list", () => {
     });
     expect(tb.root.querySelectorAll(".rt-toolbar__btn")).toHaveLength(3);
     tb.destroy();
+  });
+});
+
+describe("tool registry (plugin feature groups)", () => {
+  it("registers a custom tool, resolves its tab def, and renders it in the toolbar", () => {
+    registerEditorTool({
+      id: "watermark-test",
+      label: "Watermark",
+      icon: "<svg></svg>",
+      mount: () => ({ root: document.createElement("div") }),
+    });
+    expect(getCustomTools().some((t) => t.id === "watermark-test")).toBe(true);
+    expect(resolveToolDef("watermark-test").label).toBe("Watermark");
+
+    const tb = createToolbar({
+      tools: ["crop", "watermark-test"],
+      activeTool: "crop",
+      onToolChange: vi.fn(),
+    });
+    const titles = [...tb.root.querySelectorAll(".rt-toolbar__btn")].map((b) =>
+      b.getAttribute("title"),
+    );
+    expect(titles).toEqual(["Crop", "Watermark"]);
+    tb.destroy();
+  });
+
+  it("rejects duplicate and built-in ids", () => {
+    expect(() =>
+      registerEditorTool({
+        id: "crop",
+        label: "x",
+        icon: "",
+        mount: () => ({ root: document.createElement("div") }),
+      }),
+    ).toThrow(/already registered/);
+    expect(() =>
+      registerEditorTool({
+        id: "watermark-test",
+        label: "x",
+        icon: "",
+        mount: () => ({ root: document.createElement("div") }),
+      }),
+    ).toThrow(/already registered/);
+  });
+
+  it("falls back to the id for unknown tools", () => {
+    expect(resolveToolDef("mystery").label).toBe("mystery");
   });
 });

@@ -47,7 +47,7 @@ Status: ✅ shipped · 🚧 in progress · ⬜ planned.
 |--------|---|---------|
 | 🚧 | P1 | Enforce `maxFileSize` (ships with video Stage A1) |
 | 🚧 | P1 | Export progress/error/cancel events (ships with video Stage B) |
-| 🚧 | P2 | `tools` option — toolbar becomes data-driven (video Stage A2) |
+| ✅ | P2 | `tools` option — feature-group tabs are registry-driven |
 | ✅ | P2 | Export options: format png/jpeg/webp, quality, max dimension (`export` option) |
 | ⬜ | P2 | Paste-from-clipboard + URL import |
 | ⬜ | P2 | `getEdits()/setEdits()` JSON round-trip for host persistence |
@@ -81,4 +81,5 @@ Status: ✅ shipped · 🚧 in progress · ⬜ planned.
 |--------|---|---------|
 | ⬜ | P3 | Background removal (separate plugin package, WebGPU/onnx) |
 | ⬜ | P3 | Collage canvas · batch watermark |
-| ⬜ | P3 | Plugin API (`registerTool` / `registerFilter`) |
+| ✅ | — | Plugin API v1: `Retouch.registerTool` feature groups over the shared edit model (demo: "Looks") |
+| ⬜ | P3 | Plugin API v2: custom render passes + `registerFilter` (needed for Draw/Text/Sticker as plugins) |

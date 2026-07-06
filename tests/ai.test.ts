@@ -2,7 +2,7 @@ import type { AiContext } from "../src/ai/interpreter";
 import { buildSchema, buildSystem, interpretCommand, validateAiOps } from "../src/ai/interpreter";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../src/constants";
 import type { AiRequest } from "../src/types";
-import { createAiFab } from "../src/ui/editor/ai-fab";
+import { createAiChat } from "../src/ui/editor/ai-chat";
 
 const IMAGE_CTX: AiContext = {
   kind: "image",
@@ -166,102 +166,121 @@ describe("interpretCommand with a custom transport", () => {
   });
 });
 
-describe("AI floating input", () => {
+describe("AI chat panel", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     localStorage.clear();
   });
 
-  function makeFab(
+  function makeChat(
     onSubmit = vi.fn(async () => "ok"),
     ai: import("../src/types").AiOptions = { apiKey: "sk-test" },
   ) {
-    const fab = createAiFab({ ai, onSubmit });
-    document.body.appendChild(fab.root);
-    return { fab, onSubmit };
+    const chat = createAiChat({ ai, onSubmit });
+    document.body.appendChild(chat.root);
+    return { chat, onSubmit };
+  }
+
+  function messagesOf(root: HTMLElement): string[] {
+    return [...root.querySelectorAll(".rt-ai__msg")].map((m) => m.textContent ?? "");
   }
 
   it("starts collapsed and expands via the trigger or open()", () => {
-    const { fab } = makeFab();
-    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(false);
-    (fab.root.querySelector(".rt-ai-fab__trigger") as HTMLElement).click();
-    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(true);
-    fab.destroy();
+    const { chat } = makeChat();
+    expect(chat.root.classList.contains("rt-ai--open")).toBe(false);
+    (chat.root.querySelector(".rt-ai__trigger") as HTMLElement).click();
+    expect(chat.root.classList.contains("rt-ai--open")).toBe(true);
+    chat.destroy();
 
-    const { fab: fab2 } = makeFab();
-    fab2.open();
-    expect(fab2.root.classList.contains("rt-ai-fab--open")).toBe(true);
-    fab2.destroy();
+    const { chat: chat2 } = makeChat();
+    chat2.open();
+    expect(chat2.root.classList.contains("rt-ai--open")).toBe(true);
+    chat2.destroy();
   });
 
-  it("submits on Enter, shows the explanation chip, and collapses after", async () => {
-    vi.useFakeTimers();
-    const onSubmit = vi.fn(async () => "Made it moody");
-    const { fab } = makeFab(onSubmit);
-    fab.open();
-    const input = fab.root.querySelector(".rt-ai-fab__input") as HTMLInputElement;
+  it("appends a user + assistant message per prompt and keeps the thread open", async () => {
+    const onSubmit = vi
+      .fn<(prompt: string) => Promise<string>>()
+      .mockResolvedValueOnce("Made it moody")
+      .mockResolvedValueOnce("Cropped to a square");
+    const { chat } = makeChat(onSubmit);
+    chat.open();
+    const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
+
     input.value = "make it moody";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    await vi.advanceTimersByTimeAsync(0); // flush the submit promise chain
+    await vi.waitFor(() =>
+      expect(chat.root.querySelector(".rt-ai__msg--assistant")?.textContent).toBe("Made it moody"),
+    );
     expect(onSubmit).toHaveBeenCalledWith("make it moody");
-    expect(fab.root.querySelector(".rt-ai-fab__chip--ok")?.textContent).toBe("Made it moody");
     expect(input.value).toBe("");
-    vi.advanceTimersByTime(2600);
-    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(false);
-    fab.destroy();
-    vi.useRealTimers();
+    expect(chat.root.classList.contains("rt-ai--open")).toBe(true);
+
+    input.value = "now crop it square";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await vi.waitFor(() => expect(messagesOf(chat.root)).toHaveLength(4));
+    expect(messagesOf(chat.root)).toEqual([
+      "make it moody",
+      "Made it moody",
+      "now crop it square",
+      "Cropped to a square",
+    ]);
+    chat.destroy();
   });
 
-  it("shows an error chip and stays open on failure", async () => {
+  it("turns the pending message into an error and stays open on failure", async () => {
     const onSubmit = vi.fn(async () => {
       throw new Error("[Retouch] Invalid API key");
     });
-    const { fab } = makeFab(onSubmit);
-    fab.open();
-    const input = fab.root.querySelector(".rt-ai-fab__input") as HTMLInputElement;
+    const { chat } = makeChat(onSubmit);
+    chat.open();
+    const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
     input.value = "do a thing";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await vi.waitFor(() =>
-      expect(fab.root.querySelector(".rt-ai-fab__chip--error")?.textContent).toBe(
-        "Invalid API key",
-      ),
+      expect(chat.root.querySelector(".rt-ai__msg--error")?.textContent).toBe("Invalid API key"),
     );
-    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(true);
-    fab.destroy();
+    expect(chat.root.querySelector(".rt-ai__msg--user")?.textContent).toBe("do a thing");
+    expect(chat.root.classList.contains("rt-ai--open")).toBe(true);
+    chat.destroy();
   });
 
-  it("collapses on Escape (consuming the event) and on outside pointerdown", () => {
-    const { fab } = makeFab();
-    fab.open();
-    const input = fab.root.querySelector(".rt-ai-fab__input") as HTMLInputElement;
+  it("closes on Escape (consuming the event), outside pointerdown, and the × button", () => {
+    const { chat } = makeChat();
+    chat.open();
+    const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
     const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
     const documentSpy = vi.fn();
     document.addEventListener("keydown", documentSpy, { once: true });
     input.dispatchEvent(escape);
-    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(false);
+    expect(chat.root.classList.contains("rt-ai--open")).toBe(false);
     expect(documentSpy).not.toHaveBeenCalled(); // stopPropagation kept it from the editor
 
-    fab.open();
+    chat.open();
     document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
-    expect(fab.root.classList.contains("rt-ai-fab--open")).toBe(false);
-    fab.destroy();
+    expect(chat.root.classList.contains("rt-ai--open")).toBe(false);
+
+    chat.open();
+    (chat.root.querySelector(".rt-ai__close") as HTMLElement).click();
+    expect(chat.root.classList.contains("rt-ai--open")).toBe(false);
+    chat.destroy();
   });
 
   it("opens the key popover instead of submitting when allowUserKey has no stored key", () => {
     const onSubmit = vi.fn(async () => "ok");
-    const { fab } = makeFab(onSubmit, { allowUserKey: true });
-    fab.open();
-    const input = fab.root.querySelector(".rt-ai-fab__input") as HTMLInputElement;
+    const { chat } = makeChat(onSubmit, { allowUserKey: true });
+    chat.open();
+    const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
     input.value = "anything";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(fab.root.querySelector(".rt-ai-fab__popover")).not.toBeNull();
+    expect(chat.root.querySelector(".rt-ai__popover")).not.toBeNull();
 
-    const keyInput = fab.root.querySelector(".rt-ai-fab__key-input") as HTMLInputElement;
+    const keyInput = chat.root.querySelector(".rt-ai__key-input") as HTMLInputElement;
     keyInput.value = "sk-ant-test";
-    (fab.root.querySelector(".rt-ai-fab__save") as HTMLElement).click();
+    (chat.root.querySelector(".rt-ai__save") as HTMLElement).click();
     expect(localStorage.getItem("rt-ai-key")).toBe("sk-ant-test");
-    expect(fab.root.querySelector(".rt-ai-fab__popover")).toBeNull();
-    fab.destroy();
+    expect(chat.root.querySelector(".rt-ai__popover")).toBeNull();
+    chat.destroy();
   });
 });

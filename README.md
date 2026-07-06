@@ -130,7 +130,7 @@ Once images are loaded they appear in a responsive grid (or list). Each thumbnai
 
 ### 3. Editor
 
-Opens as a modal overlay on a single dark surface that keeps focus on the image. The canvas dominates; the active tool's controls sit in a horizontal strip directly below it (aspect chips, one-slider adjustments, a filter filmstrip), with the tool tabs underneath — no sidebars. Everything is non-destructive until you hit **Done**.
+Opens as a modal overlay: a dark stage that keeps focus on the image, and a clearly separated control tray below it. The active tool's controls sit in a horizontal strip (aspect chips, one-slider adjustments, a filter filmstrip), with prominent feature-group tabs underneath — no sidebars. Tabs are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
 
 <br />
 
@@ -159,13 +159,54 @@ transport. Everything is non-destructive until export:
 - **Export** — MP4 (WebM fallback) via WebCodecs + lazily-loaded [mediabunny](https://mediabunny.dev/); browsers without WebCodecs fall back to a realtime MediaRecorder pipeline
 - Progress is reported per file (`export:progress` events) with cancellation via `cancelExport()`
 
+### Plugin feature groups
+
+The editor's tabs are registry-driven. Register your own feature group — a
+tab plus a contextual pane under the canvas — or deploy only the built-ins
+you want:
+
+```ts
+Retouch.registerTool({
+  id: "looks",
+  label: "Looks",
+  icon: "<svg …></svg>",
+  // kinds: ["image"],            // optionally restrict by media kind
+  mount(ctx) {
+    const root = document.createElement("div");
+    root.className = "rt-dock__row";
+    const chip = document.createElement("button");
+    chip.className = "rt-dock__chip";
+    chip.textContent = "Golden hour";
+    chip.onclick = () => {
+      ctx.edits.filter = "warm";                       // shared edit model
+      ctx.edits.adjustments.temperature = 35;
+      ctx.render();                                    // live preview
+      ctx.record();                                    // undoable step
+    };
+    root.appendChild(chip);
+    return { root };
+  },
+});
+
+new Retouch({
+  target: "#editor",
+  tools: ["crop", "filters", "looks"],  // deploy a subset, in tab order
+});
+```
+
+Custom tools write through the same non-destructive edit model as the
+built-ins, so previews, undo/redo, AI ops, and export work unchanged. (Tools
+that need their own render passes — draw/text layers — are on the roadmap.)
+
 ### AI edits
 
-A floating ✦ button hovers over the canvas — click it (or press **⌘K**) and it
-expands into a prompt. Type what you want — *"moody and cinematic, crop to a
-square"*, *"rotate it upright and speed it up 2×"* — and a vision model maps it
-onto the same non-destructive edit operations the manual tools use, applied as
-a single undoable step. Token-gated and off by default:
+A **✦ Ask AI** pill sits at the bottom-left of the canvas — click it (or press
+**⌘K**) and it opens a vertical chat panel. Type what you want — *"moody and
+cinematic, crop to a square"*, *"rotate it upright and speed it up 2×"* — and a
+vision model maps it onto the same non-destructive edit operations the manual
+tools use, applied as a single undoable step. Each prompt and its outcome stay
+in the thread, so follow-ups ("a bit warmer", "undo the crop") read as a
+conversation. Token-gated and off by default:
 
 ```ts
 new Retouch({

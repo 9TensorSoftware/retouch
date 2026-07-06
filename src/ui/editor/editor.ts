@@ -24,13 +24,15 @@ import type { SeekQueue } from "../../utils/video";
 import { captureFrame, createSeekQueue, formatDuration } from "../../utils/video";
 import { h } from "../h";
 import { createAdjustTool } from "./adjust-tool";
-import type { AiFabHandle } from "./ai-fab";
-import { createAiFab, getStoredAiKey } from "./ai-fab";
+import type { AiChatHandle } from "./ai-chat";
+import { createAiChat, getStoredAiKey } from "./ai-chat";
 import { CanvasRenderer } from "./canvas-renderer";
 import type { TransformOp } from "./context-dock";
 import { createContextDock } from "./context-dock";
 import { createCropTool } from "./crop-tool";
 import { createFiltersTool } from "./filters-tool";
+import type { ToolContext, ToolPaneHandle } from "./tool-registry";
+import { getCustomTools } from "./tool-registry";
 import { createToolbar } from "./toolbar";
 import type { TransportBarHandle } from "./transport-bar";
 import { createTransportBar } from "./transport-bar";
@@ -65,6 +67,8 @@ export interface EditorOptions {
   /** Enables the AI command bar when configured. */
   ai?: AiOptions;
   onAiEvent?: (event: EditorAiEvent) => void;
+  /** Feature groups to mount, in tab order (defaults to all applicable). */
+  tools?: EditorTool[];
 }
 
 export function createEditor(options: EditorOptions): ViewHandle {
@@ -83,8 +87,16 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (!suppressRecord) history?.record();
   };
 
-  const tools: EditorTool[] =
+  // Feature groups: built-ins for this media kind plus registered custom
+  // tools, optionally filtered/ordered by the `tools` option.
+  const customTools = getCustomTools().filter((t) => !t.kinds || t.kinds.includes(entry.kind));
+  const builtinIds: EditorTool[] =
     entry.kind === "video" ? ["trim", "crop", "adjust", "filters"] : ["crop", "adjust", "filters"];
+  const allIds: EditorTool[] = [...builtinIds, ...customTools.map((t) => t.id)];
+  const tools: EditorTool[] = options.tools
+    ? options.tools.filter((id) => allIds.includes(id))
+    : allIds;
+  if (tools.length === 0) tools.push(builtinIds[0]);
   let activeTool: EditorTool = tools[0];
 
   // Top bar
@@ -277,8 +289,28 @@ export function createEditor(options: EditorOptions): ViewHandle {
     recordEdit();
   }
 
+  // Custom feature groups mount against the shared edit model: they mutate
+  // `edits`, then render() pushes the state everywhere and record() makes it
+  // undoable — same lifecycle the built-ins use.
+  const toolCtx: ToolContext = {
+    kind: entry.kind,
+    edits: entry.edits,
+    render: () => syncToolsFromEdits(),
+    record: recordEdit,
+    canvasArea,
+  };
+  const customHandles = new Map<EditorTool, ToolPaneHandle>();
+  const customPanes: Array<{ id: EditorTool; root: HTMLElement }> = [];
+  for (const plugin of customTools) {
+    if (!tools.includes(plugin.id)) continue;
+    const handle = plugin.mount(toolCtx);
+    customHandles.set(plugin.id, handle);
+    customPanes.push({ id: plugin.id, root: handle.root });
+  }
+
   // Contextual controls strip (below the canvas)
   const dock = createContextDock({
+    customPanes,
     cropTool,
     adjustTool,
     filtersTool,
@@ -295,10 +327,12 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   /** Apply a tool's side effects (crop overlay visibility, dock pane). */
   function selectTool(tool: EditorTool): void {
+    if (tool !== activeTool) customHandles.get(activeTool)?.onDeactivate?.();
     activeTool = tool;
     cropTool.setVisible(tool === "crop");
     transport?.setTrimEditable(tool === "trim");
     dock.setActiveTool(tool);
+    customHandles.get(tool)?.onActivate?.();
   }
 
   // Tool tabs (bottom)
@@ -327,6 +361,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       transport?.setMuted(entry.edits.mute);
       transport?.setSpeed(entry.edits.speed);
     }
+    for (const handle of customHandles.values()) handle.sync?.();
     renderer.render();
     suppressRecord = false;
   }
@@ -467,10 +502,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
     }
   }
 
-  let aiFab: AiFabHandle | null = null;
+  let aiChat: AiChatHandle | null = null;
   const aiOptions = options.ai;
   if (aiOptions && (aiOptions.apiKey || aiOptions.complete || aiOptions.allowUserKey)) {
-    aiFab = createAiFab({
+    aiChat = createAiChat({
       ai: aiOptions,
       onSubmit: async (prompt) => {
         options.onAiEvent?.({ type: "start", prompt });
@@ -499,15 +534,17 @@ export function createEditor(options: EditorOptions): ViewHandle {
         }
       },
     });
-    // Floats over the canvas, Grok-style — summoned on demand, not a fixed bar.
-    canvasArea.appendChild(aiFab.root);
+    // Anchored bottom-left of the stage; expands into a vertical chat panel.
+    canvasArea.appendChild(aiChat.root);
   }
 
-  // Single-surface stack: canvas dominates; transport (video), contextual
-  // controls, and tool tabs sit under it — no side rails.
-  const rootChildren: HTMLElement[] = [topbar, canvasArea];
-  if (transport) rootChildren.push(transport.root);
-  rootChildren.push(dock.root, toolbar.root);
+  // Stage on top; all controls live in a visually separate tray below it:
+  // transport (video), contextual dock, then the feature-group tabs.
+  const trayChildren: HTMLElement[] = [];
+  if (transport) trayChildren.push(transport.root);
+  trayChildren.push(dock.root, toolbar.root);
+  const tray = h("div", { class: "rt-editor__tray" }, ...trayChildren);
+  const rootChildren: HTMLElement[] = [topbar, canvasArea, tray];
   const root = h(
     "div",
     {
@@ -556,7 +593,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       }
       if (mod && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
-        aiFab?.open();
+        aiChat?.open();
         return;
       }
       if (mod && (e.key === "z" || e.key === "Z")) {
@@ -631,7 +668,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();
       history?.destroy();
-      aiFab?.destroy();
+      aiChat?.destroy();
+      for (const handle of customHandles.values()) handle.destroy?.();
       trimTool?.destroy();
       transport?.destroy();
       seekQueue?.destroy();

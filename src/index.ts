@@ -7,6 +7,7 @@ export type {
   AiRequest,
   AppState,
   AspectRatioPreset,
+  BuiltinEditorTool,
   CropRect,
   EditorTool,
   FileRejectionReason,
@@ -24,4 +25,9 @@ export type {
   VideoEdits,
   VideoEntry,
 } from "./types";
+export type {
+  EditorToolPlugin,
+  ToolContext,
+  ToolPaneHandle,
+} from "./ui/editor/tool-registry";
 export { isImageEntry, isVideoEntry } from "./utils/video";

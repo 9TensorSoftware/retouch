@@ -14,6 +14,8 @@ import type {
 } from "./types";
 import { createDropZone } from "./ui/drop-zone";
 import { createEditor } from "./ui/editor/editor";
+import type { EditorToolPlugin } from "./ui/editor/tool-registry";
+import { registerEditorTool } from "./ui/editor/tool-registry";
 import type { ExportOverlayHandle } from "./ui/export-overlay";
 import { createExportOverlay } from "./ui/export-overlay";
 import { createGallery } from "./ui/gallery";
@@ -39,6 +41,14 @@ const STATE_TRANSITIONS: Record<AppState, AppState[]> = {
 };
 
 export class Retouch {
+  /**
+   * Register a custom editor feature group (a tab + contextual pane) before
+   * instantiating Retouch. See `EditorToolPlugin`.
+   */
+  static registerTool(plugin: EditorToolPlugin): void {
+    registerEditorTool(plugin);
+  }
+
   private readonly root: HTMLElement;
   private readonly container: HTMLElement;
   private readonly media = new Map<string, MediaEntry>();
@@ -52,6 +62,7 @@ export class Retouch {
   > & {
     onDone?: RetouchOptions["onDone"];
     ai?: RetouchOptions["ai"];
+    tools?: RetouchOptions["tools"];
     export?: RetouchOptions["export"];
   };
 
@@ -79,6 +90,7 @@ export class Retouch {
       maxVideoDuration: options.maxVideoDuration ?? Number.POSITIVE_INFINITY,
       onDone: options.onDone,
       ai: options.ai,
+      tools: options.tools,
       export: options.export,
     };
 
@@ -399,6 +411,7 @@ export class Retouch {
           ? (canvas, time) => void this.addCapturedFrame(entry, canvas, time)
           : undefined,
       ai: this.options.ai,
+      tools: this.options.tools,
       onAiEvent: (event) => {
         if (event.type === "start") {
           this.emitter.emit("ai:start", { id: entry.id, prompt: event.prompt });

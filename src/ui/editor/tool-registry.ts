@@ -1,0 +1,94 @@
+import type { BuiltinEditorTool, ImageEdits, VideoEdits } from "../../types";
+
+/** What a custom tool gets to work with. Mutate `edits`, then render + record. */
+export interface ToolContext {
+  kind: "image" | "video";
+  /** The live, shared edit state (a `VideoEdits` when `kind` is "video"). */
+  edits: ImageEdits | VideoEdits;
+  /** Push the current edits to the canvas and every tool UI. */
+  render(): void;
+  /** Record an undoable history step (call after a user-driven change). */
+  record(): void;
+  /** The element hosting the canvas, for overlays. */
+  canvasArea: HTMLElement;
+}
+
+/** The dock pane a custom tool mounts into the editor. */
+export interface ToolPaneHandle {
+  root: HTMLElement;
+  /** Called after undo/redo/reset/AI changed the edits — refresh your UI. */
+  sync?(): void;
+  onActivate?(): void;
+  onDeactivate?(): void;
+  destroy?(): void;
+}
+
+/**
+ * A pluggable editor feature group: a tab in the toolbar plus a contextual
+ * pane in the dock. Custom tools drive the same non-destructive edit model
+ * the built-ins use, so their changes preview, undo, and export for free.
+ */
+export interface EditorToolPlugin {
+  /** Unique id; also usable in the `tools` option. */
+  id: string;
+  label: string;
+  /** Inline SVG for the tab. */
+  icon: string;
+  /** Media kinds the tool applies to. Defaults to both. */
+  kinds?: Array<"image" | "video">;
+  mount(ctx: ToolContext): ToolPaneHandle;
+}
+
+export interface ToolDef {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
+  trim: {
+    id: "trim",
+    label: "Trim",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 8L21 19M8.5 16L21 5"/></svg>',
+  },
+  crop: {
+    id: "crop",
+    label: "Crop",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18"/></svg>',
+  },
+  adjust: {
+    id: "adjust",
+    label: "Adjust",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>',
+  },
+  filters: {
+    id: "filters",
+    label: "Filters",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/></svg>',
+  },
+};
+
+const FALLBACK_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6"/></svg>';
+
+const customTools: EditorToolPlugin[] = [];
+
+/** Register a custom editor feature group. Call before instantiating Retouch. */
+export function registerEditorTool(plugin: EditorToolPlugin): void {
+  if (plugin.id in BUILTIN_TOOL_DEFS || customTools.some((t) => t.id === plugin.id)) {
+    throw new Error(`[Retouch] A tool with id "${plugin.id}" is already registered`);
+  }
+  customTools.push(plugin);
+}
+
+export function getCustomTools(): readonly EditorToolPlugin[] {
+  return customTools;
+}
+
+/** Tab metadata for any tool id — built-in or registered. */
+export function resolveToolDef(id: string): ToolDef {
+  if (id in BUILTIN_TOOL_DEFS) return BUILTIN_TOOL_DEFS[id as BuiltinEditorTool];
+  const custom = customTools.find((t) => t.id === id);
+  if (custom) return { id: custom.id, label: custom.label, icon: custom.icon };
+  return { id, label: id, icon: FALLBACK_ICON };
+}

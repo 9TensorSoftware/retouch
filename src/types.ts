@@ -1,6 +1,9 @@
 export type AppState = "idle" | "dropzone" | "gallery" | "editor" | "destroyed";
 
-export type EditorTool = "trim" | "crop" | "adjust" | "filters";
+export type BuiltinEditorTool = "trim" | "crop" | "adjust" | "filters";
+
+/** Built-in tool ids plus any id registered via `Retouch.registerTool`. */
+export type EditorTool = BuiltinEditorTool | (string & {});
 
 export type FilterPreset =
   | "none"
@@ -107,6 +110,11 @@ export interface RetouchOptions {
   maxVideoDuration?: number;
   /** Enables the AI command bar in the editor when configured. */
   ai?: AiOptions;
+  /**
+   * Editor feature groups to mount, in tab order. Filters both built-in
+   * tools and tools registered via `Retouch.registerTool`; omit for all.
+   */
+  tools?: EditorTool[];
   /** Image export format/quality/sizing. Videos always export as MP4/WebM. */
   export?: ImageExportOptions;
   /** Called when the user clicks Done in the gallery with all exported blobs. */

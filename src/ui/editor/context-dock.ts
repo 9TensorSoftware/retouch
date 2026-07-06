@@ -13,6 +13,8 @@ export interface ContextDockOptions {
   filtersTool: FiltersToolHandle;
   /** Present only for video entries. */
   trimTool?: TrimToolHandle;
+  /** Panes contributed by registered custom tools. */
+  customPanes?: Array<{ id: EditorTool; root: HTMLElement }>;
   edits: ImageEdits;
   onRotationChange: (degrees: number) => void;
   onTransform: (op: TransformOp) => void;
@@ -169,11 +171,17 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     ...(trimPane ? { trim: trimPane } : {}),
   };
 
+  for (const custom of options.customPanes ?? []) {
+    const pane = h("div", { class: "rt-dock__pane" }, custom.root);
+    root.appendChild(pane);
+    panes[custom.id] = pane;
+  }
+
   return {
     root,
     setActiveTool(tool) {
       for (const [id, pane] of Object.entries(panes)) {
-        pane.style.display = id === tool ? "" : "none";
+        if (pane) pane.style.display = id === tool ? "" : "none";
       }
     },
     setRotation(degrees) {
