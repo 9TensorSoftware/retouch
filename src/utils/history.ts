@@ -7,7 +7,7 @@ export interface HistoryOptions<T> {
   debounceMs?: number;
 }
 
-export interface HistoryController {
+export interface HistoryController<T = unknown> {
   /** Schedule a debounced checkpoint of the current state. */
   record(): void;
   /** Commit any pending debounced checkpoint immediately. */
@@ -16,6 +16,12 @@ export interface HistoryController {
   redo(): boolean;
   canUndo(): boolean;
   canRedo(): boolean;
+  /** All checkpoints, oldest first (index 0 = the original state). */
+  entries(): readonly T[];
+  /** Index of the current state within entries(). */
+  cursor(): number;
+  /** Restore an arbitrary checkpoint (undo/redo to any point). */
+  jumpTo(index: number): boolean;
   /** Subscribe to stack changes (for button enablement). Returns unsubscribe. */
   onChange(fn: () => void): () => void;
   destroy(): void;
@@ -26,7 +32,7 @@ export interface HistoryController {
  * debounce so a slider drag becomes one checkpoint; a pending edit is flushed
  * before any undo/redo so the gesture lands on a clean boundary.
  */
-export function createHistory<T>(options: HistoryOptions<T>): HistoryController {
+export function createHistory<T>(options: HistoryOptions<T>): HistoryController<T> {
   const debounceMs = options.debounceMs ?? 350;
   const stack: T[] = [options.snapshot()];
   let index = 0;
@@ -83,6 +89,20 @@ export function createHistory<T>(options: HistoryOptions<T>): HistoryController 
     },
     canRedo() {
       return timer === 0 && index < stack.length - 1;
+    },
+    entries() {
+      return stack.slice();
+    },
+    cursor() {
+      return index;
+    },
+    jumpTo(target) {
+      flushPending();
+      if (target < 0 || target >= stack.length || target === index) return false;
+      index = target;
+      options.restore(stack[index]);
+      notify();
+      return true;
     },
     onChange(fn) {
       listeners.add(fn);

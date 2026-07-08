@@ -31,10 +31,11 @@ export function getStoredAiKey(): string | null {
 }
 
 /**
- * AI entry point, bottom-left of the canvas: a labeled "✦ Ask AI ⌘K" pill
- * that expands into a vertical chat panel. Each prompt and its outcome are
- * kept as a session-scoped conversation, so refining an edit reads as a
- * dialogue rather than one-shot commands.
+ * AI entry point, top-right of the canvas: a labeled "✦ Ask AI ⌘K" pill that
+ * expands into a vertical chat panel. Each prompt and its outcome are kept as
+ * a session-scoped conversation, so refining an edit reads as a dialogue
+ * rather than one-shot commands. The panel drags by its header and resizes
+ * from its bottom-right corner.
  */
 export function createAiChat(options: AiChatOptions): AiChatHandle {
   const abort = new AbortController();
@@ -114,6 +115,67 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
 
   trigger.addEventListener("click", open, { signal });
   closeBtn.addEventListener("click", close, { signal });
+
+  // ── Drag by the header (position persists for the session) ──
+
+  let dragId: number | null = null;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragOriginX = 0;
+  let dragOriginY = 0;
+
+  header.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (closeBtn.contains(e.target as Node)) return;
+      const area = root.offsetParent as HTMLElement | null;
+      if (!area) return;
+      e.preventDefault();
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      dragOriginX = root.offsetLeft;
+      dragOriginY = root.offsetTop;
+      dragId = e.pointerId;
+      try {
+        header.setPointerCapture(e.pointerId);
+      } catch {
+        // Synthetic pointers can't be captured; move/up still bubble to us.
+      }
+      header.classList.add("rt-ai__header--dragging");
+    },
+    { signal },
+  );
+  header.addEventListener(
+    "pointermove",
+    (e) => {
+      if (dragId !== e.pointerId) return;
+      const area = root.offsetParent as HTMLElement | null;
+      if (!area) return;
+      const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
+      const x = clamp(
+        dragOriginX + e.clientX - dragStartX,
+        0,
+        Math.max(0, area.clientWidth - root.offsetWidth),
+      );
+      const y = clamp(
+        dragOriginY + e.clientY - dragStartY,
+        0,
+        Math.max(0, area.clientHeight - root.offsetHeight),
+      );
+      root.style.left = `${x}px`;
+      root.style.top = `${y}px`;
+      root.style.right = "auto";
+      root.style.bottom = "auto";
+    },
+    { signal },
+  );
+  const endDrag = (e: PointerEvent) => {
+    if (dragId !== e.pointerId) return;
+    dragId = null;
+    header.classList.remove("rt-ai__header--dragging");
+  };
+  header.addEventListener("pointerup", endDrag, { signal });
+  header.addEventListener("pointercancel", endDrag, { signal });
 
   document.addEventListener(
     "pointerdown",

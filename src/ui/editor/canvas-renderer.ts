@@ -1,6 +1,6 @@
 import { Canvas, FabricImage } from "fabric";
 import { IMAGE_PREVIEW_MAX_DIM, PREVIEW_MAX_DIM } from "../../constants";
-import type { Adjustments, FilterPreset, ImageEdits, Orientation } from "../../types";
+import type { Adjustments, CropRect, FilterPreset, ImageEdits, Orientation } from "../../types";
 import { createCanvas } from "../../utils/canvas";
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
 import { applySourceTransform, orientedDims } from "../../utils/transform";
@@ -43,6 +43,9 @@ export class CanvasRenderer {
   private flipV: boolean;
   private filter: FilterPreset;
   private filterStrength: number;
+  private crop: CropRect;
+  /** When true (any tool but Crop), the preview shows only the crop region. */
+  private cropApplied = false;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
   private looping = false;
 
@@ -56,6 +59,7 @@ export class CanvasRenderer {
     this.flipV = edits.flipV;
     this.filter = edits.filter;
     this.filterStrength = edits.filterStrength;
+    this.crop = { ...edits.crop };
 
     this.video = "videoWidth" in source ? source : null;
     if (this.video) {
@@ -153,13 +157,23 @@ export class CanvasRenderer {
     this.orientation = orientation;
     this.flipH = flipH;
     this.flipV = flipV;
-    const { width, height } = this.frameDims();
-    if (this.frameCanvas.width !== width || this.frameCanvas.height !== height) {
-      this.frameCanvas.width = width;
-      this.frameCanvas.height = height;
-      this.fabricImage.set({ width, height });
-    }
-    this.drawFrame();
+    this.updateFrameGeometry();
+  }
+
+  /** Track the crop rect (only affects pixels while the crop is applied). */
+  setCrop(crop: CropRect): void {
+    this.crop = { ...crop };
+    if (this.cropApplied) this.updateFrameGeometry();
+  }
+
+  /**
+   * Show the cropped region only (Lightroom-style: every tool but Crop sees
+   * the cropped image; the Crop tool sees the full frame plus the marquee).
+   */
+  setCropApplied(applied: boolean): void {
+    if (applied === this.cropApplied) return;
+    this.cropApplied = applied;
+    this.updateFrameGeometry();
   }
 
   getImageRect(): ImageRect {
@@ -179,7 +193,7 @@ export class CanvasRenderer {
     const availWidth = (area?.clientWidth ?? this.container.clientWidth) || 800;
     const availHeight = (area?.clientHeight ?? this.container.clientHeight) || 600;
 
-    const { width: sourceW, height: sourceH } = this.orientedSize();
+    const { width: sourceW, height: sourceH } = this.visibleSize();
     if (sourceW === 0 || sourceH === 0) return;
 
     // Fit the oriented source within the available area, with a small margin.
@@ -244,13 +258,39 @@ export class CanvasRenderer {
     return orientedDims(this.rawWidth, this.rawHeight, this.orientation);
   }
 
-  private frameDims(): { width: number; height: number } {
+  private cropActive(): boolean {
+    const c = this.crop;
+    return this.cropApplied && (c.x > 0 || c.y > 0 || c.width < 1 || c.height < 1);
+  }
+
+  /** Oriented dims of what the preview shows (crop region when applied). */
+  private visibleSize(): { width: number; height: number } {
     const { width, height } = this.orientedSize();
+    if (!this.cropActive()) return { width, height };
+    return {
+      width: Math.max(1, width * this.crop.width),
+      height: Math.max(1, height * this.crop.height),
+    };
+  }
+
+  private frameDims(): { width: number; height: number } {
+    const { width, height } = this.visibleSize();
     const cap = Math.min(this.previewCap / width, this.previewCap / height, 1);
     return {
       width: Math.max(1, Math.round(width * cap)),
       height: Math.max(1, Math.round(height * cap)),
     };
+  }
+
+  /** Resize the frame canvas to the current visible region and redraw. */
+  private updateFrameGeometry(): void {
+    const { width, height } = this.frameDims();
+    if (this.frameCanvas.width !== width || this.frameCanvas.height !== height) {
+      this.frameCanvas.width = width;
+      this.frameCanvas.height = height;
+      this.fabricImage.set({ width, height });
+    }
+    this.drawFrame();
   }
 
   private buildFrameCanvas(): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
@@ -262,10 +302,14 @@ export class CanvasRenderer {
   }
 
   private drawFrame(): void {
-    const { width: orientedW } = this.orientedSize();
-    const scale = this.frameCanvas.width / orientedW;
+    const oriented = this.orientedSize();
+    const visible = this.visibleSize();
+    const scale = this.frameCanvas.width / visible.width;
+    const cropOn = this.cropActive();
     const ctx = this.frameCtx;
     ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.frameCanvas.width, this.frameCanvas.height);
     applySourceTransform(ctx, {
       sourceWidth: this.rawWidth,
       sourceHeight: this.rawHeight,
@@ -273,6 +317,8 @@ export class CanvasRenderer {
       flipH: this.flipH,
       flipV: this.flipV,
       scale,
+      offsetX: cropOn ? this.crop.x * oriented.width * scale : 0,
+      offsetY: cropOn ? this.crop.y * oriented.height * scale : 0,
     });
     ctx.drawImage(
       this.source,

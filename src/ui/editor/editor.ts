@@ -45,6 +45,41 @@ const REDO_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 7l5 5-5 5M20 12H9a5 5 0 000 10h1"/></svg>';
 const EYE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const HISTORY_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 12a8.5 8.5 0 108.5-8.5A8.8 8.8 0 005.6 6.1L3.5 8.2"/><path d="M3.5 3.5v4.7h4.7"/><path d="M12 7.5V12l3.2 1.9"/></svg>';
+
+/** Human label for the change between two history snapshots. */
+function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdits): string {
+  const parts: string[] = [];
+  if (next.filter !== prev.filter) {
+    parts.push(next.filter === "none" ? "Remove filter" : `Filter: ${next.filter}`);
+  }
+  if (next.filterStrength !== prev.filterStrength) parts.push("Filter intensity");
+  const prevAdj = prev.adjustments as unknown as Record<string, number>;
+  const nextAdj = next.adjustments as unknown as Record<string, number>;
+  const changed = Object.keys(nextAdj).filter((k) => nextAdj[k] !== prevAdj[k]);
+  if (changed.length === 1) parts.push(changed[0][0].toUpperCase() + changed[0].slice(1));
+  else if (changed.length > 1) parts.push("Adjustments");
+  const transformed =
+    next.orientation !== prev.orientation || next.flipH !== prev.flipH || next.flipV !== prev.flipV;
+  if (next.orientation !== prev.orientation) parts.push("Rotate 90°");
+  if (next.flipH !== prev.flipH || next.flipV !== prev.flipV) parts.push("Flip");
+  if (next.rotation !== prev.rotation) parts.push("Straighten");
+  const pc = prev.crop;
+  const nc = next.crop;
+  const cropChanged =
+    pc.x !== nc.x || pc.y !== nc.y || pc.width !== nc.width || pc.height !== nc.height;
+  // A 90° turn/flip remaps the crop as a side effect — don't double-report it.
+  if (cropChanged && !transformed) parts.push("Crop");
+  if ("trim" in next && "trim" in prev) {
+    if (next.trim.start !== prev.trim.start || next.trim.end !== prev.trim.end) parts.push("Trim");
+    if (next.mute !== prev.mute) parts.push(next.mute ? "Mute" : "Unmute");
+    if (next.speed !== prev.speed) parts.push(`Speed ${next.speed}×`);
+  }
+  if (parts.length === 0) return "Edit";
+  if (parts.length <= 2) return parts.join(" · ");
+  return `${parts[0]} · ${parts[1]} +${parts.length - 2}`;
+}
 
 /** True for elements that own text-editing keystrokes (so global shortcuts skip them). */
 function isTextInput(target: EventTarget | null): boolean {
@@ -82,7 +117,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
   // Undo/redo plumbing. `recordEdit` is wired into every tool's onChange;
   // `suppressRecord` blocks it while we sync the UI from a restored snapshot.
   let suppressRecord = false;
-  let history: HistoryController | null = null;
+  let history: HistoryController<ImageEdits | VideoEdits> | null = null;
   const recordEdit = (): void => {
     if (!suppressRecord) history?.record();
   };
@@ -121,7 +156,16 @@ export function createEditor(options: EditorOptions): ViewHandle {
     "aria-label": "Redo",
   });
   redoBtn.innerHTML = REDO_ICON;
-  const historyGroup = h("div", { class: "rt-editor__history" }, undoBtn, redoBtn);
+  const historyBtn = h("button", {
+    class: "rt-editor__icon-btn",
+    title: "Edit history",
+    "aria-label": "Edit history",
+    "aria-haspopup": "true",
+  });
+  historyBtn.innerHTML = HISTORY_ICON;
+  const historyMenu = h("div", { class: "rt-history-menu" });
+  const historyWrap = h("div", { class: "rt-history" }, historyBtn, historyMenu);
+  const historyGroup = h("div", { class: "rt-editor__history" }, undoBtn, redoBtn, historyWrap);
 
   const compareBtn = h("button", {
     class: "rt-editor__icon-btn",
@@ -224,6 +268,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     edits: entry.edits,
     onChange: (crop) => {
       entry.edits.crop = crop;
+      renderer.setCrop(crop);
       renderer.render();
       recordEdit();
     },
@@ -283,6 +328,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   function applyTransformOp(op: TransformOp): void {
     transformStep(op);
+    renderer.setCrop(entry.edits.crop);
     renderer.setTransform(entry.edits.orientation, entry.edits.flipH, entry.edits.flipV);
     cropTool.setCrop(entry.edits.crop);
     renderer.render();
@@ -330,9 +376,14 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (tool !== activeTool) customHandles.get(activeTool)?.onDeactivate?.();
     activeTool = tool;
     cropTool.setVisible(tool === "crop");
+    // Lightroom-style: the Crop tool shows the full frame with a marquee;
+    // every other tool previews the cropped result.
+    renderer.setCrop(entry.edits.crop);
+    renderer.setCropApplied(tool !== "crop");
     transport?.setTrimEditable(tool === "trim");
     dock.setActiveTool(tool);
     customHandles.get(tool)?.onActivate?.();
+    renderer.render();
   }
 
   // Tool tabs (bottom)
@@ -356,6 +407,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     filtersTool.setStrength(entry.edits.filterStrength);
     dock.setRotation(entry.edits.rotation);
     cropTool.setCrop(entry.edits.crop);
+    renderer.setCrop(entry.edits.crop);
     if (entry.kind === "video") {
       transport?.setTrim(entry.edits.trim);
       transport?.setMuted(entry.edits.mute);
@@ -371,12 +423,17 @@ export function createEditor(options: EditorOptions): ViewHandle {
     restore: (state) => {
       entry.edits.crop = { ...state.crop };
       entry.edits.rotation = state.rotation;
+      entry.edits.orientation = state.orientation;
+      entry.edits.flipH = state.flipH;
+      entry.edits.flipV = state.flipV;
       entry.edits.adjustments = { ...state.adjustments };
       entry.edits.filter = state.filter;
+      entry.edits.filterStrength = state.filterStrength;
       if (entry.kind === "video" && "trim" in state) {
         const v = entry.edits as VideoEdits;
         v.trim = { ...state.trim };
         v.mute = state.mute;
+        v.speed = state.speed;
       }
       syncToolsFromEdits();
     },
@@ -393,6 +450,56 @@ export function createEditor(options: EditorOptions): ViewHandle {
   redoBtn.addEventListener("click", () => history?.redo(), { signal });
   transport?.onTrimChange(recordEdit);
 
+  // ── History timeline (hover the clock, jump to any state) ──
+
+  function buildHistoryMenu(): void {
+    if (!history) return;
+    history.flush();
+    historyMenu.innerHTML = "";
+    const card = h("div", { class: "rt-history-menu__card" });
+    const snaps = history.entries();
+    const cursor = history.cursor();
+    for (let i = snaps.length - 1; i >= 0; i--) {
+      const label = i === 0 ? "Original" : describeStep(snaps[i - 1], snaps[i]);
+      const item = h(
+        "button",
+        { class: `rt-history-menu__item${i === cursor ? " rt-history-menu__item--current" : ""}` },
+        label,
+      );
+      item.addEventListener(
+        "click",
+        () => {
+          history?.jumpTo(i);
+          buildHistoryMenu();
+        },
+        { signal },
+      );
+      card.appendChild(item);
+    }
+    historyMenu.appendChild(card);
+  }
+  historyWrap.addEventListener(
+    "pointerenter",
+    () => {
+      buildHistoryMenu();
+      historyWrap.classList.add("rt-history--open");
+    },
+    { signal },
+  );
+  historyWrap.addEventListener(
+    "pointerleave",
+    () => historyWrap.classList.remove("rt-history--open"),
+    { signal },
+  );
+  historyBtn.addEventListener(
+    "click",
+    () => {
+      buildHistoryMenu();
+      historyWrap.classList.toggle("rt-history--open");
+    },
+    { signal },
+  );
+
   // ── Compare (hold) + reset ──
 
   let comparing = false;
@@ -403,6 +510,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setAdjustments(DEFAULT_EDITS.adjustments);
     renderer.setFilter(DEFAULT_EDITS.filter);
     renderer.setRotation(DEFAULT_EDITS.rotation);
+    renderer.setCropApplied(false);
     renderer.render();
   }
   function endCompare(): void {
@@ -411,6 +519,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setAdjustments(entry.edits.adjustments);
     renderer.setFilter(entry.edits.filter);
     renderer.setRotation(entry.edits.rotation);
+    renderer.setCropApplied(activeTool !== "crop");
     renderer.render();
     cropTool.setVisible(activeTool === "crop");
   }
@@ -538,13 +647,15 @@ export function createEditor(options: EditorOptions): ViewHandle {
     canvasArea.appendChild(aiChat.root);
   }
 
-  // Stage on top; all controls live in a visually separate tray below it:
-  // transport (video), contextual dock, then the feature-group tabs.
+  // Feature-group tabs live in a left rail; the stage and the control tray
+  // (transport + contextual dock) share the center column.
   const trayChildren: HTMLElement[] = [];
   if (transport) trayChildren.push(transport.root);
-  trayChildren.push(dock.root, toolbar.root);
+  trayChildren.push(dock.root);
   const tray = h("div", { class: "rt-editor__tray" }, ...trayChildren);
-  const rootChildren: HTMLElement[] = [topbar, canvasArea, tray];
+  const center = h("div", { class: "rt-editor__center" }, canvasArea, tray);
+  const body = h("div", { class: "rt-editor__body" }, toolbar.root, center);
+  const rootChildren: HTMLElement[] = [topbar, body];
   const root = h(
     "div",
     {

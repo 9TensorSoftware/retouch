@@ -130,15 +130,15 @@ export async function processFiles(
 }
 
 export async function exportImage(
-  image: HTMLImageElement,
+  image: HTMLImageElement | HTMLCanvasElement,
   edits: ImageEdits,
   options: ImageExportOptions = {},
 ): Promise<Blob> {
   const { crop, rotation, orientation, flipH, flipV, adjustments } = edits;
 
   // Crop region in oriented (rotated/flipped) source coordinates
-  const rawW = image.naturalWidth;
-  const rawH = image.naturalHeight;
+  const rawW = "naturalWidth" in image ? image.naturalWidth : image.width;
+  const rawH = "naturalHeight" in image ? image.naturalHeight : image.height;
   const { width: orientedW, height: orientedH } = orientedDims(rawW, rawH, orientation);
   const sx = crop.x * orientedW;
   const sy = crop.y * orientedH;

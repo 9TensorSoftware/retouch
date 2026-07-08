@@ -46,33 +46,12 @@ const VIEW_ICONS: { mode: GalleryViewMode; svg: string; title: string }[] = [
   },
 ];
 
-type GallerySize = "big" | "medium" | "small";
-
-const SIZE_ICONS: { size: GallerySize; svg: string; title: string }[] = [
-  {
-    size: "big",
-    title: "Big",
-    svg: '<rect x="1.5" y="2.5" width="11" height="9" rx="0.5"/>',
-  },
-  {
-    size: "medium",
-    title: "Medium",
-    svg: '<rect x="3" y="3.5" width="8" height="7" rx="0.5"/>',
-  },
-  {
-    size: "small",
-    title: "Small",
-    svg: '<rect x="4.5" y="5" width="5" height="4" rx="0.5"/>',
-  },
-];
-
 export function createGallery(options: GalleryOptions): ViewHandle {
   const rootAbort = new AbortController();
   const rootSignal = rootAbort.signal;
   let contentAbort: AbortController | null = null;
 
   let currentMode: GalleryViewMode = "cols-3";
-  let currentSize: GallerySize = "big";
 
   // Shared hidden file input
   const input = h("input", {
@@ -116,39 +95,54 @@ export function createGallery(options: GalleryOptions): ViewHandle {
     iconBtns.push({ mode: def.mode, el: btn });
   }
 
-  // Size icon buttons
-  const sizeBtns: { size: GallerySize; el: HTMLElement }[] = [];
-  for (const def of SIZE_ICONS) {
-    const btn = h("button", {
-      class: `rt-gallery__view-btn${def.size === currentSize ? " rt-gallery__view-btn--active" : ""}`,
-      title: def.title,
-    });
-    btn.innerHTML = `<svg viewBox="0 0 14 14" fill="currentColor">${def.svg}</svg>`;
-    btn.addEventListener(
-      "click",
-      () => {
-        if (currentSize === def.size) return;
-        currentSize = def.size;
-        for (const b of sizeBtns) {
-          b.el.classList.toggle("rt-gallery__view-btn--active", b.size === currentSize);
-        }
-        root.className = `rt-gallery rt-gallery--${currentSize}`;
-      },
-      { signal: rootSignal },
-    );
-    sizeBtns.push({ size: def.size, el: btn });
-  }
+  const addBtn = h("button", { class: "rt-gallery__add-btn" });
+  addBtn.appendChild(createPlusIcon());
+  addBtn.appendChild(h("span", null, "Add more"));
+  addBtn.addEventListener("click", () => input.click(), { signal: rootSignal });
 
   const toolbar = h(
     "div",
     { class: "rt-gallery__toolbar" },
     h("div", { class: "rt-gallery__views" }, ...iconBtns.map((b) => b.el)),
     h("div", { style: "flex:1" }), // spacer
-    h("div", { class: "rt-gallery__toolbar-divider" }),
-    h("div", { class: "rt-gallery__views" }, ...sizeBtns.map((b) => b.el)),
+    addBtn,
   );
 
   const content = h("div", { class: "rt-gallery__content" });
+
+  // The whole gallery stays a drop target even without a dashed tile.
+  let dragCount = 0;
+  content.addEventListener(
+    "dragenter",
+    (e) => {
+      e.preventDefault();
+      dragCount++;
+      content.classList.add("rt-gallery__content--dropping");
+    },
+    { signal: rootSignal },
+  );
+  content.addEventListener("dragover", (e) => e.preventDefault(), { signal: rootSignal });
+  content.addEventListener(
+    "dragleave",
+    (e) => {
+      e.preventDefault();
+      dragCount = Math.max(0, dragCount - 1);
+      if (dragCount === 0) content.classList.remove("rt-gallery__content--dropping");
+    },
+    { signal: rootSignal },
+  );
+  content.addEventListener(
+    "drop",
+    (e) => {
+      e.preventDefault();
+      dragCount = 0;
+      content.classList.remove("rt-gallery__content--dropping");
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        options.onAddMore(Array.from(e.dataTransfer.files));
+      }
+    },
+    { signal: rootSignal },
+  );
 
   function renderContent(): void {
     contentAbort?.abort();
@@ -158,33 +152,27 @@ export function createGallery(options: GalleryOptions): ViewHandle {
 
     switch (currentMode) {
       case "cols-2":
-        renderColumnsView(content, options, input, signal, 2);
+        renderColumnsView(content, options, signal, 2);
         break;
       case "cols-3":
-        renderColumnsView(content, options, input, signal, 3);
+        renderColumnsView(content, options, signal, 3);
         break;
       case "cols-4":
-        renderColumnsView(content, options, input, signal, 4);
+        renderColumnsView(content, options, signal, 4);
         break;
       case "width-fit":
-        renderWidthFitView(content, options, input, signal);
+        renderWidthFitView(content, options, signal);
         break;
       case "height-fit":
-        renderHeightFitView(content, options, input, signal);
+        renderHeightFitView(content, options, signal);
         break;
       case "list":
-        renderListView(content, options, input, signal);
+        renderListView(content, options, signal);
         break;
     }
   }
 
-  const root = h(
-    "div",
-    { class: `rt-gallery rt-gallery--${currentSize}` },
-    toolbar,
-    content,
-    input,
-  );
+  const root = h("div", { class: "rt-gallery" }, toolbar, content, input);
   renderContent();
 
   return {
@@ -202,7 +190,6 @@ export function createGallery(options: GalleryOptions): ViewHandle {
 function renderColumnsView(
   container: HTMLElement,
   options: GalleryOptions,
-  input: HTMLInputElement,
   signal: AbortSignal,
   columns: number,
 ): void {
@@ -214,7 +201,6 @@ function renderColumnsView(
     grid.appendChild(createFlowCard(entry, options, signal));
   }
 
-  grid.appendChild(createAddCell(input, options, signal));
   container.appendChild(grid);
 }
 
@@ -223,7 +209,6 @@ function renderColumnsView(
 function renderWidthFitView(
   container: HTMLElement,
   options: GalleryOptions,
-  input: HTMLInputElement,
   signal: AbortSignal,
 ): void {
   const stack = h("div", { class: "rt-gallery__width-fit" });
@@ -232,7 +217,6 @@ function renderWidthFitView(
     stack.appendChild(createFlowCard(entry, options, signal));
   }
 
-  stack.appendChild(createAddCell(input, options, signal));
   container.appendChild(stack);
 }
 
@@ -241,7 +225,6 @@ function renderWidthFitView(
 function renderHeightFitView(
   container: HTMLElement,
   options: GalleryOptions,
-  input: HTMLInputElement,
   signal: AbortSignal,
 ): void {
   const strip = h("div", { class: "rt-gallery__height-fit" });
@@ -258,7 +241,6 @@ function renderHeightFitView(
     strip.appendChild(item);
   }
 
-  strip.appendChild(createAddCell(input, options, signal));
   container.appendChild(strip);
 }
 
@@ -267,7 +249,6 @@ function renderHeightFitView(
 function renderListView(
   container: HTMLElement,
   options: GalleryOptions,
-  input: HTMLInputElement,
   signal: AbortSignal,
 ): void {
   const list = h("div", { class: "rt-gallery__names" });
@@ -276,12 +257,6 @@ function renderListView(
     list.appendChild(createNameRow(entry, options, signal));
   }
 
-  const addRow = h("button", { class: "rt-gallery__names-add" });
-  addRow.appendChild(createPlusIcon());
-  addRow.appendChild(h("span", null, "Add more images"));
-  addRow.addEventListener("click", () => input.click(), { signal });
-
-  list.appendChild(addRow);
   container.appendChild(list);
 }
 
@@ -386,67 +361,6 @@ function createRemoveButton(
   return btn;
 }
 
-function createAddCell(
-  input: HTMLInputElement,
-  options: GalleryOptions,
-  signal: AbortSignal,
-): HTMLElement {
-  const cell = h(
-    "div",
-    { class: "rt-gallery__add-cell" },
-    h(
-      "div",
-      { class: "rt-gallery__add-cell-inner" },
-      createUploadIcon(),
-      h("span", null, "Drop images here or ", h("strong", null, "browse")),
-    ),
-  );
-
-  cell.addEventListener("click", () => input.click(), { signal });
-
-  let dragCounter = 0;
-
-  cell.addEventListener(
-    "dragenter",
-    (e) => {
-      e.preventDefault();
-      dragCounter++;
-      cell.classList.add("rt-gallery__add-cell--active");
-    },
-    { signal },
-  );
-
-  cell.addEventListener("dragover", (e) => e.preventDefault(), { signal });
-
-  cell.addEventListener(
-    "dragleave",
-    (e) => {
-      e.preventDefault();
-      dragCounter--;
-      if (dragCounter <= 0) {
-        dragCounter = 0;
-        cell.classList.remove("rt-gallery__add-cell--active");
-      }
-    },
-    { signal },
-  );
-
-  cell.addEventListener(
-    "drop",
-    (e) => {
-      e.preventDefault();
-      dragCounter = 0;
-      cell.classList.remove("rt-gallery__add-cell--active");
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        options.onAddMore(Array.from(e.dataTransfer.files));
-      }
-    },
-    { signal },
-  );
-
-  return cell;
-}
-
 function createNameRow(
   entry: MediaEntry,
   options: GalleryOptions,
@@ -521,22 +435,6 @@ function createPlusIcon(): SVGElement {
   const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
   p.setAttribute("d", "M8 3v10M3 8h10");
   svg.appendChild(p);
-  return svg;
-}
-
-function createUploadIcon(): SVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.5");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  const p1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  p1.setAttribute("d", "M4 14.899A7 7 0 1115.71 8h1.79a4.5 4.5 0 012.5 8.242");
-  const p2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  p2.setAttribute("d", "M12 12v9m0-9l-3 3m3-3 3 3");
-  svg.append(p1, p2);
   return svg;
 }
 

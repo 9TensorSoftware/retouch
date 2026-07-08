@@ -30,7 +30,7 @@ import {
   processFiles,
   revokeThumbnailUrl,
 } from "./utils/image";
-import { frameFileName, isImageEntry, releaseVideo } from "./utils/video";
+import { captureFrame, frameFileName, isImageEntry, releaseVideo } from "./utils/video";
 
 const STATE_TRANSITIONS: Record<AppState, AppState[]> = {
   idle: ["dropzone"],
@@ -191,6 +191,7 @@ export class Retouch {
 
     if (commit && entry) {
       entry.edited = true;
+      void this.refreshThumbnail(entry);
       this.emitter.emit("editor:done", { id, edits: entry.edits });
     } else {
       this.emitter.emit("editor:cancel", { id });
@@ -384,6 +385,29 @@ export class Retouch {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Re-render an entry's gallery thumbnail so the card shows the edited
+   * result (crop/filter/adjustments applied). Video uses the current frame.
+   */
+  private async refreshThumbnail(entry: MediaEntry): Promise<void> {
+    try {
+      const source = entry.kind === "video" ? captureFrame(entry.video) : entry.image;
+      const blob = await exportImage(source, entry.edits, {
+        format: "jpeg",
+        quality: 0.85,
+        maxDimension: 512,
+      });
+      revokeThumbnailUrl(entry.thumbnailUrl);
+      entry.thumbnailUrl = URL.createObjectURL(blob);
+      if (this.sm.state === "gallery") {
+        this.unmountCurrentView();
+        this.mountGallery();
+      }
+    } catch {
+      // Keep the original thumbnail if the preview render fails.
+    }
   }
 
   private mountGallery(): void {

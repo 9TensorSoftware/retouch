@@ -107,4 +107,34 @@ describe("createHistory", () => {
     // initial checkpoint only — nothing to undo to
     expect(history.undo()).toBe(false);
   });
+
+  it("exposes the timeline via entries()/cursor() and jumps to any state", () => {
+    const { live, history } = setup();
+    for (const v of [1, 2, 3]) {
+      live.value = v;
+      history.record();
+      vi.advanceTimersByTime(350);
+    }
+    expect(history.entries().map((s) => s.value)).toEqual([0, 1, 2, 3]);
+    expect(history.cursor()).toBe(3);
+
+    expect(history.jumpTo(1)).toBe(true);
+    expect(live.value).toBe(1);
+    expect(history.cursor()).toBe(1);
+    // Jumping is non-destructive: redo tail survives until the next edit.
+    expect(history.jumpTo(3)).toBe(true);
+    expect(live.value).toBe(3);
+
+    expect(history.jumpTo(3)).toBe(false); // no-op on same index
+    expect(history.jumpTo(99)).toBe(false); // out of range
+  });
+
+  it("flushes a pending edit before jumping", () => {
+    const { live, history } = setup();
+    live.value = 9;
+    history.record(); // pending, not yet committed
+    expect(history.jumpTo(0)).toBe(true);
+    expect(live.value).toBe(0);
+    expect(history.entries().map((s) => s.value)).toEqual([0, 9]);
+  });
 });
