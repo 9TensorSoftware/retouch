@@ -6,15 +6,20 @@ import type { CanvasRenderer } from "./canvas-renderer";
 export interface CropToolOptions {
   container: HTMLElement;
   renderer: CanvasRenderer;
-  edits: { crop: CropRect };
-  onChange: (crop: CropRect) => void;
+  /** Fires whenever the pending selection changes (drag, aspect preset). */
+  onChange: (selection: CropRect) => void;
 }
 
 export interface CropToolHandle {
   root: HTMLElement;
-  getCrop(): CropRect;
-  /** Reposition the overlay after an external crop change (does not fire onChange). */
-  setCrop(rect: CropRect): void;
+  /** Pending selection in visible-image space (0–1). Full frame = nothing to apply. */
+  getSelection(): CropRect;
+  /** True when the selection covers the whole visible frame. */
+  isSelectionFull(): boolean;
+  /** Snap the marquee back to the full visible frame (after apply/undo/transform). */
+  resetSelection(): void;
+  /** Recompute overlay pixel positions from the renderer's current rect. */
+  refresh(): void;
   setAspectRatio(preset: AspectRatioPreset): void;
   getAspectRatio(): AspectRatioPreset;
   setVisible(visible: boolean): void;
@@ -23,11 +28,17 @@ export interface CropToolHandle {
 
 type HandlePosition = "nw" | "ne" | "sw" | "se" | "n" | "s" | "w" | "e";
 
-const MIN_SIZE = 0.05; // Minimum crop size in normalized coords
+const MIN_SIZE = 0.05; // Minimum selection size in normalized coords
+const EPS = 1e-4;
 
+/**
+ * Commit-style crop marquee. It never edits the committed crop directly: the
+ * user drags a pending selection over the (already cropped) preview, and the
+ * editor composes it into the edit state when they hit Apply.
+ */
 export function createCropTool(options: CropToolOptions): CropToolHandle {
   const { container, renderer, onChange } = options;
-  const crop: CropRect = { ...options.edits.crop };
+  const sel: CropRect = { x: 0, y: 0, width: 1, height: 1 };
   let aspectRatio: AspectRatioPreset = "free";
   const abort = new AbortController();
   const signal = abort.signal;
@@ -36,7 +47,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
   const root = document.createElement("div");
   root.className = "rt-crop";
 
-  // 4 mask regions
+  // 4 mask regions (the part that will be discarded on Apply)
   const maskTop = createMask();
   const maskRight = createMask();
   const maskBottom = createMask();
@@ -78,23 +89,19 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
   function updateLayout(): void {
     const imgRect = renderer.getImageRect();
 
-    // Crop selection position in pixels (relative to container)
-    const sx = imgRect.x + crop.x * imgRect.width;
-    const sy = imgRect.y + crop.y * imgRect.height;
-    const sw = crop.width * imgRect.width;
-    const sh = crop.height * imgRect.height;
+    const sx = imgRect.x + sel.x * imgRect.width;
+    const sy = imgRect.y + sel.y * imgRect.height;
+    const sw = sel.width * imgRect.width;
+    const sh = sel.height * imgRect.height;
 
-    // Selection
     selection.style.left = `${sx}px`;
     selection.style.top = `${sy}px`;
     selection.style.width = `${sw}px`;
     selection.style.height = `${sh}px`;
 
-    // Container dimensions
     const cw = container.clientWidth || imgRect.width;
     const ch = container.clientHeight || imgRect.height;
 
-    // Masks
     maskTop.style.left = "0";
     maskTop.style.top = "0";
     maskTop.style.width = `${cw}px`;
@@ -103,7 +110,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     maskBottom.style.left = "0";
     maskBottom.style.top = `${sy + sh}px`;
     maskBottom.style.width = `${cw}px`;
-    maskBottom.style.height = `${ch - sy - sh}px`;
+    maskBottom.style.height = `${Math.max(0, ch - sy - sh)}px`;
 
     maskLeft.style.left = "0";
     maskLeft.style.top = `${sy}px`;
@@ -112,7 +119,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
 
     maskRight.style.left = `${sx + sw}px`;
     maskRight.style.top = `${sy}px`;
-    maskRight.style.width = `${cw - sx - sw}px`;
+    maskRight.style.width = `${Math.max(0, cw - sx - sw)}px`;
     maskRight.style.height = `${sh}px`;
   }
 
@@ -122,7 +129,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     type: "move" | HandlePosition;
     startX: number;
     startY: number;
-    startCrop: CropRect;
+    startSel: CropRect;
   } | null = null;
 
   selection.addEventListener(
@@ -130,7 +137,8 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     (e) => {
       if ((e.target as HTMLElement).dataset.handle) return;
       e.preventDefault();
-      dragging = { type: "move", startX: e.clientX, startY: e.clientY, startCrop: { ...crop } };
+      updateLayout(); // re-anchor in case the canvas moved since the last layout
+      dragging = { type: "move", startX: e.clientX, startY: e.clientY, startSel: { ...sel } };
     },
     { signal },
   );
@@ -141,11 +149,12 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
       (e) => {
         e.preventDefault();
         e.stopPropagation();
+        updateLayout();
         dragging = {
           type: pos as HandlePosition,
           startX: e.clientX,
           startY: e.clientY,
-          startCrop: { ...crop },
+          startSel: { ...sel },
         };
       },
       { signal },
@@ -163,17 +172,17 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
 
       const dx = (e.clientX - dragging.startX) / imgRect.width;
       const dy = (e.clientY - dragging.startY) / imgRect.height;
-      const sc = dragging.startCrop;
+      const ss = dragging.startSel;
 
       if (dragging.type === "move") {
-        crop.x = clamp(sc.x + dx, 0, 1 - sc.width);
-        crop.y = clamp(sc.y + dy, 0, 1 - sc.height);
+        sel.x = clamp(ss.x + dx, 0, 1 - ss.width);
+        sel.y = clamp(ss.y + dy, 0, 1 - ss.height);
       } else {
-        handleResize(dragging.type, sc, dx, dy);
+        handleResize(dragging.type, ss, dx, dy);
       }
 
       updateLayout();
-      onChange(crop);
+      onChange({ ...sel });
     },
     { signal },
   );
@@ -186,33 +195,33 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     { signal },
   );
 
-  function handleResize(pos: HandlePosition, sc: CropRect, dx: number, dy: number): void {
+  function handleResize(pos: HandlePosition, ss: CropRect, dx: number, dy: number): void {
     const ratio = ASPECT_RATIOS[aspectRatio];
-    let newX = sc.x;
-    let newY = sc.y;
-    let newW = sc.width;
-    let newH = sc.height;
+    let newX = ss.x;
+    let newY = ss.y;
+    let newW = ss.width;
+    let newH = ss.height;
 
     // Horizontal edges
     if (pos.includes("w")) {
-      const maxDx = sc.width - MIN_SIZE;
-      const clampedDx = clamp(dx, -sc.x, maxDx);
-      newX = sc.x + clampedDx;
-      newW = sc.width - clampedDx;
+      const maxDx = ss.width - MIN_SIZE;
+      const clampedDx = clamp(dx, -ss.x, maxDx);
+      newX = ss.x + clampedDx;
+      newW = ss.width - clampedDx;
     }
     if (pos.includes("e")) {
-      newW = clamp(sc.width + dx, MIN_SIZE, 1 - sc.x);
+      newW = clamp(ss.width + dx, MIN_SIZE, 1 - ss.x);
     }
 
     // Vertical edges
     if (pos.includes("n")) {
-      const maxDy = sc.height - MIN_SIZE;
-      const clampedDy = clamp(dy, -sc.y, maxDy);
-      newY = sc.y + clampedDy;
-      newH = sc.height - clampedDy;
+      const maxDy = ss.height - MIN_SIZE;
+      const clampedDy = clamp(dy, -ss.y, maxDy);
+      newY = ss.y + clampedDy;
+      newH = ss.height - clampedDy;
     }
     if (pos.includes("s")) {
-      newH = clamp(sc.height + dy, MIN_SIZE, 1 - sc.y);
+      newH = clamp(ss.height + dy, MIN_SIZE, 1 - ss.y);
     }
 
     // Enforce aspect ratio
@@ -236,10 +245,10 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     newW = clamp(newW, MIN_SIZE, 1 - newX);
     newH = clamp(newH, MIN_SIZE, 1 - newY);
 
-    crop.x = newX;
-    crop.y = newY;
-    crop.width = newW;
-    crop.height = newH;
+    sel.x = newX;
+    sel.y = newY;
+    sel.width = newW;
+    sel.height = newH;
   }
 
   // Initial layout
@@ -247,39 +256,45 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
 
   return {
     root,
-    getCrop: () => ({ ...crop }),
-    setCrop(rect) {
-      crop.x = clamp(rect.x, 0, 1 - MIN_SIZE);
-      crop.y = clamp(rect.y, 0, 1 - MIN_SIZE);
-      crop.width = clamp(rect.width, MIN_SIZE, 1 - crop.x);
-      crop.height = clamp(rect.height, MIN_SIZE, 1 - crop.y);
+    getSelection: () => ({ ...sel }),
+    isSelectionFull() {
+      return sel.x < EPS && sel.y < EPS && sel.width > 1 - EPS && sel.height > 1 - EPS;
+    },
+    resetSelection() {
+      sel.x = 0;
+      sel.y = 0;
+      sel.width = 1;
+      sel.height = 1;
+      aspectRatio = "free";
       updateLayout();
     },
+    refresh: updateLayout,
     setAspectRatio(preset) {
       aspectRatio = preset;
       const ratio = ASPECT_RATIOS[preset];
       if (ratio !== null && ratio !== undefined) {
-        // Adjust current crop to match ratio
+        // Fit the largest centered selection with this ratio
         const imgRect = renderer.getImageRect();
         const pixelRatio = imgRect.width / imgRect.height;
         const normalizedRatio = ratio / pixelRatio;
-        let newW = crop.width;
+        let newW = 1;
         let newH = newW / normalizedRatio;
         if (newH > 1) {
           newH = 1;
           newW = newH * normalizedRatio;
         }
-        if (crop.x + newW > 1) crop.x = Math.max(0, 1 - newW);
-        if (crop.y + newH > 1) crop.y = Math.max(0, 1 - newH);
-        crop.width = newW;
-        crop.height = newH;
+        sel.width = newW;
+        sel.height = newH;
+        sel.x = (1 - newW) / 2;
+        sel.y = (1 - newH) / 2;
         updateLayout();
-        onChange(crop);
+        onChange({ ...sel });
       }
     },
     getAspectRatio: () => aspectRatio,
     setVisible(visible) {
       root.style.display = visible ? "" : "none";
+      if (visible) updateLayout();
     },
     destroy() {
       abort.abort();

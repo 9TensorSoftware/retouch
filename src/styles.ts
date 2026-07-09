@@ -214,29 +214,46 @@ const CSS = /* css */ `
   color: white;
 }
 
-.rt-gallery__add-btn {
+.rt-gallery__add-zone {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 999px;
-  background: var(--rt-accent);
-  color: white;
+  gap: 9px;
+  padding: 9px 16px;
+  border: 1.5px dashed var(--rt-border-strong);
+  border-radius: var(--rt-radius-md);
+  background: transparent;
+  color: var(--rt-text-secondary);
   font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
   transition: var(--rt-transition);
-  font-family: inherit;
+  user-select: none;
 }
 
-.rt-gallery__add-btn:hover {
-  background: var(--rt-accent-hover);
+.rt-gallery__add-zone strong {
+  color: var(--rt-accent);
+  font-weight: 500;
 }
 
-.rt-gallery__add-btn svg {
-  width: 14px;
-  height: 14px;
+.rt-gallery__add-zone:hover,
+.rt-gallery__add-zone--active {
+  border-color: var(--rt-accent);
+  background: var(--rt-accent-soft);
+}
+
+.rt-gallery__add-zone--active {
+  border-style: solid;
+}
+
+.rt-gallery__add-zone svg {
+  width: 17px;
+  height: 17px;
+  color: var(--rt-text-tertiary);
+  transition: var(--rt-transition);
+}
+
+.rt-gallery__add-zone:hover svg,
+.rt-gallery__add-zone--active svg {
+  color: var(--rt-accent);
 }
 
 .rt-gallery__content--dropping {
@@ -806,6 +823,21 @@ const CSS = /* css */ `
   color: var(--rt-accent);
 }
 
+.rt-toolbar__btn {
+  position: relative;
+}
+
+.rt-toolbar__btn--touched::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--rt-accent);
+}
+
 .rt-toolbar__btn svg {
   width: 19px;
   height: 19px;
@@ -861,7 +893,7 @@ const CSS = /* css */ `
 
 .rt-crop__mask {
   position: absolute;
-  background: rgba(0,0,0,0.45);
+  background: rgba(0,0,0,0.6);
   pointer-events: none;
 }
 
@@ -1006,6 +1038,22 @@ const CSS = /* css */ `
 .rt-dock__chip--active {
   background: var(--rt-accent-glow);
   color: var(--rt-accent);
+}
+
+.rt-dock__chip--primary {
+  background: var(--rt-accent);
+  color: #fff;
+}
+
+.rt-dock__chip--primary:hover {
+  background: var(--rt-accent-hover);
+  color: #fff;
+}
+
+.rt-dock__chip[disabled] {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
 }
 
 /* Dot marking an adjustment that is away from neutral */

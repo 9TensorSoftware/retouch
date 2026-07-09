@@ -44,8 +44,8 @@ export class CanvasRenderer {
   private filter: FilterPreset;
   private filterStrength: number;
   private crop: CropRect;
-  /** When true (any tool but Crop), the preview shows only the crop region. */
-  private cropApplied = false;
+  /** The committed crop stays applied in every tool; compare lifts it briefly. */
+  private cropApplied = true;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
   private looping = false;
 

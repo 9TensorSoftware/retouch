@@ -1,6 +1,6 @@
 import type { AiContext } from "../../ai/interpreter";
 import { interpretCommand } from "../../ai/interpreter";
-import { createDefaultVideoEdits, DEFAULT_EDITS } from "../../constants";
+import { createDefaultVideoEdits, DEFAULT_ADJUSTMENTS, DEFAULT_EDITS } from "../../constants";
 import type {
   AiEditOps,
   AiOptions,
@@ -13,6 +13,7 @@ import type {
 import { createCanvas } from "../../utils/canvas";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
+import { clamp } from "../../utils/math";
 import {
   flipCropX,
   flipCropY,
@@ -261,18 +262,57 @@ export function createEditor(options: EditorOptions): ViewHandle {
     void seekQueue.seek(videoEdits.trim.start);
   }
 
-  // Crop tool (DOM overlay, sits inside canvasContainer)
+  // Crop tool (DOM overlay, sits inside canvasContainer). Commit-style: the
+  // marquee is a pending selection; nothing changes until Apply.
   const cropTool = createCropTool({
     container: canvasContainer,
     renderer,
-    edits: entry.edits,
-    onChange: (crop) => {
-      entry.edits.crop = crop;
-      renderer.setCrop(crop);
-      renderer.render();
-      recordEdit();
-    },
+    onChange: () => syncCropButtons(),
   });
+
+  /** True when a crop is committed (the preview shows less than the source). */
+  function hasCommittedCrop(): boolean {
+    const c = entry.edits.crop;
+    return c.x > 1e-6 || c.y > 1e-6 || c.width < 1 - 1e-6 || c.height < 1 - 1e-6;
+  }
+
+  function syncCropButtons(): void {
+    dock.setCropApplyEnabled(!cropTool.isSelectionFull());
+    dock.setCropResetEnabled(hasCommittedCrop());
+  }
+
+  /** Compose the pending selection into the committed crop. */
+  function applyCrop(): void {
+    if (cropTool.isSelectionFull()) return;
+    const sel = cropTool.getSelection();
+    const c = entry.edits.crop;
+    entry.edits.crop = {
+      x: clamp(c.x + sel.x * c.width, 0, 1),
+      y: clamp(c.y + sel.y * c.height, 0, 1),
+      width: clamp(sel.width * c.width, 0.01, 1),
+      height: clamp(sel.height * c.height, 0.01, 1),
+    };
+    renderer.setCrop(entry.edits.crop);
+    renderer.render();
+    cropTool.resetSelection();
+    cropTool.refresh();
+    dock.setAspect("free");
+    syncCropButtons();
+    recordEdit();
+  }
+
+  /** Bring the discarded area back (the crop is non-destructive). */
+  function resetCrop(): void {
+    if (!hasCommittedCrop()) return;
+    entry.edits.crop = { x: 0, y: 0, width: 1, height: 1 };
+    renderer.setCrop(entry.edits.crop);
+    renderer.render();
+    cropTool.resetSelection();
+    cropTool.refresh();
+    dock.setAspect("free");
+    syncCropButtons();
+    recordEdit();
+  }
 
   // Adjust tool
   const adjustTool = createAdjustTool({
@@ -330,8 +370,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
     transformStep(op);
     renderer.setCrop(entry.edits.crop);
     renderer.setTransform(entry.edits.orientation, entry.edits.flipH, entry.edits.flipV);
-    cropTool.setCrop(entry.edits.crop);
     renderer.render();
+    cropTool.resetSelection();
+    cropTool.refresh();
+    syncCropButtons();
     recordEdit();
   }
 
@@ -369,21 +411,25 @@ export function createEditor(options: EditorOptions): ViewHandle {
       recordEdit();
     },
     onTransform: applyTransformOp,
+    onApplyCrop: applyCrop,
+    onResetCrop: resetCrop,
   });
 
   /** Apply a tool's side effects (crop overlay visibility, dock pane). */
   function selectTool(tool: EditorTool): void {
     if (tool !== activeTool) customHandles.get(activeTool)?.onDeactivate?.();
     activeTool = tool;
-    cropTool.setVisible(tool === "crop");
-    // Lightroom-style: the Crop tool shows the full frame with a marquee;
-    // every other tool previews the cropped result.
-    renderer.setCrop(entry.edits.crop);
-    renderer.setCropApplied(tool !== "crop");
     transport?.setTrimEditable(tool === "trim");
     dock.setActiveTool(tool);
     customHandles.get(tool)?.onActivate?.();
     renderer.render();
+    // The committed crop stays applied in every tool — entering Crop just
+    // overlays a fresh selection marquee, so the image never resizes.
+    cropTool.setVisible(tool === "crop");
+    if (tool === "crop") {
+      cropTool.refresh();
+      syncCropButtons();
+    }
   }
 
   // Tool tabs (bottom)
@@ -406,7 +452,6 @@ export function createEditor(options: EditorOptions): ViewHandle {
     filtersTool.setFilter(entry.edits.filter);
     filtersTool.setStrength(entry.edits.filterStrength);
     dock.setRotation(entry.edits.rotation);
-    cropTool.setCrop(entry.edits.crop);
     renderer.setCrop(entry.edits.crop);
     if (entry.kind === "video") {
       transport?.setTrim(entry.edits.trim);
@@ -415,6 +460,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
     }
     for (const handle of customHandles.values()) handle.sync?.();
     renderer.render();
+    cropTool.resetSelection();
+    cropTool.refresh();
+    dock.setAspect("free");
+    syncCropButtons();
     suppressRecord = false;
   }
 
@@ -439,9 +488,33 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
   });
 
+  /** Orange dot per feature group while its edits are away from neutral. */
+  function updateToolDots(): void {
+    const e = entry.edits;
+    toolbar.setTouched(
+      "crop",
+      hasCommittedCrop() || e.rotation !== 0 || e.orientation !== 0 || e.flipH || e.flipV,
+    );
+    const adj = e.adjustments as unknown as Record<string, number>;
+    const defaults = DEFAULT_ADJUSTMENTS as unknown as Record<string, number>;
+    toolbar.setTouched(
+      "adjust",
+      Object.keys(adj).some((k) => adj[k] !== defaults[k]),
+    );
+    toolbar.setTouched("filters", e.filter !== "none");
+    if (entry.kind === "video") {
+      const v = entry.edits;
+      toolbar.setTouched(
+        "trim",
+        v.trim.start > 1e-4 || v.trim.end < entry.duration - 1e-4 || v.mute || v.speed !== 1,
+      );
+    }
+  }
+
   function syncHistoryButtons(): void {
     undoBtn.toggleAttribute("disabled", !history?.canUndo());
     redoBtn.toggleAttribute("disabled", !history?.canRedo());
+    updateToolDots();
   }
   history.onChange(syncHistoryButtons);
   syncHistoryButtons();
@@ -519,9 +592,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setAdjustments(entry.edits.adjustments);
     renderer.setFilter(entry.edits.filter);
     renderer.setRotation(entry.edits.rotation);
-    renderer.setCropApplied(activeTool !== "crop");
+    renderer.setCropApplied(true);
     renderer.render();
     cropTool.setVisible(activeTool === "crop");
+    if (activeTool === "crop") cropTool.refresh();
   }
   compareBtn.addEventListener(
     "pointerdown",
@@ -582,8 +656,9 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
     syncToolsFromEdits();
     if (ops.aspect) {
-      // setAspectRatio recomputes the crop and records via its own onChange.
+      // Aspect shapes a selection over the current frame; commit it (records).
       cropTool.setAspectRatio(ops.aspect);
+      applyCrop();
     } else {
       history?.record();
     }
@@ -747,6 +822,12 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
       if (inText) return;
 
+      if (e.key === "Enter" && activeTool === "crop") {
+        e.preventDefault();
+        applyCrop();
+        return;
+      }
+
       const num = Number(e.key);
       if (Number.isInteger(num) && num >= 1 && num <= tools.length) {
         e.preventDefault();
@@ -762,6 +843,21 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
     { signal },
   );
+
+  // Refit the canvas when the stage resizes (window resize, panel changes) —
+  // otherwise the fit scale is stale and the image renders at the wrong size.
+  let resizeObserver: ResizeObserver | null = null;
+  if (typeof ResizeObserver !== "undefined") {
+    let raf = 0;
+    resizeObserver = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        renderer.render();
+        if (activeTool === "crop") cropTool.refresh();
+      });
+    });
+    resizeObserver.observe(canvasArea);
+  }
 
   // Move focus into the modal once the caller has attached it. A microtask
   // runs right after the synchronous mount (and isn't throttled in hidden tabs
@@ -779,6 +875,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();
       history?.destroy();
+      resizeObserver?.disconnect();
       aiChat?.destroy();
       for (const handle of customHandles.values()) handle.destroy?.();
       trimTool?.destroy();

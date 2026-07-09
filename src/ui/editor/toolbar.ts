@@ -11,6 +11,8 @@ export interface ToolbarOptions {
 
 export interface ToolbarHandle extends ViewHandle {
   setActiveTool(tool: EditorTool): void;
+  /** Show/hide the accent dot marking a feature group with active edits. */
+  setTouched(tool: EditorTool, touched: boolean): void;
 }
 
 export function createToolbar(options: ToolbarOptions): ToolbarHandle {
@@ -52,6 +54,9 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
       buttons.get(active)?.classList.remove("rt-toolbar__btn--active");
       buttons.get(tool)?.classList.add("rt-toolbar__btn--active");
       active = tool;
+    },
+    setTouched(tool, touched) {
+      buttons.get(tool)?.classList.toggle("rt-toolbar__btn--touched", touched);
     },
     destroy() {
       abort.abort();

@@ -18,12 +18,22 @@ export interface ContextDockOptions {
   edits: ImageEdits;
   onRotationChange: (degrees: number) => void;
   onTransform: (op: TransformOp) => void;
+  /** Commit the pending crop selection. */
+  onApplyCrop: () => void;
+  /** Restore the full original frame. */
+  onResetCrop: () => void;
 }
 
 export interface ContextDockHandle extends ViewHandle {
   setActiveTool(tool: EditorTool): void;
   /** Sync the straighten slider after an external change (does not fire onRotationChange). */
   setRotation(degrees: number): void;
+  /** Enable/disable the Apply-crop button (enabled while a selection is pending). */
+  setCropApplyEnabled(enabled: boolean): void;
+  /** Enable/disable Reset-crop (enabled while a crop is committed). */
+  setCropResetEnabled(enabled: boolean): void;
+  /** Reflect the crop tool's aspect preset in the chips. */
+  setAspect(preset: AspectRatioPreset): void;
 }
 
 const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
@@ -84,6 +94,11 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
 
   const aspectBtns = new Map<AspectRatioPreset, HTMLElement>();
   const aspectGroup = h("div", { class: "rt-dock__group" });
+  function setActiveAspect(preset: AspectRatioPreset): void {
+    for (const [id, b] of aspectBtns) {
+      b.classList.toggle("rt-dock__chip--active", id === preset);
+    }
+  }
   for (const preset of ASPECT_PRESETS) {
     const isActive = cropTool.getAspectRatio() === preset.id;
     const btn = h(
@@ -94,8 +109,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     btn.addEventListener(
       "click",
       () => {
-        for (const b of aspectBtns.values()) b.classList.remove("rt-dock__chip--active");
-        btn.classList.add("rt-dock__chip--active");
+        setActiveAspect(preset.id);
         cropTool.setAspectRatio(preset.id);
       },
       { signal },
@@ -103,6 +117,17 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     aspectBtns.set(preset.id, btn);
     aspectGroup.appendChild(btn);
   }
+
+  // Commit / restore — the selection only takes effect on Apply.
+  const applyBtn = h(
+    "button",
+    { class: "rt-dock__chip rt-dock__chip--primary", disabled: "" },
+    "Apply crop",
+  );
+  applyBtn.addEventListener("click", () => options.onApplyCrop(), { signal });
+  const resetCropBtn = h("button", { class: "rt-dock__chip", disabled: "" }, "Reset crop");
+  resetCropBtn.addEventListener("click", () => options.onResetCrop(), { signal });
+  const commitGroup = h("div", { class: "rt-dock__group" }, applyBtn, resetCropBtn);
 
   const rotationValue = h("span", { class: "rt-dock__slider-value" }, `${edits.rotation}°`);
   const rotationInput = h("input", {
@@ -148,9 +173,11 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const cropPane = h(
     "div",
     { class: "rt-dock__pane rt-dock__row" },
-    transformGroup,
+    commitGroup,
     divider(),
     aspectGroup,
+    divider(),
+    transformGroup,
     divider(),
     straightenGroup,
   );
@@ -187,6 +214,15 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     setRotation(degrees) {
       rotationInput.value = String(degrees);
       rotationValue.textContent = `${degrees}°`;
+    },
+    setCropApplyEnabled(enabled) {
+      applyBtn.toggleAttribute("disabled", !enabled);
+    },
+    setCropResetEnabled(enabled) {
+      resetCropBtn.toggleAttribute("disabled", !enabled);
+    },
+    setAspect(preset) {
+      setActiveAspect(preset);
     },
     destroy() {
       abort.abort();

@@ -95,17 +95,64 @@ export function createGallery(options: GalleryOptions): ViewHandle {
     iconBtns.push({ mode: def.mode, el: btn });
   }
 
-  const addBtn = h("button", { class: "rt-gallery__add-btn" });
-  addBtn.appendChild(createPlusIcon());
-  addBtn.appendChild(h("span", null, "Add more"));
-  addBtn.addEventListener("click", () => input.click(), { signal: rootSignal });
+  // Compact echo of the initial drop zone: click to browse or drag files on.
+  const addZone = h(
+    "div",
+    { class: "rt-gallery__add-zone", role: "button", tabindex: 0, title: "Add more files" },
+    createUploadIcon(),
+    h("span", null, "Drop files or ", h("strong", null, "browse")),
+  );
+  addZone.addEventListener("click", () => input.click(), { signal: rootSignal });
+  addZone.addEventListener(
+    "keydown",
+    (e) => {
+      if ((e as KeyboardEvent).key === "Enter" || (e as KeyboardEvent).key === " ") {
+        e.preventDefault();
+        input.click();
+      }
+    },
+    { signal: rootSignal },
+  );
+  let zoneDrag = 0;
+  addZone.addEventListener(
+    "dragenter",
+    (e) => {
+      e.preventDefault();
+      zoneDrag++;
+      addZone.classList.add("rt-gallery__add-zone--active");
+    },
+    { signal: rootSignal },
+  );
+  addZone.addEventListener("dragover", (e) => e.preventDefault(), { signal: rootSignal });
+  addZone.addEventListener(
+    "dragleave",
+    (e) => {
+      e.preventDefault();
+      zoneDrag = Math.max(0, zoneDrag - 1);
+      if (zoneDrag === 0) addZone.classList.remove("rt-gallery__add-zone--active");
+    },
+    { signal: rootSignal },
+  );
+  addZone.addEventListener(
+    "drop",
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zoneDrag = 0;
+      addZone.classList.remove("rt-gallery__add-zone--active");
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        options.onAddMore(Array.from(e.dataTransfer.files));
+      }
+    },
+    { signal: rootSignal },
+  );
 
   const toolbar = h(
     "div",
     { class: "rt-gallery__toolbar" },
     h("div", { class: "rt-gallery__views" }, ...iconBtns.map((b) => b.el)),
     h("div", { style: "flex:1" }), // spacer
-    addBtn,
+    addZone,
   );
 
   const content = h("div", { class: "rt-gallery__content" });
@@ -426,15 +473,19 @@ function createNameRow(
   return row;
 }
 
-function createPlusIcon(): SVGElement {
+function createUploadIcon(): SVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("fill", "none");
   svg.setAttribute("stroke", "currentColor");
   svg.setAttribute("stroke-width", "1.5");
-  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  p.setAttribute("d", "M8 3v10M3 8h10");
-  svg.appendChild(p);
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  const p1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p1.setAttribute("d", "M4 14.899A7 7 0 1115.71 8h1.79a4.5 4.5 0 012.5 8.242");
+  const p2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p2.setAttribute("d", "M12 12v9m0-9l-3 3m3-3 3 3");
+  svg.append(p1, p2);
   return svg;
 }
 
