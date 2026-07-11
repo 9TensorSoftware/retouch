@@ -13,11 +13,29 @@ export interface FetchProgress {
   total: number;
 }
 
+const inflight = new Map<string, Promise<ArrayBuffer>>();
+
 /**
  * Fetch a model file, reporting progress and caching the bytes. Falls back
  * to a plain fetch where the Cache API is unavailable (private windows).
+ * Concurrent requests for the same URL share one download.
  */
-export async function fetchModel(
+export function fetchModel(
+  url: string,
+  onProgress?: (progress: FetchProgress) => void,
+): Promise<ArrayBuffer> {
+  const existing = inflight.get(url);
+  if (existing) return existing;
+  const promise = fetchModelUncached(url, onProgress);
+  inflight.set(url, promise);
+  promise.then(
+    () => inflight.delete(url),
+    () => inflight.delete(url),
+  );
+  return promise;
+}
+
+async function fetchModelUncached(
   url: string,
   onProgress?: (progress: FetchProgress) => void,
 ): Promise<ArrayBuffer> {

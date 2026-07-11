@@ -11,6 +11,10 @@ cached via the Cache API.
   point `modelUrl` at any BiRefNet ONNX export for higher fidelity. Registers
   a "Cutout" tab in the editor; the result is added to the gallery as a new
   transparent PNG.
+- **Upscale (4× super-resolution)** — Real-ESRGAN x4plus (BSD-3-Clause,
+  ~67 MB), run tile-by-tile with overlap so seams never show. WebGPU when the
+  device can take it, automatic WASM fallback when a kernel fails mid-run.
+  Inputs are capped at a 2048px long edge; transparency is preserved.
 
 ## Usage
 
@@ -39,15 +43,20 @@ By default, model weights load from the Hugging Face CDN and the ONNX Runtime
 
 ```ts
 installMlTools(retouch, {
-  modelUrl: "https://your.cdn/models/modnet.onnx",
-  wasmPaths: "https://your.cdn/ort/",
+  cutout: { modelUrl: "https://your.cdn/models/modnet.onnx", wasmPaths: "https://your.cdn/ort/" },
+  upscale: { modelUrl: "https://your.cdn/models/realesrgan-x4plus.onnx" },
 });
 ```
+
+Pass `cutout: false` or `upscale: false` to skip registering a tool.
+`wasmPaths` is page-global — setting it in either tool's options applies to
+both.
 
 `clearModelCache()` drops the cached weights.
 
 ## Licenses
 
-The package is MIT. Default model weights: MODNet (Apache-2.0). ONNX Runtime
-Web is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
-per-model license audit.
+The package is MIT. Default model weights: MODNet (Apache-2.0) and
+Real-ESRGAN x4plus (BSD-3-Clause). ONNX Runtime Web is MIT. See
+`docs/ADVANCED-FEATURES.md` in the repo root for the full per-model license
+audit.

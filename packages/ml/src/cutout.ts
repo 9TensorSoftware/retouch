@@ -1,3 +1,4 @@
+import { enqueueInference } from "./queue";
 import { loadSession, ort, type RuntimeOptions } from "./runtime";
 
 /**
@@ -98,7 +99,7 @@ export async function removeBackground(
     ref.width,
   ]);
   const inputName = session.inputNames[0];
-  const outputs = await session.run({ [inputName]: input });
+  const outputs = await enqueueInference(() => session.run({ [inputName]: input }));
   const matte = outputs[session.outputNames[0]].data as Float32Array;
 
   // Upsample the matte to full resolution with canvas bilinear filtering

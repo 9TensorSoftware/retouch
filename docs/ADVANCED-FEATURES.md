@@ -59,7 +59,7 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 
 1. ✅ Background removal / cutout — shipped in `@9tensor/retouch-ml` M1: MODNet (Apache-2.0, ~25 MB) default, any BiRefNet ONNX export via `modelUrl`; ORT-web WebGPU→WASM, Cache API weights, result lands as a new gallery image
 2. Object erase / heal brush — **LaMa** (Apache-2.0), **MI-GAN** (MIT) for small installs
-3. Upscale 2–4× — **Real-ESRGAN** (BSD-3)
+3. ✅ Upscale 4× — shipped in `@9tensor/retouch-ml` M2: Real-ESRGAN x4plus ONNX (BSD-3, ~67 MB, dynamic shapes), overlap-padded tile inference (64px cores + 8px context, no seams), WebGPU with run-level WASM fallback (some devices fail Conv buffers only at inference time), alpha carried via canvas upsampling, 2048px input cap
 4. Depth effects — **Depth Anything V2 Small** (Apache-2.0): bokeh, fog, depth grade
 5. Click-to-select subject — **SAM2** (Apache-2.0) masks feeding selective adjustments
 6. Colorize B&W — **DDColor** (Apache-2.0)
@@ -79,4 +79,4 @@ realistic browser path. Revisit only if a server proxy tier is ever wanted.
 ## Recommended order
 
 1. ✅ Tier A (all 11 shipped)
-2. `@9tensor/retouch-ml` milestones (agreed 2026-07): ✅ M1 scaffold+cutout → M2 upscale (Real-ESRGAN) → M3 erase (MI-GAN/LaMa) → M4 detection pack (B 11) → M5 SAM2 select → M6+ depth bokeh, colorize, GFPGAN, denoise
+2. `@9tensor/retouch-ml` milestones (agreed 2026-07): ✅ M1 scaffold+cutout → ✅ M2 upscale (Real-ESRGAN) → M3 erase (MI-GAN/LaMa) → M4 detection pack (B 11) → M5 SAM2 select → M6+ depth bokeh, colorize, GFPGAN, denoise

@@ -9,4 +9,13 @@ export {
 } from "./cutout";
 export { clearModelCache, type FetchProgress, fetchModel } from "./model-cache";
 export { installMlTools, type MlToolsOptions } from "./plugin";
-export { loadSession, type RuntimeOptions } from "./runtime";
+export { enqueueInference } from "./queue";
+export { loadSession, type RuntimeOptions, releaseSession } from "./runtime";
+export { computeTileGrid, type Tile } from "./tiles";
+export {
+  chw01ToRgba,
+  DEFAULT_UPSCALE_MODEL_URL,
+  rgbaToChw01,
+  type UpscaleOptions,
+  upscaleImage,
+} from "./upscale";
