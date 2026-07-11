@@ -6,6 +6,7 @@ export type BuiltinEditorTool =
   | "transform"
   | "curves"
   | "hsl"
+  | "masks"
   | "adjust"
   | "filters";
 
@@ -192,6 +193,36 @@ export interface HslShift {
 /** Lightroom-style HSL mixer: independent shifts for eight hue bands. */
 export type HslMixer = Record<HslBand, HslShift>;
 
+export type MaskKind = "linear" | "radial";
+
+/** Local adjustment deltas inside a mask, each -100..100 (0 = neutral). */
+export interface LocalAdjust {
+  exposure: number;
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  temperature: number;
+  tint: number;
+}
+
+/**
+ * A selective-adjustment mask. Geometry is normalized over the visible
+ * (cropped/warped) frame: linear masks fade from full effect at (x0,y0) to
+ * none at (x1,y1); radial masks are ellipses centered at (x0,y0) with radii
+ * |x1−x0| × |y1−y0| and a feathered edge.
+ */
+export interface EditMask {
+  id: string;
+  kind: MaskKind;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** Apply outside the shape instead of inside. */
+  invert: boolean;
+  adjust: LocalAdjust;
+}
+
 /** One tone-curve control point, both axes normalized 0–1. */
 export interface CurvePoint {
   x: number;
@@ -226,6 +257,8 @@ export interface ImageEdits {
   curves: Curves;
   /** Per-hue-band color mixer, applied before the curves. */
   hsl: HslMixer;
+  /** Selective-adjustment masks, applied before the global color passes. */
+  masks: EditMask[];
   /** Preset filter applied beneath the adjustments. */
   filter: FilterPreset;
   /** Preset intensity, 0–100. */

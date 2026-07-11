@@ -9,6 +9,7 @@ import type {
   Adjustments,
   CropRect,
   Curves,
+  EditMask,
   FilterPreset,
   HslMixer,
   ImageEdits,
@@ -20,6 +21,8 @@ import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../../u
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
 import type { HueTable } from "../../utils/hsl";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "../../utils/hsl";
+import type { PreparedMask } from "../../utils/masks";
+import { applyMasksToContext, prepareMasks } from "../../utils/masks";
 import { applyKeystone, hasKeystone } from "../../utils/perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "../../utils/transform";
 
@@ -67,6 +70,8 @@ export class CanvasRenderer {
   private hsl: HslMixer = createDefaultHsl();
   /** Cached hue table; null while the mixer is neutral. */
   private hueTable: HueTable | null = null;
+  /** Masks with precomputed matrices; empty while all masks are neutral. */
+  private preparedMasks: PreparedMask[] = [];
   private orientation: Orientation;
   private flipH: boolean;
   private flipV: boolean;
@@ -87,6 +92,7 @@ export class CanvasRenderer {
     this.keystoneH = edits.keystoneH;
     this.setCurves(edits.curves);
     this.setHsl(edits.hsl);
+    this.setMasks(edits.masks);
     this.orientation = edits.orientation;
     this.flipH = edits.flipH;
     this.flipV = edits.flipV;
@@ -137,6 +143,9 @@ export class CanvasRenderer {
     this.fabricCanvas.on("after:render", ({ ctx: renderCtx }) => {
       if (!renderCtx) return;
       const el = this.fabricCanvas.getElement();
+      if (this.preparedMasks.length > 0) {
+        applyMasksToContext(renderCtx, el.width, el.height, this.preparedMasks);
+      }
       if (this.hueTable) {
         applyHslToContext(renderCtx, el.width, el.height, this.hueTable);
       }
@@ -183,6 +192,11 @@ export class CanvasRenderer {
 
   setRotation(deg: number): void {
     this.rotation = deg;
+  }
+
+  /** Update the selective masks (matrices are precomputed once per change). */
+  setMasks(masks: EditMask[]): void {
+    this.preparedMasks = prepareMasks(structuredClone(masks));
   }
 
   /** Update the HSL mixer (the hue table is rebuilt once per change). */

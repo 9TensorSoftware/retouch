@@ -4,6 +4,7 @@ import type { FileRejectionReason, ImageEdits, ImageExportOptions, MediaEntry } 
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "./curves";
 import { buildFabricFilters, drawVignette } from "./filters";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "./hsl";
+import { applyMasksToContext, masksAreNeutral, prepareMasks } from "./masks";
 import { applyKeystone, hasKeystone } from "./perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "./transform";
 import { capturePoster, createSeekQueue, loadVideo, releaseVideo } from "./video";
@@ -223,6 +224,13 @@ export async function exportImage(
     options.maxDimension && options.maxDimension < longEdge ? options.maxDimension / longEdge : 1;
   const outCanvas = exportCanvas.toCanvasElement(multiplier);
   exportCanvas.dispose();
+
+  if (!masksAreNeutral(edits.masks)) {
+    const outCtx = outCanvas.getContext("2d");
+    if (outCtx) {
+      applyMasksToContext(outCtx, outCanvas.width, outCanvas.height, prepareMasks(edits.masks));
+    }
+  }
 
   if (!hslIsNeutral(edits.hsl)) {
     const outCtx = outCanvas.getContext("2d");

@@ -39,7 +39,7 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 2. ✅ Auto-crop on straighten — largest inscribed rect, no black corners (shipped)
 3. ✅ Curves + live histogram (shipped; Levels still open)
 4. ✅ HSL mixer + white-balance eyedropper (shipped; split-toning wheels still open)
-5. Selective (masked) adjustments — linear/radial gradient + brush masks
+5. ✅ Selective (masked) adjustments — linear/radial gradients shipped (brush masks still open)
 6. Clarity / dehaze (CLAHE-style local contrast) · unsharp with radius
 7. Lens corrections — barrel/pincushion, defish, CA fix, devignette
 8. Warp / liquify / mesh (cage) transform

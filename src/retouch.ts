@@ -481,6 +481,7 @@ export class Retouch {
       adjustments,
       curves,
       hsl,
+      masks,
       filter,
       filterStrength,
     } = structuredClone(source.edits);
@@ -501,6 +502,7 @@ export class Retouch {
         adjustments,
         curves,
         hsl,
+        masks,
         filter,
         filterStrength,
       },

@@ -21,6 +21,7 @@ import { curvesAreIdentity } from "../../utils/curves";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
 import { hslIsNeutral } from "../../utils/hsl";
+import { masksAreNeutral } from "../../utils/masks";
 import { clamp } from "../../utils/math";
 import {
   flipCropX,
@@ -42,6 +43,8 @@ import { createCropTool } from "./crop-tool";
 import { createCurvesTool } from "./curves-tool";
 import { createFiltersTool } from "./filters-tool";
 import { createHslTool } from "./hsl-tool";
+import { createMasksOverlay } from "./masks-overlay";
+import { createMasksTool } from "./masks-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools } from "./tool-registry";
 import { createToolbar } from "./toolbar";
@@ -81,6 +84,7 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
   }
   if (JSON.stringify(next.curves) !== JSON.stringify(prev.curves)) parts.push("Curves");
   if (JSON.stringify(next.hsl) !== JSON.stringify(prev.hsl)) parts.push("Color mix");
+  if (JSON.stringify(next.masks) !== JSON.stringify(prev.masks)) parts.push("Masks");
   const pc = prev.crop;
   const nc = next.crop;
   const cropChanged =
@@ -143,8 +147,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const customTools = getCustomTools().filter((t) => !t.kinds || t.kinds.includes(entry.kind));
   const builtinIds: EditorTool[] =
     entry.kind === "video"
-      ? ["trim", "crop", "transform", "adjust", "curves", "hsl", "filters"]
-      : ["crop", "transform", "adjust", "curves", "hsl", "filters"];
+      ? ["trim", "crop", "transform", "adjust", "curves", "hsl", "masks", "filters"]
+      : ["crop", "transform", "adjust", "curves", "hsl", "masks", "filters"];
   const allIds: EditorTool[] = [...builtinIds, ...customTools.map((t) => t.id)];
   const tools: EditorTool[] = options.tools
     ? options.tools.filter((id) => allIds.includes(id))
@@ -419,6 +423,34 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
   });
 
+  // Selective masks: dock pane + on-canvas gizmo share the edit state.
+  const masksTool = createMasksTool({
+    masks: entry.edits.masks,
+    onChange: (masks) => {
+      entry.edits.masks = masks;
+      renderer.setMasks(masks);
+      renderer.render();
+      masksOverlay.update(masks, masksTool.getSelectedId());
+      recordEdit();
+    },
+    onSelectionChange: (id) => {
+      masksOverlay.update(entry.edits.masks, id);
+    },
+  });
+  const masksOverlay = createMasksOverlay({
+    container: canvasContainer,
+    renderer,
+    onGeometryChange: (mask) => {
+      const target = entry.edits.masks.find((m) => m.id === mask.id);
+      if (!target) return;
+      Object.assign(target, mask);
+      renderer.setMasks(entry.edits.masks);
+      renderer.render();
+      recordEdit();
+    },
+  });
+  masksOverlay.setVisible(false);
+
   // Curves tool (tone curves over a live input histogram)
   const curvesTool = createCurvesTool({
     curves: entry.edits.curves,
@@ -509,6 +541,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     adjustTool,
     curvesTool,
     hslTool,
+    masksTool,
     filtersTool,
     trimTool,
     edits: entry.edits,
@@ -540,6 +573,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     customHandles.get(tool)?.onActivate?.();
     renderer.render();
     if (tool === "curves") curvesTool.refreshHistogram();
+    masksOverlay.setVisible(tool === "masks");
+    if (tool === "masks") masksOverlay.update(entry.edits.masks, masksTool.getSelectedId());
     // The committed crop stays applied in every tool — entering Crop just
     // overlays a fresh selection marquee, so the image never resizes.
     cropTool.setVisible(tool === "crop");
@@ -568,9 +603,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setFilterStrength(entry.edits.filterStrength);
     renderer.setCurves(entry.edits.curves);
     renderer.setHsl(entry.edits.hsl);
+    renderer.setMasks(entry.edits.masks);
     adjustTool.setAdjustments(entry.edits.adjustments);
     curvesTool.setCurves(entry.edits.curves);
     hslTool.setHsl(entry.edits.hsl);
+    masksTool.setMasks(entry.edits.masks);
     filtersTool.setFilter(entry.edits.filter);
     filtersTool.setStrength(entry.edits.filterStrength);
     dock.setRotation(entry.edits.rotation);
@@ -603,6 +640,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.adjustments = { ...state.adjustments };
       entry.edits.curves = structuredClone(state.curves);
       entry.edits.hsl = structuredClone(state.hsl);
+      entry.edits.masks = structuredClone(state.masks);
       entry.edits.filter = state.filter;
       entry.edits.filterStrength = state.filterStrength;
       if (entry.kind === "video" && "trim" in state) {
@@ -637,6 +675,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     toolbar.setTouched("filters", e.filter !== "none");
     toolbar.setTouched("curves", !curvesAreIdentity(e.curves));
     toolbar.setTouched("hsl", !hslIsNeutral(e.hsl));
+    toolbar.setTouched("masks", !masksAreNeutral(e.masks));
     if (entry.kind === "video") {
       const v = entry.edits;
       toolbar.setTouched(
@@ -721,7 +760,9 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setKeystone(0, 0);
     renderer.setCurves(createDefaultCurves());
     renderer.setHsl(createDefaultHsl());
+    renderer.setMasks([]);
     renderer.setCropApplied(false);
+    masksOverlay.setVisible(false);
     renderer.render();
   }
   function endCompare(): void {
@@ -733,7 +774,9 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
     renderer.setCurves(entry.edits.curves);
     renderer.setHsl(entry.edits.hsl);
+    renderer.setMasks(entry.edits.masks);
     renderer.setCropApplied(true);
+    masksOverlay.setVisible(activeTool === "masks");
     renderer.render();
     cropTool.setVisible(activeTool === "crop");
     if (activeTool === "crop") cropTool.refresh();
@@ -1010,6 +1053,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
         if (signal.aborted) return;
         renderer.render();
         if (activeTool === "crop") cropTool.refresh();
+        if (activeTool === "masks") masksOverlay.refresh();
       });
     });
     resizeObserver.observe(canvasArea);
@@ -1041,6 +1085,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
       adjustTool.destroy();
       curvesTool.destroy();
       hslTool.destroy();
+      masksTool.destroy();
+      masksOverlay.destroy();
       filtersTool.destroy();
       dock.destroy();
       toolbar.destroy();

@@ -83,6 +83,7 @@ export const DEFAULT_EDITS: ImageEdits = {
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   curves: createDefaultCurves(),
   hsl: createDefaultHsl(),
+  masks: [],
   filter: "none",
   filterStrength: 100,
 };

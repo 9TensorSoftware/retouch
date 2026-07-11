@@ -1181,6 +1181,41 @@ const CSS = /* css */ `
   cursor: crosshair !important;
 }
 
+/* Selective masks: gizmo overlay + pane */
+
+.rt-mask-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 2;
+}
+
+.rt-mask-overlay__line,
+.rt-mask-overlay__ellipse {
+  fill: none;
+  stroke: rgba(255,255,255,0.9);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.rt-mask-overlay__handle {
+  fill: var(--rt-accent);
+  stroke: #fff;
+  stroke-width: 2;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.rt-mask-overlay__handle--end {
+  fill: var(--rt-dark-elevated, #2E2E30);
+}
+
+.rt-masks .rt-dock__slider input[type="range"] {
+  width: 200px;
+}
+
 /* HSL mixer pane */
 
 .rt-hsl__slider input[type="range"] {

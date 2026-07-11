@@ -71,6 +71,11 @@ export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
     label: "Color mix",
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18M12 3a9 9 0 00-4.5 16.8M12 12l6.4-6.4M12 12l-8.5 3"/></svg>',
   },
+  masks: {
+    id: "masks",
+    label: "Masks",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 000 18z" fill="currentColor" stroke="none" opacity="0.55"/></svg>',
+  },
   adjust: {
     id: "adjust",
     label: "Adjust",
