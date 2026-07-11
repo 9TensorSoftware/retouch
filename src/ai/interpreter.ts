@@ -47,6 +47,8 @@ const ADJUSTMENT_RANGES: Record<keyof Adjustments, [number, number]> = {
   blur: [0, 100],
   grain: [0, 100],
   vignette: [0, 100],
+  clarity: [-100, 100],
+  dehaze: [0, 100],
 };
 const ADJUSTMENT_KEYS = Object.keys(ADJUSTMENT_RANGES) as (keyof Adjustments)[];
 
@@ -85,6 +87,15 @@ export function buildSchema(context: AiContext): Record<string, unknown> {
     keystoneH: {
       type: "number",
       description: "Horizontal perspective (keystone) correction, -100 to 100.",
+    },
+    lensDistortion: {
+      type: "number",
+      description:
+        "Radial lens distortion correction, -100..100. Positive bulges the center outward (fixes pincushion), negative pinches it (fixes barrel/fisheye).",
+    },
+    lensDevignette: {
+      type: "number",
+      description: "Brighten dark lens corners (devignette), 0..100.",
     },
     orientation: {
       type: "number",
@@ -233,6 +244,11 @@ export function validateAiOps(raw: unknown, context: AiContext): AiEditOps {
   if (keystoneV !== undefined) ops.keystoneV = clamp(keystoneV, -100, 100);
   const keystoneH = toNumber(r.keystoneH);
   if (keystoneH !== undefined) ops.keystoneH = clamp(keystoneH, -100, 100);
+
+  const lensDistortion = toNumber(r.lensDistortion);
+  if (lensDistortion !== undefined) ops.lensDistortion = clamp(lensDistortion, -100, 100);
+  const lensDevignette = toNumber(r.lensDevignette);
+  if (lensDevignette !== undefined) ops.lensDevignette = clamp(lensDevignette, 0, 100);
 
   const orientation = toNumber(r.orientation);
   if (orientation !== undefined && ORIENTATIONS.includes(orientation)) {

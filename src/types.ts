@@ -78,6 +78,10 @@ export interface AiEditOps {
   keystoneV?: number;
   /** Horizontal keystone correction, -100 to 100. */
   keystoneH?: number;
+  /** Radial lens distortion correction, -100 to 100. */
+  lensDistortion?: number;
+  /** Corner brightness recovery, 0 to 100. */
+  lensDevignette?: number;
   /** Absolute target orientation. */
   orientation?: Orientation;
   /** Toggle: mirror the displayed image horizontally. */
@@ -171,6 +175,10 @@ export interface Adjustments {
   grain: number;
   /** Edge darkening, 0–100, default 0. */
   vignette: number;
+  /** Midtone local contrast, -100–100, default 0. */
+  clarity: number;
+  /** Haze removal, 0–100, default 0. */
+  dehaze: number;
 }
 
 export type HslBand =
@@ -246,6 +254,10 @@ export interface ImageEdits {
   keystoneV: number;
   /** Horizontal keystone (perspective) correction, -100 to 100. */
   keystoneH: number;
+  /** Radial lens distortion correction, -100 (pinch) to 100 (bulge). */
+  lensDistortion: number;
+  /** Corner brightness recovery (devignette), 0 to 100. */
+  lensDevignette: number;
   /** 90°-step rotation applied to the source before cropping. */
   orientation: Orientation;
   /** Mirror the source horizontally (before orientation). */

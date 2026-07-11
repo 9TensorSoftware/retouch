@@ -40,8 +40,8 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 3. ✅ Curves + live histogram (shipped; Levels still open)
 4. ✅ HSL mixer + white-balance eyedropper (shipped; split-toning wheels still open)
 5. ✅ Selective (masked) adjustments — linear/radial gradients shipped (brush masks still open)
-6. Clarity / dehaze (CLAHE-style local contrast) · unsharp with radius
-7. Lens corrections — barrel/pincushion, defish, CA fix, devignette
+6. ✅ Clarity (midtone-weighted large-radius unsharp) + dehaze (shipped)
+7. ✅ Lens corrections — barrel/pincushion distortion + devignette shipped (defish ≈ strong distortion; CA fix still open)
 8. Warp / liquify / mesh (cage) transform
 9. Content-aware scale — seam carving in a worker (see patent note)
 10. Stylize — tilt-shift, duotone/gradient map, posterize, pixelate region, halftone

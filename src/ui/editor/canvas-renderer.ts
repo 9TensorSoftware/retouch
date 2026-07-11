@@ -18,9 +18,11 @@ import type {
 import { createCanvas } from "../../utils/canvas";
 import type { CurveLuts } from "../../utils/curves";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../../utils/curves";
+import { applyDetailToContext, detailIsNeutral } from "../../utils/detail";
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
 import type { HueTable } from "../../utils/hsl";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "../../utils/hsl";
+import { applyLensToCanvas, hasLens } from "../../utils/lens";
 import type { PreparedMask } from "../../utils/masks";
 import { applyMasksToContext, prepareMasks } from "../../utils/masks";
 import { applyKeystone, hasKeystone } from "../../utils/perspective";
@@ -53,9 +55,10 @@ export class CanvasRenderer {
    */
   private frameCanvas: HTMLCanvasElement;
   private frameCtx: CanvasRenderingContext2D;
-  /** Scratch canvases for the keystone warp (allocated on first use). */
+  /** Scratch canvases for the keystone/lens warps (allocated on first use). */
   private warpSrc: HTMLCanvasElement | null = null;
   private warpScratch: HTMLCanvasElement | null = null;
+  private lensSrc: HTMLCanvasElement | null = null;
   private readonly rawWidth: number;
   private readonly rawHeight: number;
   private readonly previewCap: number;
@@ -64,6 +67,8 @@ export class CanvasRenderer {
   private rotation = 0;
   private keystoneV = 0;
   private keystoneH = 0;
+  private lensDistortion = 0;
+  private lensDevignette = 0;
   private curves: Curves = createDefaultCurves();
   /** Cached LUTs; null while the curves are identity. */
   private curveLuts: CurveLuts | null = null;
@@ -90,6 +95,8 @@ export class CanvasRenderer {
     this.rotation = edits.rotation;
     this.keystoneV = edits.keystoneV;
     this.keystoneH = edits.keystoneH;
+    this.lensDistortion = edits.lensDistortion;
+    this.lensDevignette = edits.lensDevignette;
     this.setCurves(edits.curves);
     this.setHsl(edits.hsl);
     this.setMasks(edits.masks);
@@ -143,6 +150,15 @@ export class CanvasRenderer {
     this.fabricCanvas.on("after:render", ({ ctx: renderCtx }) => {
       if (!renderCtx) return;
       const el = this.fabricCanvas.getElement();
+      if (!detailIsNeutral(this.adjustments.clarity, this.adjustments.dehaze)) {
+        applyDetailToContext(
+          renderCtx,
+          el.width,
+          el.height,
+          this.adjustments.clarity,
+          this.adjustments.dehaze,
+        );
+      }
       if (this.preparedMasks.length > 0) {
         applyMasksToContext(renderCtx, el.width, el.height, this.preparedMasks);
       }
@@ -192,6 +208,14 @@ export class CanvasRenderer {
 
   setRotation(deg: number): void {
     this.rotation = deg;
+  }
+
+  /** Update lens correction; the frame is redrawn through the remap. */
+  setLens(distortion: number, devignette: number): void {
+    if (distortion === this.lensDistortion && devignette === this.lensDevignette) return;
+    this.lensDistortion = distortion;
+    this.lensDevignette = devignette;
+    this.drawFrame();
   }
 
   /** Update the selective masks (matrices are precomputed once per change). */
@@ -404,11 +428,12 @@ export class CanvasRenderer {
     const scale = this.frameCanvas.width / visible.width;
     const cropOn = this.cropActive();
     const warp = hasKeystone(this.keystoneV, this.keystoneH);
+    const lens = hasLens(this.lensDistortion, this.lensDevignette);
 
-    // With keystone active, draw into a scratch canvas first, then warp it
-    // into the frame canvas fabric reads from.
+    // With geometric corrections active, draw into a scratch canvas first,
+    // then run the warp chain into the frame canvas fabric reads from.
     let target: CanvasRenderingContext2D | null = this.frameCtx;
-    if (warp) {
+    if (warp || lens) {
       if (!this.warpSrc) this.warpSrc = createCanvas(1, 1);
       if (!this.warpScratch) this.warpScratch = createCanvas(1, 1);
       if (
@@ -444,8 +469,25 @@ export class CanvasRenderer {
     );
     target.restore();
 
-    if (warp && this.warpSrc && this.warpScratch) {
+    if (!this.warpSrc || !this.warpScratch) return;
+    if (warp && lens) {
+      // keystone → lensSrc, then lens → frame
+      if (!this.lensSrc) this.lensSrc = createCanvas(1, 1);
+      if (
+        this.lensSrc.width !== this.frameCanvas.width ||
+        this.lensSrc.height !== this.frameCanvas.height
+      ) {
+        this.lensSrc.width = this.frameCanvas.width;
+        this.lensSrc.height = this.frameCanvas.height;
+      }
+      const lensCtx = this.lensSrc.getContext("2d");
+      if (!lensCtx) return;
+      applyKeystone(this.warpSrc, this.warpScratch, lensCtx, this.keystoneV, this.keystoneH);
+      applyLensToCanvas(this.lensSrc, this.frameCtx, this.lensDistortion, this.lensDevignette);
+    } else if (warp) {
       applyKeystone(this.warpSrc, this.warpScratch, this.frameCtx, this.keystoneV, this.keystoneH);
+    } else if (lens) {
+      applyLensToCanvas(this.warpSrc, this.frameCtx, this.lensDistortion, this.lensDevignette);
     }
   }
 

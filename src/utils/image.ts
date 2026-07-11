@@ -2,8 +2,10 @@ import { FabricImage, StaticCanvas } from "fabric";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../constants";
 import type { FileRejectionReason, ImageEdits, ImageExportOptions, MediaEntry } from "../types";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "./curves";
+import { applyDetailToContext, detailIsNeutral } from "./detail";
 import { buildFabricFilters, drawVignette } from "./filters";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "./hsl";
+import { applyLensToCanvas, hasLens } from "./lens";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "./masks";
 import { applyKeystone, hasKeystone } from "./perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "./transform";
@@ -138,7 +140,18 @@ export async function exportImage(
   edits: ImageEdits,
   options: ImageExportOptions = {},
 ): Promise<Blob> {
-  const { crop, rotation, keystoneV, keystoneH, orientation, flipH, flipV, adjustments } = edits;
+  const {
+    crop,
+    rotation,
+    keystoneV,
+    keystoneH,
+    lensDistortion,
+    lensDevignette,
+    orientation,
+    flipH,
+    flipV,
+    adjustments,
+  } = edits;
 
   // Crop region in oriented (rotated/flipped) source coordinates
   const rawW = "naturalWidth" in image ? image.naturalWidth : image.width;
@@ -188,6 +201,17 @@ export async function exportImage(
     }
   }
 
+  if (hasLens(lensDistortion, lensDevignette)) {
+    const lensCanvas = document.createElement("canvas");
+    lensCanvas.width = sourceCanvas.width;
+    lensCanvas.height = sourceCanvas.height;
+    const lensCtx = lensCanvas.getContext("2d");
+    if (lensCtx) {
+      applyLensToCanvas(sourceCanvas, lensCtx, lensDistortion, lensDevignette);
+      sourceCanvas = lensCanvas;
+    }
+  }
+
   // Load the cropped region as an image for fabric
   const croppedImg = new Image();
   croppedImg.src = sourceCanvas.toDataURL();
@@ -224,6 +248,19 @@ export async function exportImage(
     options.maxDimension && options.maxDimension < longEdge ? options.maxDimension / longEdge : 1;
   const outCanvas = exportCanvas.toCanvasElement(multiplier);
   exportCanvas.dispose();
+
+  if (!detailIsNeutral(adjustments.clarity, adjustments.dehaze)) {
+    const outCtx = outCanvas.getContext("2d");
+    if (outCtx) {
+      applyDetailToContext(
+        outCtx,
+        outCanvas.width,
+        outCanvas.height,
+        adjustments.clarity,
+        adjustments.dehaze,
+      );
+    }
+  }
 
   if (!masksAreNeutral(edits.masks)) {
     const outCtx = outCanvas.getContext("2d");

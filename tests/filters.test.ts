@@ -121,6 +121,8 @@ describe("buildFabricFilters", () => {
       blur: 10,
       grain: 15,
       vignette: 50, // not a fabric filter — must not appear in the stack
+      clarity: 30, // spatial post pass — not a fabric filter either
+      dehaze: 20,
     };
     const stack = buildFabricFilters(adj, "vintage", 80);
     // ColorMatrix + brightness + contrast + saturation + hue + vibrance + blur + sharpen + grain

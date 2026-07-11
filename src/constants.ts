@@ -33,6 +33,8 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
   blur: 0,
   grain: 0,
   vignette: 0,
+  clarity: 0,
+  dehaze: 0,
 };
 
 /** Identity tone curves (straight diagonal per channel). */
@@ -77,6 +79,8 @@ export const DEFAULT_EDITS: ImageEdits = {
   rotation: 0,
   keystoneV: 0,
   keystoneH: 0,
+  lensDistortion: 0,
+  lensDevignette: 0,
   orientation: 0,
   flipH: false,
   flipV: false,

@@ -30,6 +30,8 @@ export interface ContextDockOptions {
   onResetCrop: () => void;
   /** Perspective (keystone) correction changed. */
   onKeystoneChange: (vertical: number, horizontal: number) => void;
+  /** Lens correction changed. */
+  onLensChange: (distortion: number, devignette: number) => void;
 }
 
 export interface ContextDockHandle extends ViewHandle {
@@ -44,6 +46,8 @@ export interface ContextDockHandle extends ViewHandle {
   setAspect(preset: AspectRatioPreset): void;
   /** Sync the keystone sliders after an external change (does not fire onKeystoneChange). */
   setKeystone(vertical: number, horizontal: number): void;
+  /** Sync the lens sliders after an external change (does not fire onLensChange). */
+  setLens(distortion: number, devignette: number): void;
 }
 
 const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
@@ -211,6 +215,17 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const keystoneHSlider = makeSlider("Horizontal", -100, 100, edits.keystoneH, String, (v) =>
     options.onKeystoneChange(Number.NaN, v),
   );
+  const lensDistortionSlider = makeSlider(
+    "Distortion",
+    -100,
+    100,
+    edits.lensDistortion,
+    String,
+    (v) => options.onLensChange(v, Number.NaN),
+  );
+  const lensDevignetteSlider = makeSlider("Devignette", 0, 100, edits.lensDevignette, String, (v) =>
+    options.onLensChange(Number.NaN, v),
+  );
 
   const divider = () => h("div", { class: "rt-dock__divider" });
   const cropPane = h(
@@ -232,6 +247,13 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Perspective"),
       keystoneVSlider.group,
       keystoneHSlider.group,
+    ),
+    h(
+      "div",
+      { class: "rt-dock__row" },
+      h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Lens"),
+      lensDistortionSlider.group,
+      lensDevignetteSlider.group,
     ),
   );
 
@@ -287,6 +309,10 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     setKeystone(vertical, horizontal) {
       keystoneVSlider.set(vertical);
       keystoneHSlider.set(horizontal);
+    },
+    setLens(distortion, devignette) {
+      lensDistortionSlider.set(distortion);
+      lensDevignetteSlider.set(devignette);
     },
     setCropApplyEnabled(enabled) {
       applyBtn.toggleAttribute("disabled", !enabled);

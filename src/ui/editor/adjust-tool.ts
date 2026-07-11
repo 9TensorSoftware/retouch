@@ -37,6 +37,8 @@ const DEFS: SliderDef[] = [
   { key: "blur", label: "Blur", min: 0, max: 100, neutral: 0 },
   { key: "grain", label: "Grain", min: 0, max: 100, neutral: 0 },
   { key: "vignette", label: "Vignette", min: 0, max: 100, neutral: 0 },
+  { key: "clarity", label: "Clarity", min: -100, max: 100, neutral: 0 },
+  { key: "dehaze", label: "Dehaze", min: 0, max: 100, neutral: 0 },
 ];
 
 /** Signed offset from neutral: "0", "+12", "-45". */

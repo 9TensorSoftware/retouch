@@ -2,8 +2,10 @@ import { FabricImage, StaticCanvas } from "fabric";
 import type { ImageEdits } from "../types";
 import { createCanvas } from "../utils/canvas";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../utils/curves";
+import { applyDetailToContext, detailIsNeutral } from "../utils/detail";
 import { buildFabricFilters, drawVignette, isNeutral } from "../utils/filters";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "../utils/hsl";
+import { applyLensToCanvas, hasLens } from "../utils/lens";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "../utils/masks";
 import { applyKeystone, hasKeystone } from "../utils/perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "../utils/transform";
@@ -59,6 +61,8 @@ export function createFramePipeline(
     rotation,
     keystoneV,
     keystoneH,
+    lensDistortion,
+    lensDevignette,
     orientation,
     flipH,
     flipV,
@@ -86,6 +90,8 @@ export function createFramePipeline(
   const outH = even(cropH * fit);
 
   const warp = hasKeystone(keystoneV, keystoneH);
+  const lens = hasLens(lensDistortion, lensDevignette);
+  const detailNeutral = detailIsNeutral(adjustments.clarity, adjustments.dehaze);
   const curveLuts = curvesAreIdentity(edits.curves) ? null : buildCurveLuts(edits.curves);
   const hueTable = hslIsNeutral(edits.hsl) ? null : buildHueTable(edits.hsl);
   const preparedMasks = masksAreNeutral(edits.masks) ? [] : prepareMasks(edits.masks);
@@ -95,6 +101,8 @@ export function createFramePipeline(
     adjustments.vignette === 0 &&
     rotation === 0 &&
     !warp &&
+    !lens &&
+    detailNeutral &&
     !curveLuts &&
     !hueTable &&
     preparedMasks.length === 0;
@@ -115,7 +123,7 @@ export function createFramePipeline(
     offsetY: sy * k,
   });
 
-  // Perspective correction warps the cropped frame before fabric sees it.
+  // Perspective/lens corrections warp the cropped frame before fabric sees it.
   let warpCanvas: HTMLCanvasElement | null = null;
   let warpCtx: CanvasRenderingContext2D | null = null;
   let warpScratch: HTMLCanvasElement | null = null;
@@ -123,6 +131,12 @@ export function createFramePipeline(
     warpCanvas = createCanvas(cropW, cropH);
     warpCtx = warpCanvas.getContext("2d");
     warpScratch = createCanvas(1, 1);
+  }
+  let lensCanvas: HTMLCanvasElement | null = null;
+  let lensCtx: CanvasRenderingContext2D | null = null;
+  if (lens) {
+    lensCanvas = createCanvas(cropW, cropH);
+    lensCtx = lensCanvas.getContext("2d");
   }
 
   // fabric is only involved when rotation or filters actually apply
@@ -137,7 +151,7 @@ export function createFramePipeline(
       // size or devicePixelRatio would scale the exported resolution.
       enableRetinaScaling: false,
     });
-    fabricImg = new FabricImage(warpCanvas ?? cropCanvas, {
+    fabricImg = new FabricImage(lensCanvas ?? warpCanvas ?? cropCanvas, {
       selectable: false,
       evented: false,
       originX: "center",
@@ -170,11 +184,23 @@ export function createFramePipeline(
       if (warpCanvas && warpCtx && warpScratch) {
         applyKeystone(cropCanvas, warpScratch, warpCtx, keystoneV, keystoneH);
       }
+      if (lensCanvas && lensCtx) {
+        applyLensToCanvas(warpCanvas ?? cropCanvas, lensCtx, lensDistortion, lensDevignette);
+      }
       if (neutralVisual || !staticCanvas || !fabricImg) return cropCanvas;
       fabricImg.applyFilters();
       staticCanvas.renderAll();
       const element = staticCanvas.getElement();
       const ctx = element.getContext("2d");
+      if (ctx && !detailNeutral) {
+        applyDetailToContext(
+          ctx,
+          element.width,
+          element.height,
+          adjustments.clarity,
+          adjustments.dehaze,
+        );
+      }
       if (ctx && preparedMasks.length > 0) {
         applyMasksToContext(ctx, element.width, element.height, preparedMasks);
       }
