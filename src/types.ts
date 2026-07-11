@@ -7,6 +7,7 @@ export type BuiltinEditorTool =
   | "curves"
   | "hsl"
   | "masks"
+  | "stylize"
   | "adjust"
   | "filters";
 
@@ -91,6 +92,8 @@ export interface AiEditOps {
   adjustments?: Partial<Adjustments>;
   /** Per-band HSL shifts; only include bands you change. */
   hsl?: Partial<Record<HslBand, Partial<HslShift>>>;
+  /** Stylize effect (kind + strength). */
+  stylize?: { kind: StylizeKind; amount?: number };
   filter?: FilterPreset;
   filterStrength?: number;
   trim?: TrimRange;
@@ -201,6 +204,21 @@ export interface HslShift {
 /** Lightroom-style HSL mixer: independent shifts for eight hue bands. */
 export type HslMixer = Record<HslBand, HslShift>;
 
+export type StylizeKind = "none" | "tiltshift" | "duotone" | "posterize" | "pixelate" | "halftone";
+
+/** One parametric stylize effect (only one active at a time). */
+export interface StylizeEffect {
+  kind: StylizeKind;
+  /** Primary strength/size, 0–100. */
+  amount: number;
+  /** Tilt-shift: vertical center of the sharp band, 0–1. */
+  position: number;
+  /** Duotone shadow color (hex). */
+  shadow: string;
+  /** Duotone highlight color (hex). */
+  highlight: string;
+}
+
 export type MaskKind = "linear" | "radial";
 
 /** Local adjustment deltas inside a mask, each -100..100 (0 = neutral). */
@@ -271,6 +289,8 @@ export interface ImageEdits {
   hsl: HslMixer;
   /** Selective-adjustment masks, applied before the global color passes. */
   masks: EditMask[];
+  /** Stylize effect, applied after color work (before the vignette). */
+  stylize: StylizeEffect;
   /** Preset filter applied beneath the adjustments. */
   filter: FilterPreset;
   /** Preset intensity, 0–100. */

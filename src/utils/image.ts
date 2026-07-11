@@ -8,6 +8,7 @@ import { applyHslToContext, buildHueTable, hslIsNeutral } from "./hsl";
 import { applyLensToCanvas, hasLens } from "./lens";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "./masks";
 import { applyKeystone, hasKeystone } from "./perspective";
+import { applyStylizeToContext, stylizeIsNeutral } from "./stylize";
 import { applySourceTransform, orientedDims, straightenFitScale } from "./transform";
 import { capturePoster, createSeekQueue, loadVideo, releaseVideo } from "./video";
 
@@ -281,6 +282,11 @@ export async function exportImage(
     if (outCtx) {
       applyCurvesToContext(outCtx, outCanvas.width, outCanvas.height, buildCurveLuts(edits.curves));
     }
+  }
+
+  if (!stylizeIsNeutral(edits.stylize)) {
+    const outCtx = outCanvas.getContext("2d");
+    if (outCtx) applyStylizeToContext(outCtx, outCanvas.width, outCanvas.height, edits.stylize);
   }
 
   if (adjustments.vignette > 0) {

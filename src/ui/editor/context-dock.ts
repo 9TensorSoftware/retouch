@@ -6,6 +6,7 @@ import type { CurvesToolHandle } from "./curves-tool";
 import type { FiltersToolHandle } from "./filters-tool";
 import type { HslToolHandle } from "./hsl-tool";
 import type { MasksToolHandle } from "./masks-tool";
+import type { StylizeToolHandle } from "./stylize-tool";
 import type { TrimToolHandle } from "./trim-tool";
 
 export type TransformOp = "rotate-ccw" | "rotate-cw" | "flip-h" | "flip-v";
@@ -16,6 +17,7 @@ export interface ContextDockOptions {
   curvesTool: CurvesToolHandle;
   hslTool: HslToolHandle;
   masksTool: MasksToolHandle;
+  stylizeTool: StylizeToolHandle;
   filtersTool: FiltersToolHandle;
   /** Present only for video entries. */
   trimTool?: TrimToolHandle;
@@ -93,6 +95,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     curvesTool,
     hslTool,
     masksTool,
+    stylizeTool,
     filtersTool,
     trimTool,
     edits,
@@ -263,6 +266,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const curvesPane = h("div", { class: "rt-dock__pane" }, curvesTool.root);
   const hslPane = h("div", { class: "rt-dock__pane" }, hslTool.root);
   const masksPane = h("div", { class: "rt-dock__pane" }, masksTool.root);
+  const stylizePane = h("div", { class: "rt-dock__pane" }, stylizeTool.root);
   const filtersPane = h("div", { class: "rt-dock__pane" }, filtersTool.root);
   const trimPane = trimTool ? h("div", { class: "rt-dock__pane" }, trimTool.root) : null;
 
@@ -274,6 +278,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     curvesPane,
     hslPane,
     masksPane,
+    stylizePane,
     adjustPane,
     filtersPane,
   );
@@ -285,6 +290,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     curves: curvesPane,
     hsl: hslPane,
     masks: masksPane,
+    stylize: stylizePane,
     adjust: adjustPane,
     filters: filtersPane,
     ...(trimPane ? { trim: trimPane } : {}),

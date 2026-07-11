@@ -144,6 +144,7 @@ Opens as a modal overlay: a dark stage that keeps focus on the image, and a clea
 | **Curves** | Photoshop-style tone curves: master + per-channel (R/G/B) with draggable control points over a **live histogram**. Monotone-cubic interpolation (no overshoot), applied identically in the preview, image export, and per-frame video export. |
 | **Color mix** | Lightroom-style **HSL mixer**: eight hue bands (red → magenta), each with hue/saturation/luminance shifts and smooth falloff to neighboring bands. Grays stay untouched. The AI understands it too — "make the sky bluer" targets just the blue band. |
 | **Masks** | Selective adjustments: add **linear or radial gradient masks**, drag their handles on the canvas, and dial local exposure/brightness/contrast/saturation/temperature/tint that apply only inside the feathered gradient. Invertible, stackable, fully non-destructive. |
+| **Stylize** | Parametric effects: **tilt-shift** (miniature look with a movable focus band), **duotone** (pick shadow/highlight colors), **posterize**, **pixelate**, **halftone** — each with a strength slider, applied identically at export. |
 | **Filters** | 12 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — with an intensity slider and live thumbnails. |
 | **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging, and 0.25–4× playback speed. |
 | **Draw** | _Planned._ Freehand drawing and annotation directly on the canvas. |

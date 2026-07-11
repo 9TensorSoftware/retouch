@@ -1,4 +1,12 @@
-import type { Adjustments, CropRect, Curves, HslMixer, ImageEdits, VideoEdits } from "./types";
+import type {
+  Adjustments,
+  CropRect,
+  Curves,
+  HslMixer,
+  ImageEdits,
+  StylizeEffect,
+  VideoEdits,
+} from "./types";
 
 export const VERSION = "0.0.2";
 
@@ -74,6 +82,11 @@ export function createDefaultHsl(): HslMixer {
   };
 }
 
+/** No stylize effect. */
+export function createDefaultStylize(): StylizeEffect {
+  return { kind: "none", amount: 50, position: 0.5, shadow: "#20305A", highlight: "#F2C14E" };
+}
+
 export const DEFAULT_EDITS: ImageEdits = {
   crop: { ...DEFAULT_CROP },
   rotation: 0,
@@ -88,6 +101,7 @@ export const DEFAULT_EDITS: ImageEdits = {
   curves: createDefaultCurves(),
   hsl: createDefaultHsl(),
   masks: [],
+  stylize: createDefaultStylize(),
   filter: "none",
   filterStrength: 100,
 };

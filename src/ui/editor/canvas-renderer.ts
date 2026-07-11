@@ -2,6 +2,7 @@ import { Canvas, FabricImage } from "fabric";
 import {
   createDefaultCurves,
   createDefaultHsl,
+  createDefaultStylize,
   IMAGE_PREVIEW_MAX_DIM,
   PREVIEW_MAX_DIM,
 } from "../../constants";
@@ -14,6 +15,7 @@ import type {
   HslMixer,
   ImageEdits,
   Orientation,
+  StylizeEffect,
 } from "../../types";
 import { createCanvas } from "../../utils/canvas";
 import type { CurveLuts } from "../../utils/curves";
@@ -26,6 +28,7 @@ import { applyLensToCanvas, hasLens } from "../../utils/lens";
 import type { PreparedMask } from "../../utils/masks";
 import { applyMasksToContext, prepareMasks } from "../../utils/masks";
 import { applyKeystone, hasKeystone } from "../../utils/perspective";
+import { applyStylizeToContext, stylizeIsNeutral } from "../../utils/stylize";
 import { applySourceTransform, orientedDims, straightenFitScale } from "../../utils/transform";
 
 export interface ImageRect {
@@ -77,6 +80,7 @@ export class CanvasRenderer {
   private hueTable: HueTable | null = null;
   /** Masks with precomputed matrices; empty while all masks are neutral. */
   private preparedMasks: PreparedMask[] = [];
+  private stylize: StylizeEffect = createDefaultStylize();
   private orientation: Orientation;
   private flipH: boolean;
   private flipV: boolean;
@@ -100,6 +104,7 @@ export class CanvasRenderer {
     this.setCurves(edits.curves);
     this.setHsl(edits.hsl);
     this.setMasks(edits.masks);
+    this.stylize = { ...edits.stylize };
     this.orientation = edits.orientation;
     this.flipH = edits.flipH;
     this.flipV = edits.flipV;
@@ -168,6 +173,9 @@ export class CanvasRenderer {
       if (this.curveLuts) {
         applyCurvesToContext(renderCtx, el.width, el.height, this.curveLuts);
       }
+      if (!stylizeIsNeutral(this.stylize)) {
+        applyStylizeToContext(renderCtx, el.width, el.height, this.stylize);
+      }
       if (this.adjustments.vignette > 0) {
         drawVignette(renderCtx, el.width, el.height, this.adjustments.vignette);
       }
@@ -208,6 +216,11 @@ export class CanvasRenderer {
 
   setRotation(deg: number): void {
     this.rotation = deg;
+  }
+
+  /** Update the stylize effect. */
+  setStylize(stylize: StylizeEffect): void {
+    this.stylize = { ...stylize };
   }
 
   /** Update lens correction; the frame is redrawn through the remap. */

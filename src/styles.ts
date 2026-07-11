@@ -1216,6 +1216,18 @@ const CSS = /* css */ `
   width: 200px;
 }
 
+/* Stylize pane */
+
+.rt-stylize__color {
+  width: 34px;
+  height: 26px;
+  padding: 2px;
+  border: 1px solid var(--rt-dark-line);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+}
+
 /* HSL mixer pane */
 
 .rt-hsl__slider input[type="range"] {

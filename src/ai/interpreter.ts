@@ -11,6 +11,7 @@ import type {
   HslShift,
   ImageEdits,
   Orientation,
+  StylizeKind,
   VideoEdits,
 } from "../types";
 import { FILTER_PRESETS } from "../utils/filters";
@@ -119,6 +120,20 @@ export function buildSchema(context: AiContext): Record<string, unknown> {
       ),
       additionalProperties: false,
     },
+    stylize: {
+      type: "object",
+      description:
+        "One artistic effect: tiltshift (miniature look), duotone, posterize, pixelate, halftone, or none to remove.",
+      properties: {
+        kind: {
+          type: "string",
+          enum: ["none", "tiltshift", "duotone", "posterize", "pixelate", "halftone"],
+        },
+        amount: { type: "number", description: "Strength 0-100" },
+      },
+      required: ["kind"],
+      additionalProperties: false,
+    },
     hsl: {
       type: "object",
       description:
@@ -212,6 +227,16 @@ export function validateAiOps(raw: unknown, context: AiContext): AiEditOps {
   };
 
   if (r.reset === true) ops.reset = true;
+
+  if (r.stylize && typeof r.stylize === "object") {
+    const st = r.stylize as Record<string, unknown>;
+    const kinds = ["none", "tiltshift", "duotone", "posterize", "pixelate", "halftone"];
+    if (typeof st.kind === "string" && kinds.includes(st.kind)) {
+      ops.stylize = { kind: st.kind as StylizeKind };
+      const amount = toNumber(st.amount);
+      if (amount !== undefined) ops.stylize.amount = clamp(amount, 0, 100);
+    }
+  }
 
   if (r.hsl && typeof r.hsl === "object") {
     const bands = r.hsl as Record<string, unknown>;

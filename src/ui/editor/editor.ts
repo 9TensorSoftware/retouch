@@ -3,6 +3,7 @@ import { interpretCommand } from "../../ai/interpreter";
 import {
   createDefaultCurves,
   createDefaultHsl,
+  createDefaultStylize,
   createDefaultVideoEdits,
   DEFAULT_ADJUSTMENTS,
   DEFAULT_EDITS,
@@ -23,6 +24,7 @@ import { createHistory } from "../../utils/history";
 import { hslIsNeutral } from "../../utils/hsl";
 import { masksAreNeutral } from "../../utils/masks";
 import { clamp } from "../../utils/math";
+import { stylizeIsNeutral } from "../../utils/stylize";
 import {
   flipCropX,
   flipCropY,
@@ -45,6 +47,7 @@ import { createFiltersTool } from "./filters-tool";
 import { createHslTool } from "./hsl-tool";
 import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
+import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools } from "./tool-registry";
 import { createToolbar } from "./toolbar";
@@ -88,6 +91,7 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
   if (JSON.stringify(next.curves) !== JSON.stringify(prev.curves)) parts.push("Curves");
   if (JSON.stringify(next.hsl) !== JSON.stringify(prev.hsl)) parts.push("Color mix");
   if (JSON.stringify(next.masks) !== JSON.stringify(prev.masks)) parts.push("Masks");
+  if (JSON.stringify(next.stylize) !== JSON.stringify(prev.stylize)) parts.push("Stylize");
   const pc = prev.crop;
   const nc = next.crop;
   const cropChanged =
@@ -150,8 +154,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const customTools = getCustomTools().filter((t) => !t.kinds || t.kinds.includes(entry.kind));
   const builtinIds: EditorTool[] =
     entry.kind === "video"
-      ? ["trim", "crop", "transform", "adjust", "curves", "hsl", "masks", "filters"]
-      : ["crop", "transform", "adjust", "curves", "hsl", "masks", "filters"];
+      ? ["trim", "crop", "transform", "adjust", "curves", "hsl", "masks", "stylize", "filters"]
+      : ["crop", "transform", "adjust", "curves", "hsl", "masks", "stylize", "filters"];
   const allIds: EditorTool[] = [...builtinIds, ...customTools.map((t) => t.id)];
   const tools: EditorTool[] = options.tools
     ? options.tools.filter((id) => allIds.includes(id))
@@ -454,6 +458,17 @@ export function createEditor(options: EditorOptions): ViewHandle {
   });
   masksOverlay.setVisible(false);
 
+  // Stylize effects
+  const stylizeTool = createStylizeTool({
+    stylize: entry.edits.stylize,
+    onChange: (stylize) => {
+      entry.edits.stylize = stylize;
+      renderer.setStylize(stylize);
+      renderer.render();
+      recordEdit();
+    },
+  });
+
   // Curves tool (tone curves over a live input histogram)
   const curvesTool = createCurvesTool({
     curves: entry.edits.curves,
@@ -545,6 +560,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     curvesTool,
     hslTool,
     masksTool,
+    stylizeTool,
     filtersTool,
     trimTool,
     edits: entry.edits,
@@ -615,10 +631,12 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setCurves(entry.edits.curves);
     renderer.setHsl(entry.edits.hsl);
     renderer.setMasks(entry.edits.masks);
+    renderer.setStylize(entry.edits.stylize);
     adjustTool.setAdjustments(entry.edits.adjustments);
     curvesTool.setCurves(entry.edits.curves);
     hslTool.setHsl(entry.edits.hsl);
     masksTool.setMasks(entry.edits.masks);
+    stylizeTool.setStylize(entry.edits.stylize);
     filtersTool.setFilter(entry.edits.filter);
     filtersTool.setStrength(entry.edits.filterStrength);
     dock.setRotation(entry.edits.rotation);
@@ -655,6 +673,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.curves = structuredClone(state.curves);
       entry.edits.hsl = structuredClone(state.hsl);
       entry.edits.masks = structuredClone(state.masks);
+      entry.edits.stylize = { ...state.stylize };
       entry.edits.filter = state.filter;
       entry.edits.filterStrength = state.filterStrength;
       if (entry.kind === "video" && "trim" in state) {
@@ -692,6 +711,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     toolbar.setTouched("curves", !curvesAreIdentity(e.curves));
     toolbar.setTouched("hsl", !hslIsNeutral(e.hsl));
     toolbar.setTouched("masks", !masksAreNeutral(e.masks));
+    toolbar.setTouched("stylize", !stylizeIsNeutral(e.stylize));
     if (entry.kind === "video") {
       const v = entry.edits;
       toolbar.setTouched(
@@ -778,6 +798,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setCurves(createDefaultCurves());
     renderer.setHsl(createDefaultHsl());
     renderer.setMasks([]);
+    renderer.setStylize(createDefaultStylize());
     renderer.setCropApplied(false);
     masksOverlay.setVisible(false);
     renderer.render();
@@ -793,6 +814,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setCurves(entry.edits.curves);
     renderer.setHsl(entry.edits.hsl);
     renderer.setMasks(entry.edits.masks);
+    renderer.setStylize(entry.edits.stylize);
     renderer.setCropApplied(true);
     masksOverlay.setVisible(activeTool === "masks");
     renderer.render();
@@ -846,6 +868,13 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (ops.filterStrength !== undefined) entry.edits.filterStrength = ops.filterStrength;
     if (ops.adjustments) {
       entry.edits.adjustments = { ...entry.edits.adjustments, ...ops.adjustments };
+    }
+    if (ops.stylize) {
+      entry.edits.stylize = {
+        ...entry.edits.stylize,
+        kind: ops.stylize.kind,
+        ...(ops.stylize.amount !== undefined ? { amount: ops.stylize.amount } : {}),
+      };
     }
     if (ops.hsl) {
       for (const [band, shift] of Object.entries(ops.hsl)) {
@@ -1107,6 +1136,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       hslTool.destroy();
       masksTool.destroy();
       masksOverlay.destroy();
+      stylizeTool.destroy();
       filtersTool.destroy();
       dock.destroy();
       toolbar.destroy();

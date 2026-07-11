@@ -8,6 +8,7 @@ import { applyHslToContext, buildHueTable, hslIsNeutral } from "../utils/hsl";
 import { applyLensToCanvas, hasLens } from "../utils/lens";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "../utils/masks";
 import { applyKeystone, hasKeystone } from "../utils/perspective";
+import { applyStylizeToContext, stylizeIsNeutral } from "../utils/stylize";
 import { applySourceTransform, orientedDims, straightenFitScale } from "../utils/transform";
 
 /**
@@ -95,6 +96,7 @@ export function createFramePipeline(
   const curveLuts = curvesAreIdentity(edits.curves) ? null : buildCurveLuts(edits.curves);
   const hueTable = hslIsNeutral(edits.hsl) ? null : buildHueTable(edits.hsl);
   const preparedMasks = masksAreNeutral(edits.masks) ? [] : prepareMasks(edits.masks);
+  const stylizeNeutral = stylizeIsNeutral(edits.stylize);
   const untransformed = orientation === 0 && !flipH && !flipV;
   const neutralVisual =
     isNeutral(adjustments, filter, filterStrength) &&
@@ -105,7 +107,8 @@ export function createFramePipeline(
     detailNeutral &&
     !curveLuts &&
     !hueTable &&
-    preparedMasks.length === 0;
+    preparedMasks.length === 0 &&
+    stylizeNeutral;
   const fullFrame = crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
 
   const cropCanvas = createCanvas(cropW, cropH);
@@ -209,6 +212,9 @@ export function createFramePipeline(
       }
       if (ctx && curveLuts) {
         applyCurvesToContext(ctx, element.width, element.height, curveLuts);
+      }
+      if (ctx && !stylizeNeutral) {
+        applyStylizeToContext(ctx, element.width, element.height, edits.stylize);
       }
       if (ctx && adjustments.vignette > 0) {
         drawVignette(ctx, element.width, element.height, adjustments.vignette);

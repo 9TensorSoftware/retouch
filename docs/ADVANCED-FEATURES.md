@@ -44,7 +44,7 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 7. ✅ Lens corrections — barrel/pincushion distortion + devignette shipped (defish ≈ strong distortion; CA fix still open)
 8. Warp / liquify / mesh (cage) transform
 9. Content-aware scale — seam carving in a worker (see patent note)
-10. Stylize — tilt-shift, duotone/gradient map, posterize, pixelate region, halftone
+10. ✅ Stylize — tilt-shift, duotone, posterize, pixelate, halftone (shipped; per-region pixelate still open)
 11. Video classical — deflicker, reverse, boomerang, GIF-of-range, poster pick, low-light via CLAHE
 
 ## Tier B — on-device ML plugin packages (`@9tensor/retouch-ml-*`, lazy-loaded, WebGPU→WASM fallback)
