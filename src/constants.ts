@@ -95,6 +95,7 @@ export const DEFAULT_EDITS: ImageEdits = {
   lensDistortion: 0,
   lensDevignette: 0,
   seamWidth: 100,
+  liquify: null,
   orientation: 0,
   flipH: false,
   flipV: false,

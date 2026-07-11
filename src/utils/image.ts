@@ -6,6 +6,7 @@ import { applyDetailToContext, detailIsNeutral } from "./detail";
 import { buildFabricFilters, drawVignette } from "./filters";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "./hsl";
 import { applyLensToCanvas, hasLens } from "./lens";
+import { applyLiquifyToCanvas, liquifyIsNeutral } from "./liquify";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "./masks";
 import { applyKeystone, hasKeystone } from "./perspective";
 import { carveWidthSync } from "./seam";
@@ -243,6 +244,17 @@ export async function exportImage(
     if (lensCtx) {
       applyLensToCanvas(sourceCanvas, lensCtx, lensDistortion, lensDevignette);
       sourceCanvas = lensCanvas;
+    }
+  }
+
+  if (edits.liquify && !liquifyIsNeutral(edits.liquify)) {
+    const liquifyCanvas = document.createElement("canvas");
+    liquifyCanvas.width = sourceCanvas.width;
+    liquifyCanvas.height = sourceCanvas.height;
+    const liquifyCtx = liquifyCanvas.getContext("2d");
+    if (liquifyCtx) {
+      applyLiquifyToCanvas(sourceCanvas, liquifyCtx, edits.liquify);
+      sourceCanvas = liquifyCanvas;
     }
   }
 

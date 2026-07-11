@@ -4,6 +4,7 @@ export type BuiltinEditorTool =
   | "trim"
   | "crop"
   | "transform"
+  | "liquify"
   | "curves"
   | "hsl"
   | "masks"
@@ -251,6 +252,18 @@ export interface EditMask {
   adjust: LocalAdjust;
 }
 
+/**
+ * Liquify displacement field: a coarse row-major grid of per-node offsets,
+ * each a fraction of the visible frame's width/height. Rendering bilinearly
+ * interpolates between nodes and backward-maps each output pixel.
+ */
+export interface WarpField {
+  cols: number;
+  rows: number;
+  dx: number[];
+  dy: number[];
+}
+
 /** One tone-curve control point, both axes normalized 0–1. */
 export interface CurvePoint {
   x: number;
@@ -280,6 +293,8 @@ export interface ImageEdits {
   lensDevignette: number;
   /** Content-aware width (seam carving), 50–100 percent of the original. Images only. */
   seamWidth: number;
+  /** Brush-painted liquify field, or null when untouched. */
+  liquify: WarpField | null;
   /** 90°-step rotation applied to the source before cropping. */
   orientation: Orientation;
   /** Mirror the source horizontally (before orientation). */

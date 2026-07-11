@@ -22,6 +22,7 @@ import { curvesAreIdentity } from "../../utils/curves";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
 import { hslIsNeutral } from "../../utils/hsl";
+import { applyBrushStroke, createWarpField, liquifyIsNeutral } from "../../utils/liquify";
 import { masksAreNeutral } from "../../utils/masks";
 import { clamp } from "../../utils/math";
 import { carveWidthAsync } from "../../utils/seam";
@@ -46,6 +47,8 @@ import { createCropTool } from "./crop-tool";
 import { createCurvesTool } from "./curves-tool";
 import { createFiltersTool } from "./filters-tool";
 import { createHslTool } from "./hsl-tool";
+import { createLiquifyOverlay } from "./liquify-overlay";
+import { createLiquifyTool } from "./liquify-tool";
 import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
 import { createStylizeTool } from "./stylize-tool";
@@ -90,6 +93,7 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
     parts.push("Lens");
   }
   if (next.seamWidth !== prev.seamWidth) parts.push("Content-aware scale");
+  if (JSON.stringify(next.liquify) !== JSON.stringify(prev.liquify)) parts.push("Liquify");
   if (JSON.stringify(next.curves) !== JSON.stringify(prev.curves)) parts.push("Curves");
   if (JSON.stringify(next.hsl) !== JSON.stringify(prev.hsl)) parts.push("Color mix");
   if (JSON.stringify(next.masks) !== JSON.stringify(prev.masks)) parts.push("Masks");
@@ -163,8 +167,19 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const customTools = getCustomTools().filter((t) => !t.kinds || t.kinds.includes(entry.kind));
   const builtinIds: EditorTool[] =
     entry.kind === "video"
-      ? ["trim", "crop", "transform", "adjust", "curves", "hsl", "masks", "stylize", "filters"]
-      : ["crop", "transform", "adjust", "curves", "hsl", "masks", "stylize", "filters"];
+      ? [
+          "trim",
+          "crop",
+          "transform",
+          "liquify",
+          "adjust",
+          "curves",
+          "hsl",
+          "masks",
+          "stylize",
+          "filters",
+        ]
+      : ["crop", "transform", "liquify", "adjust", "curves", "hsl", "masks", "stylize", "filters"];
   const allIds: EditorTool[] = [...builtinIds, ...customTools.map((t) => t.id)];
   const tools: EditorTool[] = options.tools
     ? options.tools.filter((id) => allIds.includes(id))
@@ -498,6 +513,43 @@ export function createEditor(options: EditorOptions): ViewHandle {
   });
   masksOverlay.setVisible(false);
 
+  // Liquify: dock pane holds the brush params, the overlay paints pushes.
+  const liquifyTool = createLiquifyTool({
+    onReset: () => {
+      entry.edits.liquify = null;
+      renderer.setLiquify(null);
+      renderer.render();
+      liquifyTool.setResetEnabled(false);
+      recordEdit();
+    },
+    onBrushChange: () => {},
+  });
+  const liquifyOverlay = createLiquifyOverlay({
+    container: canvasContainer,
+    renderer,
+    getBrush: () => liquifyTool.getBrush(),
+    onStroke: (x, y, dx, dy, radius, aspect) => {
+      if (!entry.edits.liquify) entry.edits.liquify = createWarpField();
+      applyBrushStroke(
+        entry.edits.liquify,
+        x,
+        y,
+        dx,
+        dy,
+        radius,
+        liquifyTool.getBrush().strength,
+        aspect,
+      );
+      renderer.setLiquify(entry.edits.liquify);
+      renderer.render();
+    },
+    onCommit: () => {
+      liquifyTool.setResetEnabled(!liquifyIsNeutral(entry.edits.liquify));
+      recordEdit();
+    },
+  });
+  liquifyOverlay.setVisible(false);
+
   // Stylize effects
   const stylizeTool = createStylizeTool({
     stylize: entry.edits.stylize,
@@ -657,6 +709,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     adjustTool,
     curvesTool,
     hslTool,
+    liquifyTool,
     masksTool,
     stylizeTool,
     filtersTool,
@@ -707,6 +760,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (tool === "curves") curvesTool.refreshHistogram();
     masksOverlay.setVisible(tool === "masks");
     if (tool === "masks") masksOverlay.update(entry.edits.masks, masksTool.getSelectedId());
+    liquifyOverlay.setVisible(tool === "liquify");
     // The committed crop stays applied in every tool — entering Crop just
     // overlays a fresh selection marquee, so the image never resizes.
     cropTool.setVisible(tool === "crop");
@@ -738,6 +792,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setHsl(entry.edits.hsl);
     renderer.setMasks(entry.edits.masks);
     renderer.setStylize(entry.edits.stylize);
+    renderer.setLiquify(entry.edits.liquify);
+    liquifyTool.setResetEnabled(!liquifyIsNeutral(entry.edits.liquify));
     adjustTool.setAdjustments(entry.edits.adjustments);
     curvesTool.setCurves(entry.edits.curves);
     hslTool.setHsl(entry.edits.hsl);
@@ -776,6 +832,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.lensDistortion = state.lensDistortion;
       entry.edits.lensDevignette = state.lensDevignette;
       entry.edits.seamWidth = state.seamWidth;
+      entry.edits.liquify = state.liquify ? structuredClone(state.liquify) : null;
       entry.edits.orientation = state.orientation;
       entry.edits.flipH = state.flipH;
       entry.edits.flipV = state.flipV;
@@ -822,6 +879,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     toolbar.setTouched("filters", e.filter !== "none");
     toolbar.setTouched("curves", !curvesAreIdentity(e.curves));
     toolbar.setTouched("hsl", !hslIsNeutral(e.hsl));
+    toolbar.setTouched("liquify", !liquifyIsNeutral(e.liquify));
     toolbar.setTouched("masks", !masksAreNeutral(e.masks));
     toolbar.setTouched("stylize", !stylizeIsNeutral(e.stylize));
     if (entry.kind === "video") {
@@ -916,6 +974,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setHsl(createDefaultHsl());
     renderer.setMasks([]);
     renderer.setStylize(createDefaultStylize());
+    renderer.setLiquify(null);
     renderer.setCropApplied(false);
     masksOverlay.setVisible(false);
     renderer.render();
@@ -933,6 +992,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setHsl(entry.edits.hsl);
     renderer.setMasks(entry.edits.masks);
     renderer.setStylize(entry.edits.stylize);
+    renderer.setLiquify(entry.edits.liquify);
     renderer.setCropApplied(true);
     masksOverlay.setVisible(activeTool === "masks");
     renderer.render();
@@ -1260,6 +1320,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
       hslTool.destroy();
       masksTool.destroy();
       masksOverlay.destroy();
+      liquifyTool.destroy();
+      liquifyOverlay.destroy();
       stylizeTool.destroy();
       filtersTool.destroy();
       dock.destroy();

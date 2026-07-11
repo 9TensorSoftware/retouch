@@ -6,6 +6,7 @@ import { applyDetailToContext, detailIsNeutral } from "../utils/detail";
 import { buildFabricFilters, drawVignette, isNeutral } from "../utils/filters";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "../utils/hsl";
 import { applyLensToCanvas, hasLens } from "../utils/lens";
+import { applyLiquifyToCanvas, liquifyIsNeutral } from "../utils/liquify";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "../utils/masks";
 import { applyKeystone, hasKeystone } from "../utils/perspective";
 import { applyStylizeToContext, stylizeIsNeutral } from "../utils/stylize";
@@ -92,6 +93,7 @@ export function createFramePipeline(
 
   const warp = hasKeystone(keystoneV, keystoneH);
   const lens = hasLens(lensDistortion, lensDevignette);
+  const liquify = liquifyIsNeutral(edits.liquify) ? null : edits.liquify;
   const detailNeutral = detailIsNeutral(adjustments.clarity, adjustments.dehaze);
   const curveLuts = curvesAreIdentity(edits.curves) ? null : buildCurveLuts(edits.curves);
   const hueTable = hslIsNeutral(edits.hsl) ? null : buildHueTable(edits.hsl);
@@ -105,6 +107,7 @@ export function createFramePipeline(
     rotation === 0 &&
     !warp &&
     !lens &&
+    !liquify &&
     detailNeutral &&
     !curveLuts &&
     !hueTable &&
@@ -143,6 +146,12 @@ export function createFramePipeline(
     lensCanvas = createCanvas(cropW, cropH);
     lensCtx = lensCanvas.getContext("2d");
   }
+  let liquifyCanvas: HTMLCanvasElement | null = null;
+  let liquifyCtx: CanvasRenderingContext2D | null = null;
+  if (liquify) {
+    liquifyCanvas = createCanvas(cropW, cropH);
+    liquifyCtx = liquifyCanvas.getContext("2d");
+  }
 
   // fabric is only involved when rotation or filters actually apply
   let staticCanvas: StaticCanvas | null = null;
@@ -156,7 +165,7 @@ export function createFramePipeline(
       // size or devicePixelRatio would scale the exported resolution.
       enableRetinaScaling: false,
     });
-    fabricImg = new FabricImage(lensCanvas ?? warpCanvas ?? cropCanvas, {
+    fabricImg = new FabricImage(liquifyCanvas ?? lensCanvas ?? warpCanvas ?? cropCanvas, {
       selectable: false,
       evented: false,
       originX: "center",
@@ -216,6 +225,9 @@ export function createFramePipeline(
       }
       if (lensCanvas && lensCtx) {
         applyLensToCanvas(warpCanvas ?? cropCanvas, lensCtx, lensDistortion, lensDevignette);
+      }
+      if (liquify && liquifyCanvas && liquifyCtx) {
+        applyLiquifyToCanvas(lensCanvas ?? warpCanvas ?? cropCanvas, liquifyCtx, liquify);
       }
       if (neutralVisual || !staticCanvas || !fabricImg) return cropCanvas;
       fabricImg.applyFilters();

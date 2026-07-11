@@ -5,6 +5,7 @@ import type { CropToolHandle } from "./crop-tool";
 import type { CurvesToolHandle } from "./curves-tool";
 import type { FiltersToolHandle } from "./filters-tool";
 import type { HslToolHandle } from "./hsl-tool";
+import type { LiquifyToolHandle } from "./liquify-tool";
 import type { MasksToolHandle } from "./masks-tool";
 import type { StylizeToolHandle } from "./stylize-tool";
 import type { TrimToolHandle } from "./trim-tool";
@@ -16,6 +17,7 @@ export interface ContextDockOptions {
   adjustTool: AdjustToolHandle;
   curvesTool: CurvesToolHandle;
   hslTool: HslToolHandle;
+  liquifyTool: LiquifyToolHandle;
   masksTool: MasksToolHandle;
   stylizeTool: StylizeToolHandle;
   filtersTool: FiltersToolHandle;
@@ -98,6 +100,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     adjustTool,
     curvesTool,
     hslTool,
+    liquifyTool,
     masksTool,
     stylizeTool,
     filtersTool,
@@ -285,6 +288,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const adjustPane = h("div", { class: "rt-dock__pane" }, adjustTool.root);
   const curvesPane = h("div", { class: "rt-dock__pane" }, curvesTool.root);
   const hslPane = h("div", { class: "rt-dock__pane" }, hslTool.root);
+  const liquifyPane = h("div", { class: "rt-dock__pane" }, liquifyTool.root);
   const masksPane = h("div", { class: "rt-dock__pane" }, masksTool.root);
   const stylizePane = h("div", { class: "rt-dock__pane" }, stylizeTool.root);
   const filtersPane = h("div", { class: "rt-dock__pane" }, filtersTool.root);
@@ -295,6 +299,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     { class: "rt-dock" },
     cropPane,
     transformPane,
+    liquifyPane,
     curvesPane,
     hslPane,
     masksPane,
@@ -307,6 +312,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const panes: Partial<Record<EditorTool, HTMLElement>> = {
     crop: cropPane,
     transform: transformPane,
+    liquify: liquifyPane,
     curves: curvesPane,
     hsl: hslPane,
     masks: masksPane,

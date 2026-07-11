@@ -16,6 +16,7 @@ import type {
   ImageEdits,
   Orientation,
   StylizeEffect,
+  WarpField,
 } from "../../types";
 import { createCanvas } from "../../utils/canvas";
 import type { CurveLuts } from "../../utils/curves";
@@ -25,6 +26,7 @@ import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters
 import type { HueTable } from "../../utils/hsl";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "../../utils/hsl";
 import { applyLensToCanvas, hasLens } from "../../utils/lens";
+import { applyLiquifyToCanvas, liquifyIsNeutral } from "../../utils/liquify";
 import type { PreparedMask } from "../../utils/masks";
 import { applyMasksToContext, prepareMasks } from "../../utils/masks";
 import { applyKeystone, hasKeystone } from "../../utils/perspective";
@@ -74,6 +76,8 @@ export class CanvasRenderer {
   private keystoneH = 0;
   private lensDistortion = 0;
   private lensDevignette = 0;
+  /** Liquify field; null while neutral. */
+  private liquify: WarpField | null = null;
   private curves: Curves = createDefaultCurves();
   /** Cached LUTs; null while the curves are identity. */
   private curveLuts: CurveLuts | null = null;
@@ -103,6 +107,7 @@ export class CanvasRenderer {
     this.keystoneH = edits.keystoneH;
     this.lensDistortion = edits.lensDistortion;
     this.lensDevignette = edits.lensDevignette;
+    this.liquify = liquifyIsNeutral(edits.liquify) ? null : structuredClone(edits.liquify);
     this.setCurves(edits.curves);
     this.setHsl(edits.hsl);
     this.setMasks(edits.masks);
@@ -247,6 +252,12 @@ export class CanvasRenderer {
     if (distortion === this.lensDistortion && devignette === this.lensDevignette) return;
     this.lensDistortion = distortion;
     this.lensDevignette = devignette;
+    this.drawFrame();
+  }
+
+  /** Update the liquify field; the frame is redrawn through the remap. */
+  setLiquify(field: WarpField | null): void {
+    this.liquify = liquifyIsNeutral(field) ? null : structuredClone(field);
     this.drawFrame();
   }
 
@@ -454,28 +465,48 @@ export class CanvasRenderer {
     return { canvas, ctx };
   }
 
+  /** Resize a scratch canvas to the frame size, allocating on first use. */
+  private frameSizedScratch(which: "warpSrc" | "lensSrc"): HTMLCanvasElement {
+    let canvas = this[which];
+    if (!canvas) {
+      canvas = createCanvas(1, 1);
+      this[which] = canvas;
+    }
+    if (canvas.width !== this.frameCanvas.width || canvas.height !== this.frameCanvas.height) {
+      canvas.width = this.frameCanvas.width;
+      canvas.height = this.frameCanvas.height;
+    }
+    return canvas;
+  }
+
   private drawFrame(): void {
     const oriented = this.orientedSize();
     const visible = this.visibleSize();
     const scale = this.frameCanvas.width / visible.width;
     const cropOn = this.cropActive();
-    const warp = hasKeystone(this.keystoneV, this.keystoneH);
-    const lens = hasLens(this.lensDistortion, this.lensDevignette);
 
-    // With geometric corrections active, draw into a scratch canvas first,
-    // then run the warp chain into the frame canvas fabric reads from.
-    let target: CanvasRenderingContext2D | null = this.frameCtx;
-    if (warp || lens) {
-      if (!this.warpSrc) this.warpSrc = createCanvas(1, 1);
+    // Geometric warp stages, applied in order after the base draw.
+    const stages: Array<(src: HTMLCanvasElement, dst: CanvasRenderingContext2D) => void> = [];
+    if (hasKeystone(this.keystoneV, this.keystoneH)) {
       if (!this.warpScratch) this.warpScratch = createCanvas(1, 1);
-      if (
-        this.warpSrc.width !== this.frameCanvas.width ||
-        this.warpSrc.height !== this.frameCanvas.height
-      ) {
-        this.warpSrc.width = this.frameCanvas.width;
-        this.warpSrc.height = this.frameCanvas.height;
-      }
-      target = this.warpSrc.getContext("2d");
+      const scratch = this.warpScratch;
+      stages.push((src, dst) => applyKeystone(src, scratch, dst, this.keystoneV, this.keystoneH));
+    }
+    if (hasLens(this.lensDistortion, this.lensDevignette)) {
+      stages.push((src, dst) =>
+        applyLensToCanvas(src, dst, this.lensDistortion, this.lensDevignette),
+      );
+    }
+    const liquify = this.liquify;
+    if (liquify) {
+      stages.push((src, dst) => applyLiquifyToCanvas(src, dst, liquify));
+    }
+
+    // With warp stages active, draw into a scratch canvas first, then run
+    // the chain into the frame canvas fabric reads from.
+    let target: CanvasRenderingContext2D | null = this.frameCtx;
+    if (stages.length > 0) {
+      target = this.frameSizedScratch("warpSrc").getContext("2d");
       if (!target) return;
     }
 
@@ -497,25 +528,20 @@ export class CanvasRenderer {
     target.drawImage(this.carvedSource ?? this.source, -sw / 2, -sh / 2, sw, sh);
     target.restore();
 
-    if (!this.warpSrc || !this.warpScratch) return;
-    if (warp && lens) {
-      // keystone → lensSrc, then lens → frame
-      if (!this.lensSrc) this.lensSrc = createCanvas(1, 1);
-      if (
-        this.lensSrc.width !== this.frameCanvas.width ||
-        this.lensSrc.height !== this.frameCanvas.height
-      ) {
-        this.lensSrc.width = this.frameCanvas.width;
-        this.lensSrc.height = this.frameCanvas.height;
+    // Ping-pong between the two scratch canvases; the last stage lands in
+    // the frame canvas.
+    let src = this.warpSrc;
+    for (let i = 0; i < stages.length; i++) {
+      if (!src) return;
+      if (i === stages.length - 1) {
+        stages[i](src, this.frameCtx);
+      } else {
+        const next = this.frameSizedScratch(src === this.warpSrc ? "lensSrc" : "warpSrc");
+        const nextCtx = next.getContext("2d");
+        if (!nextCtx) return;
+        stages[i](src, nextCtx);
+        src = next;
       }
-      const lensCtx = this.lensSrc.getContext("2d");
-      if (!lensCtx) return;
-      applyKeystone(this.warpSrc, this.warpScratch, lensCtx, this.keystoneV, this.keystoneH);
-      applyLensToCanvas(this.lensSrc, this.frameCtx, this.lensDistortion, this.lensDevignette);
-    } else if (warp) {
-      applyKeystone(this.warpSrc, this.warpScratch, this.frameCtx, this.keystoneV, this.keystoneH);
-    } else if (lens) {
-      applyLensToCanvas(this.warpSrc, this.frameCtx, this.lensDistortion, this.lensDevignette);
     }
   }
 

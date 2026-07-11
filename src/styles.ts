@@ -1216,6 +1216,33 @@ const CSS = /* css */ `
   width: 200px;
 }
 
+/* Liquify */
+
+.rt-liquify-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  overflow: visible;
+  z-index: 2;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.rt-liquify-overlay__cursor {
+  fill: rgba(255,255,255,0.06);
+  stroke: rgba(255,255,255,0.85);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.rt-liquify__hint {
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
 /* Stylize pane */
 
 .rt-stylize__color {
