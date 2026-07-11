@@ -111,6 +111,13 @@ describe("validateAiOps clamping", () => {
     ).toBeUndefined();
   });
 
+  it("clamps keystone corrections into range", () => {
+    const ops = validateAiOps({ keystoneV: 500, keystoneH: -500, explanation: "x" }, IMAGE_CTX);
+    expect(ops.keystoneV).toBe(100);
+    expect(ops.keystoneH).toBe(-100);
+    expect(validateAiOps({ explanation: "x" }, IMAGE_CTX).keystoneV).toBeUndefined();
+  });
+
   it("clamps speed for video and ignores it for images", () => {
     expect(validateAiOps({ speed: 100, explanation: "x" }, VIDEO_CTX).speed).toBe(4);
     expect(validateAiOps({ speed: 0.01, explanation: "x" }, VIDEO_CTX).speed).toBe(0.25);

@@ -66,6 +66,9 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
   if (next.orientation !== prev.orientation) parts.push("Rotate 90°");
   if (next.flipH !== prev.flipH || next.flipV !== prev.flipV) parts.push("Flip");
   if (next.rotation !== prev.rotation) parts.push("Straighten");
+  if (next.keystoneV !== prev.keystoneV || next.keystoneH !== prev.keystoneH) {
+    parts.push("Perspective");
+  }
   const pc = prev.crop;
   const nc = next.crop;
   const cropChanged =
@@ -413,6 +416,14 @@ export function createEditor(options: EditorOptions): ViewHandle {
     onTransform: applyTransformOp,
     onApplyCrop: applyCrop,
     onResetCrop: resetCrop,
+    // NaN marks the axis that didn't change (each slider reports only its own).
+    onKeystoneChange: (vertical, horizontal) => {
+      if (!Number.isNaN(vertical)) entry.edits.keystoneV = vertical;
+      if (!Number.isNaN(horizontal)) entry.edits.keystoneH = horizontal;
+      renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
+      renderer.render();
+      recordEdit();
+    },
   });
 
   /** Apply a tool's side effects (crop overlay visibility, dock pane). */
@@ -445,6 +456,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     suppressRecord = true;
     renderer.setAdjustments(entry.edits.adjustments);
     renderer.setRotation(entry.edits.rotation);
+    renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
     renderer.setTransform(entry.edits.orientation, entry.edits.flipH, entry.edits.flipV);
     renderer.setFilter(entry.edits.filter);
     renderer.setFilterStrength(entry.edits.filterStrength);
@@ -452,6 +464,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     filtersTool.setFilter(entry.edits.filter);
     filtersTool.setStrength(entry.edits.filterStrength);
     dock.setRotation(entry.edits.rotation);
+    dock.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
     renderer.setCrop(entry.edits.crop);
     if (entry.kind === "video") {
       transport?.setTrim(entry.edits.trim);
@@ -472,6 +485,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     restore: (state) => {
       entry.edits.crop = { ...state.crop };
       entry.edits.rotation = state.rotation;
+      entry.edits.keystoneV = state.keystoneV;
+      entry.edits.keystoneH = state.keystoneH;
       entry.edits.orientation = state.orientation;
       entry.edits.flipH = state.flipH;
       entry.edits.flipV = state.flipV;
@@ -493,7 +508,13 @@ export function createEditor(options: EditorOptions): ViewHandle {
     const e = entry.edits;
     toolbar.setTouched(
       "crop",
-      hasCommittedCrop() || e.rotation !== 0 || e.orientation !== 0 || e.flipH || e.flipV,
+      hasCommittedCrop() ||
+        e.rotation !== 0 ||
+        e.keystoneV !== 0 ||
+        e.keystoneH !== 0 ||
+        e.orientation !== 0 ||
+        e.flipH ||
+        e.flipV,
     );
     const adj = e.adjustments as unknown as Record<string, number>;
     const defaults = DEFAULT_ADJUSTMENTS as unknown as Record<string, number>;
@@ -583,6 +604,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setAdjustments(DEFAULT_EDITS.adjustments);
     renderer.setFilter(DEFAULT_EDITS.filter);
     renderer.setRotation(DEFAULT_EDITS.rotation);
+    renderer.setKeystone(0, 0);
     renderer.setCropApplied(false);
     renderer.render();
   }
@@ -592,6 +614,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setAdjustments(entry.edits.adjustments);
     renderer.setFilter(entry.edits.filter);
     renderer.setRotation(entry.edits.rotation);
+    renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
     renderer.setCropApplied(true);
     renderer.render();
     cropTool.setVisible(activeTool === "crop");
@@ -646,6 +669,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.adjustments = { ...entry.edits.adjustments, ...ops.adjustments };
     }
     if (ops.rotation !== undefined) entry.edits.rotation = ops.rotation;
+    if (ops.keystoneV !== undefined) entry.edits.keystoneV = ops.keystoneV;
+    if (ops.keystoneH !== undefined) entry.edits.keystoneH = ops.keystoneH;
     if (ops.crop) entry.edits.crop = { ...ops.crop };
     if (entry.kind === "video") {
       const v = entry.edits as VideoEdits;
@@ -848,10 +873,15 @@ export function createEditor(options: EditorOptions): ViewHandle {
   // otherwise the fit scale is stale and the image renders at the wrong size.
   let resizeObserver: ResizeObserver | null = null;
   if (typeof ResizeObserver !== "undefined") {
-    let raf = 0;
+    // Coalesce via microtask, not rAF — rAF never fires in hidden/background
+    // tabs, which would leave the canvas at a stale size until user input.
+    let pending = false;
     resizeObserver = new ResizeObserver(() => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
+      if (pending) return;
+      pending = true;
+      queueMicrotask(() => {
+        pending = false;
+        if (signal.aborted) return;
         renderer.render();
         if (activeTool === "crop") cropTool.refresh();
       });

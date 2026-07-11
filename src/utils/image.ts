@@ -2,7 +2,8 @@ import { FabricImage, StaticCanvas } from "fabric";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../constants";
 import type { FileRejectionReason, ImageEdits, ImageExportOptions, MediaEntry } from "../types";
 import { buildFabricFilters, drawVignette } from "./filters";
-import { applySourceTransform, orientedDims } from "./transform";
+import { applyKeystone, hasKeystone } from "./perspective";
+import { applySourceTransform, orientedDims, straightenFitScale } from "./transform";
 import { capturePoster, createSeekQueue, loadVideo, releaseVideo } from "./video";
 
 export function generateId(): string {
@@ -134,7 +135,7 @@ export async function exportImage(
   edits: ImageEdits,
   options: ImageExportOptions = {},
 ): Promise<Blob> {
-  const { crop, rotation, orientation, flipH, flipV, adjustments } = edits;
+  const { crop, rotation, keystoneV, keystoneH, orientation, flipH, flipV, adjustments } = edits;
 
   // Crop region in oriented (rotated/flipped) source coordinates
   const rawW = "naturalWidth" in image ? image.naturalWidth : image.width;
@@ -145,12 +146,11 @@ export async function exportImage(
   const sw = crop.width * orientedW;
   const sh = crop.height * orientedH;
 
-  // Calculate output dimensions accounting for the fine rotation
-  const radians = (rotation * Math.PI) / 180;
-  const cos = Math.abs(Math.cos(radians));
-  const sin = Math.abs(Math.sin(radians));
-  const outWidth = Math.round(sw * cos + sh * sin);
-  const outHeight = Math.round(sh * cos + sw * sin);
+  // Straighten crops to the largest inscribed same-aspect window (matching
+  // the preview's fill-the-frame zoom) instead of expanding with background.
+  const fit = straightenFitScale(sw, sh, rotation);
+  const outWidth = Math.max(1, Math.round(sw * fit));
+  const outHeight = Math.max(1, Math.round(sh * fit));
 
   // Extract the oriented crop region onto a temp canvas
   const cropCanvas = document.createElement("canvas");
@@ -171,9 +171,23 @@ export async function exportImage(
   cropCtx.drawImage(image, -rawW / 2, -rawH / 2, rawW, rawH);
   cropCtx.setTransform(1, 0, 0, 1, 0, 0);
 
+  // Perspective correction warps the cropped region before fabric sees it.
+  let sourceCanvas = cropCanvas;
+  if (hasKeystone(keystoneV, keystoneH)) {
+    const warped = document.createElement("canvas");
+    warped.width = cropCanvas.width;
+    warped.height = cropCanvas.height;
+    const warpedCtx = warped.getContext("2d");
+    const scratch = document.createElement("canvas");
+    if (warpedCtx) {
+      applyKeystone(cropCanvas, scratch, warpedCtx, keystoneV, keystoneH);
+      sourceCanvas = warped;
+    }
+  }
+
   // Load the cropped region as an image for fabric
   const croppedImg = new Image();
-  croppedImg.src = cropCanvas.toDataURL();
+  croppedImg.src = sourceCanvas.toDataURL();
   await new Promise<void>((resolve) => {
     croppedImg.onload = () => resolve();
   });

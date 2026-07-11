@@ -66,6 +66,10 @@ export interface AiEditOps {
   crop?: CropRect;
   aspect?: AspectRatioPreset;
   rotation?: number;
+  /** Vertical keystone correction, -100 to 100. */
+  keystoneV?: number;
+  /** Horizontal keystone correction, -100 to 100. */
+  keystoneH?: number;
   /** Absolute target orientation. */
   orientation?: Orientation;
   /** Toggle: mirror the displayed image horizontally. */
@@ -164,6 +168,10 @@ export interface ImageEdits {
   crop: CropRect;
   /** Fine straighten angle in degrees, -45 to 45, applied after crop. */
   rotation: number;
+  /** Vertical keystone (perspective) correction, -100 to 100. */
+  keystoneV: number;
+  /** Horizontal keystone (perspective) correction, -100 to 100. */
+  keystoneH: number;
   /** 90°-step rotation applied to the source before cropping. */
   orientation: Orientation;
   /** Mirror the source horizontally (before orientation). */

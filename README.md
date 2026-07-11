@@ -138,7 +138,7 @@ Opens as a modal overlay: a dark stage that keeps focus on the image, and a clea
 
 | Tool | Description |
 |------|-------------|
-| **Crop** | Commit-style: drag a selection (free-form or fixed aspect — 16:9, 4:3, 1:1, 3:2, 9:16), then **Apply crop** (or press Enter) — the discarded area disappears everywhere; **Reset crop** brings the full frame back. Rule-of-thirds grid, straighten slider, rotate-90° and flip H/V that keep the crop over your content. Works on video too. |
+| **Crop** | Commit-style: drag a selection (free-form or fixed aspect — 16:9, 4:3, 1:1, 3:2, 9:16), then **Apply crop** (or press Enter) — the discarded area disappears everywhere; **Reset crop** brings the full frame back. Rule-of-thirds grid, rotate-90° and flip H/V that keep the crop over your content. Straighten auto-crops to the largest inscribed window (no black corners), and vertical/horizontal **perspective (keystone) correction** fixes converging lines. Works on video too. |
 | **Adjust** | 12 controls in Light / Color / Effects groups: exposure, brightness, contrast, temperature, tint, hue, saturation, vibrance, sharpen, blur, grain, vignette — real-time, live on playing video. Double-click a label to reset it. |
 | **Filters** | 12 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — with an intensity slider and live thumbnails. |
 | **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging, and 0.25–4× playback speed. |

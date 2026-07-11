@@ -74,6 +74,15 @@ export function buildSchema(context: AiContext): Record<string, unknown> {
       description: "Centered crop to a fixed aspect ratio. Prefer this for 'make it square' etc.",
     },
     rotation: { type: "number", description: "Straighten angle in degrees, -45 to 45." },
+    keystoneV: {
+      type: "number",
+      description:
+        "Vertical perspective (keystone) correction, -100 to 100. Positive widens the top — fixes converging verticals in upward shots.",
+    },
+    keystoneH: {
+      type: "number",
+      description: "Horizontal perspective (keystone) correction, -100 to 100.",
+    },
     orientation: {
       type: "number",
       enum: ORIENTATIONS,
@@ -179,6 +188,11 @@ export function validateAiOps(raw: unknown, context: AiContext): AiEditOps {
 
   const rotation = toNumber(r.rotation);
   if (rotation !== undefined) ops.rotation = clamp(rotation, -45, 45);
+
+  const keystoneV = toNumber(r.keystoneV);
+  if (keystoneV !== undefined) ops.keystoneV = clamp(keystoneV, -100, 100);
+  const keystoneH = toNumber(r.keystoneH);
+  if (keystoneH !== undefined) ops.keystoneH = clamp(keystoneH, -100, 100);
 
   const orientation = toNumber(r.orientation);
   if (orientation !== undefined && ORIENTATIONS.includes(orientation)) {

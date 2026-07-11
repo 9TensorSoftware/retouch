@@ -3,7 +3,8 @@ import { IMAGE_PREVIEW_MAX_DIM, PREVIEW_MAX_DIM } from "../../constants";
 import type { Adjustments, CropRect, FilterPreset, ImageEdits, Orientation } from "../../types";
 import { createCanvas } from "../../utils/canvas";
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
-import { applySourceTransform, orientedDims } from "../../utils/transform";
+import { applyKeystone, hasKeystone } from "../../utils/perspective";
+import { applySourceTransform, orientedDims, straightenFitScale } from "../../utils/transform";
 
 export interface ImageRect {
   x: number;
@@ -32,12 +33,17 @@ export class CanvasRenderer {
    */
   private frameCanvas: HTMLCanvasElement;
   private frameCtx: CanvasRenderingContext2D;
+  /** Scratch canvases for the keystone warp (allocated on first use). */
+  private warpSrc: HTMLCanvasElement | null = null;
+  private warpScratch: HTMLCanvasElement | null = null;
   private readonly rawWidth: number;
   private readonly rawHeight: number;
   private readonly previewCap: number;
   private readonly abort = new AbortController();
   private adjustments: Adjustments;
   private rotation = 0;
+  private keystoneV = 0;
+  private keystoneH = 0;
   private orientation: Orientation;
   private flipH: boolean;
   private flipV: boolean;
@@ -54,6 +60,8 @@ export class CanvasRenderer {
     this.source = source;
     this.adjustments = { ...edits.adjustments };
     this.rotation = edits.rotation;
+    this.keystoneV = edits.keystoneV;
+    this.keystoneH = edits.keystoneH;
     this.orientation = edits.orientation;
     this.flipH = edits.flipH;
     this.flipV = edits.flipV;
@@ -144,6 +152,14 @@ export class CanvasRenderer {
     this.rotation = deg;
   }
 
+  /** Update keystone correction; the frame is redrawn through the warp. */
+  setKeystone(vertical: number, horizontal: number): void {
+    if (vertical === this.keystoneV && horizontal === this.keystoneH) return;
+    this.keystoneV = vertical;
+    this.keystoneH = horizontal;
+    this.drawFrame();
+  }
+
   setFilter(preset: FilterPreset): void {
     this.filter = preset;
   }
@@ -205,11 +221,14 @@ export class CanvasRenderer {
     // Size the fabric canvas to the drawn image dimensions
     this.fabricCanvas.setDimensions({ width: drawW, height: drawH });
 
+    // Straighten fills the frame: zoom by the inverse of the largest
+    // inscribed same-aspect rect so rotation never exposes the background.
+    const fit = straightenFitScale(sourceW, sourceH, this.rotation);
     this.fabricImage.set({
       left: drawW / 2,
       top: drawH / 2,
-      scaleX: drawW / this.frameCanvas.width,
-      scaleY: drawH / this.frameCanvas.height,
+      scaleX: drawW / this.frameCanvas.width / fit,
+      scaleY: drawH / this.frameCanvas.height / fit,
       angle: this.rotation,
     });
 
@@ -306,11 +325,29 @@ export class CanvasRenderer {
     const visible = this.visibleSize();
     const scale = this.frameCanvas.width / visible.width;
     const cropOn = this.cropActive();
-    const ctx = this.frameCtx;
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, this.frameCanvas.width, this.frameCanvas.height);
-    applySourceTransform(ctx, {
+    const warp = hasKeystone(this.keystoneV, this.keystoneH);
+
+    // With keystone active, draw into a scratch canvas first, then warp it
+    // into the frame canvas fabric reads from.
+    let target: CanvasRenderingContext2D | null = this.frameCtx;
+    if (warp) {
+      if (!this.warpSrc) this.warpSrc = createCanvas(1, 1);
+      if (!this.warpScratch) this.warpScratch = createCanvas(1, 1);
+      if (
+        this.warpSrc.width !== this.frameCanvas.width ||
+        this.warpSrc.height !== this.frameCanvas.height
+      ) {
+        this.warpSrc.width = this.frameCanvas.width;
+        this.warpSrc.height = this.frameCanvas.height;
+      }
+      target = this.warpSrc.getContext("2d");
+      if (!target) return;
+    }
+
+    target.save();
+    target.setTransform(1, 0, 0, 1, 0, 0);
+    target.clearRect(0, 0, this.frameCanvas.width, this.frameCanvas.height);
+    applySourceTransform(target, {
       sourceWidth: this.rawWidth,
       sourceHeight: this.rawHeight,
       orientation: this.orientation,
@@ -320,14 +357,18 @@ export class CanvasRenderer {
       offsetX: cropOn ? this.crop.x * oriented.width * scale : 0,
       offsetY: cropOn ? this.crop.y * oriented.height * scale : 0,
     });
-    ctx.drawImage(
+    target.drawImage(
       this.source,
       -this.rawWidth / 2,
       -this.rawHeight / 2,
       this.rawWidth,
       this.rawHeight,
     );
-    ctx.restore();
+    target.restore();
+
+    if (warp && this.warpSrc && this.warpScratch) {
+      applyKeystone(this.warpSrc, this.warpScratch, this.frameCtx, this.keystoneV, this.keystoneH);
+    }
   }
 
   private startLoop(): void {

@@ -68,3 +68,20 @@ export function applySourceTransform(ctx: CanvasRenderingContext2D, t: SourceTra
   ctx.rotate((t.orientation * Math.PI) / 180);
   ctx.scale(t.scale * (t.flipH ? -1 : 1), t.scale * (t.flipV ? -1 : 1));
 }
+
+/**
+ * Scale factor for the largest same-aspect rectangle inscribed in a
+ * width×height rectangle rotated by `degrees` (Lightroom-style "constrain
+ * crop" for the straighten slider). Multiply the dims by the returned factor
+ * to get the inscribed window; zoom the preview by its inverse to fill the
+ * frame with no background corners.
+ */
+export function straightenFitScale(width: number, height: number, degrees: number): number {
+  if (width <= 0 || height <= 0 || degrees % 360 === 0) return 1;
+  const rad = Math.abs((degrees * Math.PI) / 180);
+  const sin = Math.abs(Math.sin(rad));
+  const cos = Math.abs(Math.cos(rad));
+  // An axis-aligned w×h box fits in the rotated rect iff its bounding box in
+  // the source frame fits: w·cos + h·sin ≤ W and w·sin + h·cos ≤ H.
+  return Math.min(width / (width * cos + height * sin), height / (width * sin + height * cos), 1);
+}

@@ -1119,6 +1119,27 @@ const CSS = /* css */ `
   cursor: pointer;
 }
 
+/* Crop pane: commit/aspect/transform row above, straighten + perspective below */
+
+.rt-crop-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+}
+
+.rt-crop-pane .rt-dock__slider input[type="range"] {
+  width: 150px;
+}
+
+.rt-dock__row-title {
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+}
+
 /* Adjust pane: slider row above, adjustment chips below */
 
 .rt-adjust {

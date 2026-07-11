@@ -8,6 +8,7 @@ import {
   rotateCropCCW,
   rotateCropCW,
   rotateOrientation,
+  straightenFitScale,
 } from "../src/utils/transform";
 
 const CROP: CropRect = { x: 0.1, y: 0.2, width: 0.5, height: 0.25 };
@@ -84,5 +85,35 @@ describe("frame pipeline with orientation", () => {
     const p = createFramePipeline(createDefaultVideoEdits(5), 640, 360);
     expect(p.isIdentity).toBe(true);
     p.dispose();
+  });
+});
+
+describe("straightenFitScale (auto-crop on straighten)", () => {
+  it("is 1 at zero rotation", () => {
+    expect(straightenFitScale(800, 600, 0)).toBe(1);
+  });
+
+  it("is symmetric in sign and shrinks as the angle grows", () => {
+    const f10 = straightenFitScale(800, 600, 10);
+    expect(straightenFitScale(800, 600, -10)).toBeCloseTo(f10, 10);
+    expect(f10).toBeLessThan(1);
+    expect(straightenFitScale(800, 600, 20)).toBeLessThan(f10);
+  });
+
+  it("matches the closed form for a 45° square", () => {
+    expect(straightenFitScale(400, 400, 45)).toBeCloseTo(1 / Math.SQRT2, 6);
+  });
+
+  it("keeps the scaled rect inside the rotated frame", () => {
+    for (const deg of [5, 15, 30, 44]) {
+      const w = 900;
+      const h = 600;
+      const f = straightenFitScale(w, h, deg);
+      const rad = (deg * Math.PI) / 180;
+      const sin = Math.sin(rad);
+      const cos = Math.cos(rad);
+      expect(f * (w * cos + h * sin)).toBeLessThanOrEqual(w + 1e-9);
+      expect(f * (w * sin + h * cos)).toBeLessThanOrEqual(h + 1e-9);
+    }
   });
 });

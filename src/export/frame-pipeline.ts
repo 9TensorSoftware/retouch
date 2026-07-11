@@ -2,7 +2,8 @@ import { FabricImage, StaticCanvas } from "fabric";
 import type { ImageEdits } from "../types";
 import { createCanvas } from "../utils/canvas";
 import { buildFabricFilters, drawVignette, isNeutral } from "../utils/filters";
-import { applySourceTransform, orientedDims } from "../utils/transform";
+import { applyKeystone, hasKeystone } from "../utils/perspective";
+import { applySourceTransform, orientedDims, straightenFitScale } from "../utils/transform";
 
 /**
  * Long-edge cap for exported video. Stays under fabric's default WebGL
@@ -50,7 +51,18 @@ export function createFramePipeline(
   srcWidth: number,
   srcHeight: number,
 ): FramePipeline {
-  const { crop, rotation, orientation, flipH, flipV, adjustments, filter, filterStrength } = edits;
+  const {
+    crop,
+    rotation,
+    keystoneV,
+    keystoneH,
+    orientation,
+    flipH,
+    flipV,
+    adjustments,
+    filter,
+    filterStrength,
+  } = edits;
 
   // Crop region in oriented (rotated/flipped) source pixels
   const { width: orientedW, height: orientedH } = orientedDims(srcWidth, srcHeight, orientation);
@@ -64,16 +76,19 @@ export function createFramePipeline(
   const cropW = even(sw * k);
   const cropH = even(sh * k);
 
-  // Output dimensions account for rotation (same expansion as exportImage)
-  const radians = (rotation * Math.PI) / 180;
-  const cos = Math.abs(Math.cos(radians));
-  const sin = Math.abs(Math.sin(radians));
-  const outW = even(cropW * cos + cropH * sin);
-  const outH = even(cropH * cos + cropW * sin);
+  // Straighten crops to the largest inscribed same-aspect window (matching
+  // the preview's fill-the-frame zoom and the image exporter).
+  const fit = straightenFitScale(cropW, cropH, rotation);
+  const outW = even(cropW * fit);
+  const outH = even(cropH * fit);
 
+  const warp = hasKeystone(keystoneV, keystoneH);
   const untransformed = orientation === 0 && !flipH && !flipV;
   const neutralVisual =
-    isNeutral(adjustments, filter, filterStrength) && adjustments.vignette === 0 && rotation === 0;
+    isNeutral(adjustments, filter, filterStrength) &&
+    adjustments.vignette === 0 &&
+    rotation === 0 &&
+    !warp;
   const fullFrame = crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
 
   const cropCanvas = createCanvas(cropW, cropH);
@@ -91,6 +106,16 @@ export function createFramePipeline(
     offsetY: sy * k,
   });
 
+  // Perspective correction warps the cropped frame before fabric sees it.
+  let warpCanvas: HTMLCanvasElement | null = null;
+  let warpCtx: CanvasRenderingContext2D | null = null;
+  let warpScratch: HTMLCanvasElement | null = null;
+  if (warp) {
+    warpCanvas = createCanvas(cropW, cropH);
+    warpCtx = warpCanvas.getContext("2d");
+    warpScratch = createCanvas(1, 1);
+  }
+
   // fabric is only involved when rotation or filters actually apply
   let staticCanvas: StaticCanvas | null = null;
   let fabricImg: FabricImage | null = null;
@@ -103,7 +128,7 @@ export function createFramePipeline(
       // size or devicePixelRatio would scale the exported resolution.
       enableRetinaScaling: false,
     });
-    fabricImg = new FabricImage(cropCanvas, {
+    fabricImg = new FabricImage(warpCanvas ?? cropCanvas, {
       selectable: false,
       evented: false,
       originX: "center",
@@ -133,6 +158,9 @@ export function createFramePipeline(
         srcWidth,
         srcHeight,
       );
+      if (warpCanvas && warpCtx && warpScratch) {
+        applyKeystone(cropCanvas, warpScratch, warpCtx, keystoneV, keystoneH);
+      }
       if (neutralVisual || !staticCanvas || !fabricImg) return cropCanvas;
       fabricImg.applyFilters();
       staticCanvas.renderAll();

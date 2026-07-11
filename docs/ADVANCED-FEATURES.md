@@ -35,8 +35,8 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 
 ## Tier A — pure TypeScript / canvas / WebGL (no models, no downloads)
 
-1. Perspective / keystone correction — 4-corner homography, "perspective crop" (in-house math, ~50 lines)
-2. Auto-crop on straighten — largest inscribed rect, no black corners
+1. ✅ Perspective / keystone correction — V/H sliders shipped (separable strip warp); 4-corner "perspective crop" still open
+2. ✅ Auto-crop on straighten — largest inscribed rect, no black corners (shipped)
 3. Curves + Levels + live histogram
 4. HSL mixer · split-toning wheels · white-balance eyedropper
 5. Selective (masked) adjustments — linear/radial gradient + brush masks

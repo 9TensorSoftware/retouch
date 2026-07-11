@@ -22,6 +22,8 @@ export interface ContextDockOptions {
   onApplyCrop: () => void;
   /** Restore the full original frame. */
   onResetCrop: () => void;
+  /** Perspective (keystone) correction changed. */
+  onKeystoneChange: (vertical: number, horizontal: number) => void;
 }
 
 export interface ContextDockHandle extends ViewHandle {
@@ -34,6 +36,8 @@ export interface ContextDockHandle extends ViewHandle {
   setCropResetEnabled(enabled: boolean): void;
   /** Reflect the crop tool's aspect preset in the chips. */
   setAspect(preset: AspectRatioPreset): void;
+  /** Sync the keystone sliders after an external change (does not fire onKeystoneChange). */
+  setKeystone(vertical: number, horizontal: number): void;
 }
 
 const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
@@ -129,57 +133,91 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   resetCropBtn.addEventListener("click", () => options.onResetCrop(), { signal });
   const commitGroup = h("div", { class: "rt-dock__group" }, applyBtn, resetCropBtn);
 
-  const rotationValue = h("span", { class: "rt-dock__slider-value" }, `${edits.rotation}°`);
-  const rotationInput = h("input", {
-    type: "range",
-    min: -45,
-    max: 45,
-    step: 1,
-    value: edits.rotation,
-    "aria-label": "Straighten",
-  }) as HTMLInputElement;
-  rotationInput.addEventListener(
-    "input",
-    () => {
-      const deg = Number(rotationInput.value);
-      rotationValue.textContent = `${deg}°`;
-      onRotationChange(deg);
-    },
-    { signal },
-  );
-  const straightenLabel = h(
-    "span",
-    { class: "rt-dock__slider-label", title: "Double-click to reset" },
+  /** Inline labeled slider with double-click-to-reset. */
+  function makeSlider(
+    label: string,
+    min: number,
+    max: number,
+    value: number,
+    format: (v: number) => string,
+    onInput: (v: number) => void,
+  ) {
+    const valueEl = h("span", { class: "rt-dock__slider-value" }, format(value));
+    const input = h("input", {
+      type: "range",
+      min,
+      max,
+      step: 1,
+      value,
+      "aria-label": label,
+    }) as HTMLInputElement;
+    input.addEventListener(
+      "input",
+      () => {
+        valueEl.textContent = format(Number(input.value));
+        onInput(Number(input.value));
+      },
+      { signal },
+    );
+    const labelEl = h(
+      "span",
+      { class: "rt-dock__slider-label", title: "Double-click to reset" },
+      label,
+    );
+    labelEl.addEventListener(
+      "dblclick",
+      () => {
+        input.value = "0";
+        valueEl.textContent = format(0);
+        onInput(0);
+      },
+      { signal },
+    );
+    const group = h("div", { class: "rt-dock__group rt-dock__slider" }, labelEl, input, valueEl);
+    const set = (v: number): void => {
+      input.value = String(v);
+      valueEl.textContent = format(v);
+    };
+    return { group, set };
+  }
+
+  const straighten = makeSlider(
     "Straighten",
+    -45,
+    45,
+    edits.rotation,
+    (v) => `${v}°`,
+    (v) => onRotationChange(v),
   );
-  straightenLabel.addEventListener(
-    "dblclick",
-    () => {
-      rotationInput.value = "0";
-      rotationValue.textContent = "0°";
-      onRotationChange(0);
-    },
-    { signal },
+  const keystoneVSlider = makeSlider("Vertical", -100, 100, edits.keystoneV, String, (v) =>
+    options.onKeystoneChange(v, Number.NaN),
   );
-  const straightenGroup = h(
-    "div",
-    { class: "rt-dock__group rt-dock__slider" },
-    straightenLabel,
-    rotationInput,
-    rotationValue,
+  const keystoneHSlider = makeSlider("Horizontal", -100, 100, edits.keystoneH, String, (v) =>
+    options.onKeystoneChange(Number.NaN, v),
   );
 
   const divider = () => h("div", { class: "rt-dock__divider" });
   const cropPane = h(
     "div",
-    { class: "rt-dock__pane rt-dock__row" },
-    commitGroup,
-    divider(),
-    aspectGroup,
-    divider(),
-    transformGroup,
-    divider(),
-    straightenGroup,
+    { class: "rt-dock__pane rt-crop-pane" },
+    h(
+      "div",
+      { class: "rt-dock__row" },
+      commitGroup,
+      divider(),
+      aspectGroup,
+      divider(),
+      transformGroup,
+    ),
+    h(
+      "div",
+      { class: "rt-dock__row" },
+      straighten.group,
+      divider(),
+      h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Perspective"),
+      keystoneVSlider.group,
+      keystoneHSlider.group,
+    ),
   );
 
   // ── Tool panes ──
@@ -212,8 +250,11 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       }
     },
     setRotation(degrees) {
-      rotationInput.value = String(degrees);
-      rotationValue.textContent = `${degrees}°`;
+      straighten.set(degrees);
+    },
+    setKeystone(vertical, horizontal) {
+      keystoneVSlider.set(vertical);
+      keystoneHSlider.set(horizontal);
     },
     setCropApplyEnabled(enabled) {
       applyBtn.toggleAttribute("disabled", !enabled);

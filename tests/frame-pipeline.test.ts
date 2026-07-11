@@ -30,13 +30,22 @@ describe("frame pipeline geometry", () => {
     p.dispose();
   });
 
-  it("expands output for rotation like the image exporter", () => {
+  it("crops rotation to the inscribed window instead of expanding", () => {
     const edits = createDefaultVideoEdits(5);
     edits.rotation = 45;
     const p = createFramePipeline(edits, 400, 400);
-    const expected = Math.round(400 * Math.SQRT1_2 * 2); // w*cos45 + h*sin45
+    const expected = Math.round(400 * Math.SQRT1_2); // largest inscribed square at 45°
     expect(Math.abs(p.outWidth - expected)).toBeLessThanOrEqual(2);
     expect(p.outWidth % 2).toBe(0);
+    expect(p.isIdentity).toBe(false);
+    p.dispose();
+  });
+
+  it("keystone breaks identity so the export re-encodes", () => {
+    const edits = createDefaultVideoEdits(5);
+    edits.keystoneV = 30;
+    const p = createFramePipeline(edits, 400, 400);
+    expect(p.isIdentity).toBe(false);
     p.dispose();
   });
 

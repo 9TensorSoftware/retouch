@@ -38,6 +38,8 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
 export const DEFAULT_EDITS: ImageEdits = {
   crop: { ...DEFAULT_CROP },
   rotation: 0,
+  keystoneV: 0,
+  keystoneH: 0,
   orientation: 0,
   flipH: false,
   flipV: false,
