@@ -1,4 +1,4 @@
-import type { Adjustments, CropRect, Curves, ImageEdits, VideoEdits } from "./types";
+import type { Adjustments, CropRect, Curves, HslMixer, ImageEdits, VideoEdits } from "./types";
 
 export const VERSION = "0.0.2";
 
@@ -57,6 +57,21 @@ export function createDefaultCurves(): Curves {
   };
 }
 
+/** All-zero HSL mixer. */
+export function createDefaultHsl(): HslMixer {
+  const zero = () => ({ h: 0, s: 0, l: 0 });
+  return {
+    red: zero(),
+    orange: zero(),
+    yellow: zero(),
+    green: zero(),
+    aqua: zero(),
+    blue: zero(),
+    purple: zero(),
+    magenta: zero(),
+  };
+}
+
 export const DEFAULT_EDITS: ImageEdits = {
   crop: { ...DEFAULT_CROP },
   rotation: 0,
@@ -67,6 +82,7 @@ export const DEFAULT_EDITS: ImageEdits = {
   flipV: false,
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   curves: createDefaultCurves(),
+  hsl: createDefaultHsl(),
   filter: "none",
   filterStrength: 100,
 };

@@ -1,10 +1,16 @@
 import { Canvas, FabricImage } from "fabric";
-import { createDefaultCurves, IMAGE_PREVIEW_MAX_DIM, PREVIEW_MAX_DIM } from "../../constants";
+import {
+  createDefaultCurves,
+  createDefaultHsl,
+  IMAGE_PREVIEW_MAX_DIM,
+  PREVIEW_MAX_DIM,
+} from "../../constants";
 import type {
   Adjustments,
   CropRect,
   Curves,
   FilterPreset,
+  HslMixer,
   ImageEdits,
   Orientation,
 } from "../../types";
@@ -12,6 +18,8 @@ import { createCanvas } from "../../utils/canvas";
 import type { CurveLuts } from "../../utils/curves";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../../utils/curves";
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
+import type { HueTable } from "../../utils/hsl";
+import { applyHslToContext, buildHueTable, hslIsNeutral } from "../../utils/hsl";
 import { applyKeystone, hasKeystone } from "../../utils/perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "../../utils/transform";
 
@@ -56,6 +64,9 @@ export class CanvasRenderer {
   private curves: Curves = createDefaultCurves();
   /** Cached LUTs; null while the curves are identity. */
   private curveLuts: CurveLuts | null = null;
+  private hsl: HslMixer = createDefaultHsl();
+  /** Cached hue table; null while the mixer is neutral. */
+  private hueTable: HueTable | null = null;
   private orientation: Orientation;
   private flipH: boolean;
   private flipV: boolean;
@@ -75,6 +86,7 @@ export class CanvasRenderer {
     this.keystoneV = edits.keystoneV;
     this.keystoneH = edits.keystoneH;
     this.setCurves(edits.curves);
+    this.setHsl(edits.hsl);
     this.orientation = edits.orientation;
     this.flipH = edits.flipH;
     this.flipV = edits.flipV;
@@ -125,6 +137,9 @@ export class CanvasRenderer {
     this.fabricCanvas.on("after:render", ({ ctx: renderCtx }) => {
       if (!renderCtx) return;
       const el = this.fabricCanvas.getElement();
+      if (this.hueTable) {
+        applyHslToContext(renderCtx, el.width, el.height, this.hueTable);
+      }
       if (this.curveLuts) {
         applyCurvesToContext(renderCtx, el.width, el.height, this.curveLuts);
       }
@@ -168,6 +183,12 @@ export class CanvasRenderer {
 
   setRotation(deg: number): void {
     this.rotation = deg;
+  }
+
+  /** Update the HSL mixer (the hue table is rebuilt once per change). */
+  setHsl(hsl: HslMixer): void {
+    this.hsl = structuredClone(hsl);
+    this.hueTable = hslIsNeutral(hsl) ? null : buildHueTable(hsl);
   }
 
   /** Update the tone curves (LUTs are rebuilt once per change, not per frame). */

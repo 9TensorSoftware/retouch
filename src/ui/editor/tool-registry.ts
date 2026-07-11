@@ -66,6 +66,11 @@ export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
     label: "Curves",
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21C10 21 14 3 21 3"/><circle cx="8.2" cy="14.8" r="1.6" fill="currentColor" stroke="none"/><circle cx="15.8" cy="6.4" r="1.6" fill="currentColor" stroke="none"/></svg>',
   },
+  hsl: {
+    id: "hsl",
+    label: "Color mix",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18M12 3a9 9 0 00-4.5 16.8M12 12l6.4-6.4M12 12l-8.5 3"/></svg>',
+  },
   adjust: {
     id: "adjust",
     label: "Adjust",

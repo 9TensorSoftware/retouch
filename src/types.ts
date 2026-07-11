@@ -1,6 +1,13 @@
 export type AppState = "idle" | "dropzone" | "gallery" | "editor" | "destroyed";
 
-export type BuiltinEditorTool = "trim" | "crop" | "transform" | "curves" | "adjust" | "filters";
+export type BuiltinEditorTool =
+  | "trim"
+  | "crop"
+  | "transform"
+  | "curves"
+  | "hsl"
+  | "adjust"
+  | "filters";
 
 /** Built-in tool ids plus any id registered via `Retouch.registerTool`. */
 export type EditorTool = BuiltinEditorTool | (string & {});
@@ -77,6 +84,8 @@ export interface AiEditOps {
   /** Toggle: mirror the displayed image vertically. */
   flipV?: boolean;
   adjustments?: Partial<Adjustments>;
+  /** Per-band HSL shifts; only include bands you change. */
+  hsl?: Partial<Record<HslBand, Partial<HslShift>>>;
   filter?: FilterPreset;
   filterStrength?: number;
   trim?: TrimRange;
@@ -163,6 +172,26 @@ export interface Adjustments {
   vignette: number;
 }
 
+export type HslBand =
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "aqua"
+  | "blue"
+  | "purple"
+  | "magenta";
+
+/** Per-band shifts, each -100..100 (0 = neutral). */
+export interface HslShift {
+  h: number;
+  s: number;
+  l: number;
+}
+
+/** Lightroom-style HSL mixer: independent shifts for eight hue bands. */
+export type HslMixer = Record<HslBand, HslShift>;
+
 /** One tone-curve control point, both axes normalized 0–1. */
 export interface CurvePoint {
   x: number;
@@ -195,6 +224,8 @@ export interface ImageEdits {
   adjustments: Adjustments;
   /** Tone curves applied after adjustments/filters (identity by default). */
   curves: Curves;
+  /** Per-hue-band color mixer, applied before the curves. */
+  hsl: HslMixer;
   /** Preset filter applied beneath the adjustments. */
   filter: FilterPreset;
   /** Preset intensity, 0–100. */

@@ -1181,6 +1181,17 @@ const CSS = /* css */ `
   cursor: crosshair !important;
 }
 
+/* HSL mixer pane */
+
+.rt-hsl__slider input[type="range"] {
+  width: 150px;
+}
+
+.rt-hsl__chip {
+  border-left: 3px solid var(--rt-band-color, transparent);
+  border-radius: 6px;
+}
+
 /* Adjust pane: slider row above, adjustment chips below */
 
 .rt-adjust {

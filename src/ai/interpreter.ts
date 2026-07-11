@@ -7,11 +7,14 @@ import type {
   AspectRatioPreset,
   CropRect,
   FilterPreset,
+  HslBand,
+  HslShift,
   ImageEdits,
   Orientation,
   VideoEdits,
 } from "../types";
 import { FILTER_PRESETS } from "../utils/filters";
+import { HSL_BANDS } from "../utils/hsl";
 import { clamp } from "../utils/math";
 import { clampTrim } from "../utils/video";
 
@@ -105,6 +108,26 @@ export function buildSchema(context: AiContext): Record<string, unknown> {
       ),
       additionalProperties: false,
     },
+    hsl: {
+      type: "object",
+      description:
+        "Per-hue-band color mixer: shift hue/saturation/luminance (-100..100 each) for specific color ranges only — e.g. 'make the sky bluer' → {blue:{s:40}}, 'mute the greens' → {green:{s:-50}}.",
+      properties: Object.fromEntries(
+        HSL_BANDS.map((band) => [
+          band,
+          {
+            type: "object",
+            properties: {
+              h: { type: "number", description: "Hue shift -100..100" },
+              s: { type: "number", description: "Saturation shift -100..100" },
+              l: { type: "number", description: "Luminance shift -100..100" },
+            },
+            additionalProperties: false,
+          },
+        ]),
+      ),
+      additionalProperties: false,
+    },
     filter: {
       type: "string",
       enum: FILTER_IDS,
@@ -178,6 +201,23 @@ export function validateAiOps(raw: unknown, context: AiContext): AiEditOps {
   };
 
   if (r.reset === true) ops.reset = true;
+
+  if (r.hsl && typeof r.hsl === "object") {
+    const bands = r.hsl as Record<string, unknown>;
+    const clean: Partial<Record<HslBand, Partial<HslShift>>> = {};
+    for (const band of HSL_BANDS) {
+      const shift = bands[band];
+      if (!shift || typeof shift !== "object") continue;
+      const sh = shift as Record<string, unknown>;
+      const entry: Partial<HslShift> = {};
+      for (const key of ["h", "s", "l"] as const) {
+        const value = toNumber(sh[key]);
+        if (value !== undefined) entry[key] = clamp(value, -100, 100);
+      }
+      if (Object.keys(entry).length > 0) clean[band] = entry;
+    }
+    if (Object.keys(clean).length > 0) ops.hsl = clean;
+  }
 
   if (typeof r.filter === "string" && (FILTER_IDS as string[]).includes(r.filter)) {
     ops.filter = r.filter as FilterPreset;

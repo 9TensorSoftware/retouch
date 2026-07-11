@@ -4,6 +4,7 @@ import type { AdjustToolHandle } from "./adjust-tool";
 import type { CropToolHandle } from "./crop-tool";
 import type { CurvesToolHandle } from "./curves-tool";
 import type { FiltersToolHandle } from "./filters-tool";
+import type { HslToolHandle } from "./hsl-tool";
 import type { TrimToolHandle } from "./trim-tool";
 
 export type TransformOp = "rotate-ccw" | "rotate-cw" | "flip-h" | "flip-v";
@@ -12,6 +13,7 @@ export interface ContextDockOptions {
   cropTool: CropToolHandle;
   adjustTool: AdjustToolHandle;
   curvesTool: CurvesToolHandle;
+  hslTool: HslToolHandle;
   filtersTool: FiltersToolHandle;
   /** Present only for video entries. */
   trimTool?: TrimToolHandle;
@@ -83,6 +85,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     cropTool,
     adjustTool,
     curvesTool,
+    hslTool,
     filtersTool,
     trimTool,
     edits,
@@ -233,6 +236,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
 
   const adjustPane = h("div", { class: "rt-dock__pane" }, adjustTool.root);
   const curvesPane = h("div", { class: "rt-dock__pane" }, curvesTool.root);
+  const hslPane = h("div", { class: "rt-dock__pane" }, hslTool.root);
   const filtersPane = h("div", { class: "rt-dock__pane" }, filtersTool.root);
   const trimPane = trimTool ? h("div", { class: "rt-dock__pane" }, trimTool.root) : null;
 
@@ -242,6 +246,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     cropPane,
     transformPane,
     curvesPane,
+    hslPane,
     adjustPane,
     filtersPane,
   );
@@ -251,6 +256,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     crop: cropPane,
     transform: transformPane,
     curves: curvesPane,
+    hsl: hslPane,
     adjust: adjustPane,
     filters: filtersPane,
     ...(trimPane ? { trim: trimPane } : {}),

@@ -3,6 +3,7 @@ import type { ImageEdits } from "../types";
 import { createCanvas } from "../utils/canvas";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../utils/curves";
 import { buildFabricFilters, drawVignette, isNeutral } from "../utils/filters";
+import { applyHslToContext, buildHueTable, hslIsNeutral } from "../utils/hsl";
 import { applyKeystone, hasKeystone } from "../utils/perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "../utils/transform";
 
@@ -85,13 +86,15 @@ export function createFramePipeline(
 
   const warp = hasKeystone(keystoneV, keystoneH);
   const curveLuts = curvesAreIdentity(edits.curves) ? null : buildCurveLuts(edits.curves);
+  const hueTable = hslIsNeutral(edits.hsl) ? null : buildHueTable(edits.hsl);
   const untransformed = orientation === 0 && !flipH && !flipV;
   const neutralVisual =
     isNeutral(adjustments, filter, filterStrength) &&
     adjustments.vignette === 0 &&
     rotation === 0 &&
     !warp &&
-    !curveLuts;
+    !curveLuts &&
+    !hueTable;
   const fullFrame = crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
 
   const cropCanvas = createCanvas(cropW, cropH);
@@ -169,6 +172,9 @@ export function createFramePipeline(
       staticCanvas.renderAll();
       const element = staticCanvas.getElement();
       const ctx = element.getContext("2d");
+      if (ctx && hueTable) {
+        applyHslToContext(ctx, element.width, element.height, hueTable);
+      }
       if (ctx && curveLuts) {
         applyCurvesToContext(ctx, element.width, element.height, curveLuts);
       }

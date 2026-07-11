@@ -480,6 +480,7 @@ export class Retouch {
       flipV,
       adjustments,
       curves,
+      hsl,
       filter,
       filterStrength,
     } = structuredClone(source.edits);
@@ -499,6 +500,7 @@ export class Retouch {
         flipV,
         adjustments,
         curves,
+        hsl,
         filter,
         filterStrength,
       },

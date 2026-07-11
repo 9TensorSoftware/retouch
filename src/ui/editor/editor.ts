@@ -2,6 +2,7 @@ import type { AiContext } from "../../ai/interpreter";
 import { interpretCommand } from "../../ai/interpreter";
 import {
   createDefaultCurves,
+  createDefaultHsl,
   createDefaultVideoEdits,
   DEFAULT_ADJUSTMENTS,
   DEFAULT_EDITS,
@@ -19,6 +20,7 @@ import { createCanvas } from "../../utils/canvas";
 import { curvesAreIdentity } from "../../utils/curves";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
+import { hslIsNeutral } from "../../utils/hsl";
 import { clamp } from "../../utils/math";
 import {
   flipCropX,
@@ -39,6 +41,7 @@ import { createContextDock } from "./context-dock";
 import { createCropTool } from "./crop-tool";
 import { createCurvesTool } from "./curves-tool";
 import { createFiltersTool } from "./filters-tool";
+import { createHslTool } from "./hsl-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools } from "./tool-registry";
 import { createToolbar } from "./toolbar";
@@ -77,6 +80,7 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
     parts.push("Perspective");
   }
   if (JSON.stringify(next.curves) !== JSON.stringify(prev.curves)) parts.push("Curves");
+  if (JSON.stringify(next.hsl) !== JSON.stringify(prev.hsl)) parts.push("Color mix");
   const pc = prev.crop;
   const nc = next.crop;
   const cropChanged =
@@ -139,8 +143,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const customTools = getCustomTools().filter((t) => !t.kinds || t.kinds.includes(entry.kind));
   const builtinIds: EditorTool[] =
     entry.kind === "video"
-      ? ["trim", "crop", "transform", "adjust", "curves", "filters"]
-      : ["crop", "transform", "adjust", "curves", "filters"];
+      ? ["trim", "crop", "transform", "adjust", "curves", "hsl", "filters"]
+      : ["crop", "transform", "adjust", "curves", "hsl", "filters"];
   const allIds: EditorTool[] = [...builtinIds, ...customTools.map((t) => t.id)];
   const tools: EditorTool[] = options.tools
     ? options.tools.filter((id) => allIds.includes(id))
@@ -404,6 +408,17 @@ export function createEditor(options: EditorOptions): ViewHandle {
     document.addEventListener("keydown", onEsc, true);
   }
 
+  // HSL mixer (per-hue-band shifts)
+  const hslTool = createHslTool({
+    hsl: entry.edits.hsl,
+    onChange: (hsl) => {
+      entry.edits.hsl = hsl;
+      renderer.setHsl(hsl);
+      renderer.render();
+      recordEdit();
+    },
+  });
+
   // Curves tool (tone curves over a live input histogram)
   const curvesTool = createCurvesTool({
     curves: entry.edits.curves,
@@ -493,6 +508,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     cropTool,
     adjustTool,
     curvesTool,
+    hslTool,
     filtersTool,
     trimTool,
     edits: entry.edits,
@@ -551,8 +567,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setFilter(entry.edits.filter);
     renderer.setFilterStrength(entry.edits.filterStrength);
     renderer.setCurves(entry.edits.curves);
+    renderer.setHsl(entry.edits.hsl);
     adjustTool.setAdjustments(entry.edits.adjustments);
     curvesTool.setCurves(entry.edits.curves);
+    hslTool.setHsl(entry.edits.hsl);
     filtersTool.setFilter(entry.edits.filter);
     filtersTool.setStrength(entry.edits.filterStrength);
     dock.setRotation(entry.edits.rotation);
@@ -584,6 +602,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.flipV = state.flipV;
       entry.edits.adjustments = { ...state.adjustments };
       entry.edits.curves = structuredClone(state.curves);
+      entry.edits.hsl = structuredClone(state.hsl);
       entry.edits.filter = state.filter;
       entry.edits.filterStrength = state.filterStrength;
       if (entry.kind === "video" && "trim" in state) {
@@ -617,6 +636,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     );
     toolbar.setTouched("filters", e.filter !== "none");
     toolbar.setTouched("curves", !curvesAreIdentity(e.curves));
+    toolbar.setTouched("hsl", !hslIsNeutral(e.hsl));
     if (entry.kind === "video") {
       const v = entry.edits;
       toolbar.setTouched(
@@ -700,6 +720,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setRotation(DEFAULT_EDITS.rotation);
     renderer.setKeystone(0, 0);
     renderer.setCurves(createDefaultCurves());
+    renderer.setHsl(createDefaultHsl());
     renderer.setCropApplied(false);
     renderer.render();
   }
@@ -711,6 +732,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setRotation(entry.edits.rotation);
     renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
     renderer.setCurves(entry.edits.curves);
+    renderer.setHsl(entry.edits.hsl);
     renderer.setCropApplied(true);
     renderer.render();
     cropTool.setVisible(activeTool === "crop");
@@ -763,6 +785,14 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (ops.filterStrength !== undefined) entry.edits.filterStrength = ops.filterStrength;
     if (ops.adjustments) {
       entry.edits.adjustments = { ...entry.edits.adjustments, ...ops.adjustments };
+    }
+    if (ops.hsl) {
+      for (const [band, shift] of Object.entries(ops.hsl)) {
+        entry.edits.hsl[band as keyof typeof entry.edits.hsl] = {
+          ...entry.edits.hsl[band as keyof typeof entry.edits.hsl],
+          ...shift,
+        };
+      }
     }
     if (ops.rotation !== undefined) entry.edits.rotation = ops.rotation;
     if (ops.keystoneV !== undefined) entry.edits.keystoneV = ops.keystoneV;
@@ -1010,6 +1040,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       cropTool.destroy();
       adjustTool.destroy();
       curvesTool.destroy();
+      hslTool.destroy();
       filtersTool.destroy();
       dock.destroy();
       toolbar.destroy();
