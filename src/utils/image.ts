@@ -8,6 +8,7 @@ import { applyHslToContext, buildHueTable, hslIsNeutral } from "./hsl";
 import { applyLensToCanvas, hasLens } from "./lens";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "./masks";
 import { applyKeystone, hasKeystone } from "./perspective";
+import { carveWidthSync } from "./seam";
 import { applyStylizeToContext, stylizeIsNeutral } from "./stylize";
 import { applySourceTransform, orientedDims, straightenFitScale } from "./transform";
 import { capturePoster, createSeekQueue, loadVideo, releaseVideo } from "./video";
@@ -155,8 +156,40 @@ export async function exportImage(
   } = edits;
 
   // Crop region in oriented (rotated/flipped) source coordinates
-  const rawW = "naturalWidth" in image ? image.naturalWidth : image.width;
-  const rawH = "naturalHeight" in image ? image.naturalHeight : image.height;
+  let source: HTMLImageElement | HTMLCanvasElement = image;
+  let rawW = "naturalWidth" in image ? image.naturalWidth : image.width;
+  let rawH = "naturalHeight" in image ? image.naturalHeight : image.height;
+
+  // Content-aware scale runs first, replacing the source. Carving is O(seams
+  // × pixels), so the working resolution is capped to stay interactive.
+  if (edits.seamWidth < 100 && rawW > 2) {
+    const CARVE_MAX_W = 1600;
+    const preScale = Math.min(1, CARVE_MAX_W / rawW);
+    const cw = Math.max(2, Math.round(rawW * preScale));
+    const ch = Math.max(2, Math.round(rawH * preScale));
+    const work = document.createElement("canvas");
+    work.width = cw;
+    work.height = ch;
+    const workCtx = work.getContext("2d");
+    if (workCtx) {
+      workCtx.drawImage(image, 0, 0, cw, ch);
+      const carved = carveWidthSync(
+        workCtx.getImageData(0, 0, cw, ch).data,
+        cw,
+        ch,
+        Math.round((cw * edits.seamWidth) / 100),
+      );
+      const carvedCanvas = document.createElement("canvas");
+      carvedCanvas.width = carved.width;
+      carvedCanvas.height = carved.height;
+      carvedCanvas
+        .getContext("2d")
+        ?.putImageData(new ImageData(carved.data, carved.width, carved.height), 0, 0);
+      source = carvedCanvas;
+      rawW = carved.width;
+      rawH = carved.height;
+    }
+  }
   const { width: orientedW, height: orientedH } = orientedDims(rawW, rawH, orientation);
   const sx = crop.x * orientedW;
   const sy = crop.y * orientedH;
@@ -185,7 +218,7 @@ export async function exportImage(
     offsetX: sx,
     offsetY: sy,
   });
-  cropCtx.drawImage(image, -rawW / 2, -rawH / 2, rawW, rawH);
+  cropCtx.drawImage(source, -rawW / 2, -rawH / 2, rawW, rawH);
   cropCtx.setTransform(1, 0, 0, 1, 0, 0);
 
   // Perspective correction warps the cropped region before fabric sees it.

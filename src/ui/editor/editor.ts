@@ -24,6 +24,7 @@ import { createHistory } from "../../utils/history";
 import { hslIsNeutral } from "../../utils/hsl";
 import { masksAreNeutral } from "../../utils/masks";
 import { clamp } from "../../utils/math";
+import { carveWidthAsync } from "../../utils/seam";
 import { stylizeIsNeutral } from "../../utils/stylize";
 import {
   flipCropX,
@@ -88,6 +89,7 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
   if (next.lensDistortion !== prev.lensDistortion || next.lensDevignette !== prev.lensDevignette) {
     parts.push("Lens");
   }
+  if (next.seamWidth !== prev.seamWidth) parts.push("Content-aware scale");
   if (JSON.stringify(next.curves) !== JSON.stringify(prev.curves)) parts.push("Curves");
   if (JSON.stringify(next.hsl) !== JSON.stringify(prev.hsl)) parts.push("Color mix");
   if (JSON.stringify(next.masks) !== JSON.stringify(prev.masks)) parts.push("Masks");
@@ -571,6 +573,64 @@ export function createEditor(options: EditorOptions): ViewHandle {
     recordEdit();
   }
 
+  // ── Content-aware scale (images only): carve in a worker, debounced ──
+
+  let carveTimer = 0;
+  let carveToken = 0;
+  let lastCarvedWidth = entry.edits.seamWidth;
+  let carvedCanvas: HTMLCanvasElement | null = null;
+
+  async function recomputeCarve(): Promise<void> {
+    if (entry.kind !== "image") return;
+    const token = ++carveToken;
+    if (entry.edits.seamWidth >= 100) {
+      carvedCanvas = null;
+      renderer.setCarvedSource(null);
+      renderer.render();
+      cropTool.refresh();
+      dock.setSeamWidth(100, false);
+      return;
+    }
+    dock.setSeamWidth(entry.edits.seamWidth, true);
+    const img = entry.image;
+    // Carving is O(seams × pixels): work on a capped-width copy.
+    const preScale = Math.min(1, 1000 / img.naturalWidth);
+    const cw = Math.max(2, Math.round(img.naturalWidth * preScale));
+    const ch = Math.max(2, Math.round(img.naturalHeight * preScale));
+    const work = createCanvas(cw, ch);
+    const workCtx = work.getContext("2d");
+    if (!workCtx) return;
+    workCtx.drawImage(img, 0, 0, cw, ch);
+    try {
+      const result = await carveWidthAsync(
+        workCtx.getImageData(0, 0, cw, ch).data,
+        cw,
+        ch,
+        Math.round((cw * entry.edits.seamWidth) / 100),
+      );
+      if (token !== carveToken || signal.aborted) return;
+      const carved = createCanvas(result.width, result.height);
+      carved
+        .getContext("2d")
+        ?.putImageData(new ImageData(result.data, result.width, result.height), 0, 0);
+      carvedCanvas = carved;
+      renderer.setCarvedSource(carved);
+      renderer.render();
+      cropTool.refresh();
+    } catch {
+      // keep the previous carve on worker failure
+    } finally {
+      if (token === carveToken) dock.setSeamWidth(entry.edits.seamWidth, false);
+    }
+  }
+
+  function scheduleCarveIfNeeded(): void {
+    if (entry.kind !== "image" || entry.edits.seamWidth === lastCarvedWidth) return;
+    lastCarvedWidth = entry.edits.seamWidth;
+    clearTimeout(carveTimer);
+    carveTimer = window.setTimeout(() => void recomputeCarve(), 350);
+  }
+
   // Custom feature groups mount against the shared edit model: they mutate
   // `edits`, then render() pushes the state everywhere and record() makes it
   // undoable — same lifecycle the built-ins use.
@@ -626,6 +686,14 @@ export function createEditor(options: EditorOptions): ViewHandle {
       renderer.render();
       recordEdit();
     },
+    onSeamWidthChange:
+      entry.kind === "image"
+        ? (percent) => {
+            entry.edits.seamWidth = percent;
+            recordEdit();
+            scheduleCarveIfNeeded();
+          }
+        : undefined,
   });
 
   /** Apply a tool's side effects (crop overlay visibility, dock pane). */
@@ -680,6 +748,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     dock.setRotation(entry.edits.rotation);
     dock.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
     dock.setLens(entry.edits.lensDistortion, entry.edits.lensDevignette);
+    dock.setSeamWidth(entry.edits.seamWidth);
+    scheduleCarveIfNeeded();
     renderer.setCrop(entry.edits.crop);
     if (entry.kind === "video") {
       transport?.setTrim(entry.edits.trim);
@@ -705,6 +775,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.keystoneH = state.keystoneH;
       entry.edits.lensDistortion = state.lensDistortion;
       entry.edits.lensDevignette = state.lensDevignette;
+      entry.edits.seamWidth = state.seamWidth;
       entry.edits.orientation = state.orientation;
       entry.edits.flipH = state.flipH;
       entry.edits.flipV = state.flipV;
@@ -737,6 +808,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
         e.keystoneH !== 0 ||
         e.lensDistortion !== 0 ||
         e.lensDevignette !== 0 ||
+        e.seamWidth !== 100 ||
         e.orientation !== 0 ||
         e.flipH ||
         e.flipV,
@@ -839,6 +911,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setRotation(DEFAULT_EDITS.rotation);
     renderer.setKeystone(0, 0);
     renderer.setLens(0, 0);
+    renderer.setCarvedSource(null);
     renderer.setCurves(createDefaultCurves());
     renderer.setHsl(createDefaultHsl());
     renderer.setMasks([]);
@@ -855,6 +928,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setRotation(entry.edits.rotation);
     renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
     renderer.setLens(entry.edits.lensDistortion, entry.edits.lensDevignette);
+    renderer.setCarvedSource(carvedCanvas);
     renderer.setCurves(entry.edits.curves);
     renderer.setHsl(entry.edits.hsl);
     renderer.setMasks(entry.edits.masks);
@@ -933,6 +1007,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (ops.keystoneH !== undefined) entry.edits.keystoneH = ops.keystoneH;
     if (ops.lensDistortion !== undefined) entry.edits.lensDistortion = ops.lensDistortion;
     if (ops.lensDevignette !== undefined) entry.edits.lensDevignette = ops.lensDevignette;
+    if (ops.seamWidth !== undefined && entry.kind === "image") {
+      entry.edits.seamWidth = ops.seamWidth;
+      scheduleCarveIfNeeded();
+    }
     if (ops.crop) entry.edits.crop = { ...ops.crop };
     if (entry.kind === "video") {
       const v = entry.edits as VideoEdits;
@@ -1168,6 +1246,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();
       history?.destroy();
+      clearTimeout(carveTimer);
+      carveToken++;
       resizeObserver?.disconnect();
       aiChat?.destroy();
       for (const handle of customHandles.values()) handle.destroy?.();

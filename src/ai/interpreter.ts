@@ -98,6 +98,11 @@ export function buildSchema(context: AiContext): Record<string, unknown> {
       type: "number",
       description: "Brighten dark lens corners (devignette), 0..100.",
     },
+    seamWidth: {
+      type: "number",
+      description:
+        "Content-aware width (seam carving), 50..100 percent of the original width. 100 disables it. Images only.",
+    },
     orientation: {
       type: "number",
       enum: ORIENTATIONS,
@@ -274,6 +279,8 @@ export function validateAiOps(raw: unknown, context: AiContext): AiEditOps {
   if (lensDistortion !== undefined) ops.lensDistortion = clamp(lensDistortion, -100, 100);
   const lensDevignette = toNumber(r.lensDevignette);
   if (lensDevignette !== undefined) ops.lensDevignette = clamp(lensDevignette, 0, 100);
+  const seamWidth = toNumber(r.seamWidth);
+  if (seamWidth !== undefined) ops.seamWidth = clamp(Math.round(seamWidth), 50, 100);
 
   const orientation = toNumber(r.orientation);
   if (orientation !== undefined && ORIENTATIONS.includes(orientation)) {

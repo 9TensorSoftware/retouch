@@ -64,6 +64,8 @@ export class CanvasRenderer {
   private lensSrc: HTMLCanvasElement | null = null;
   private readonly rawWidth: number;
   private readonly rawHeight: number;
+  /** Content-aware-scaled replacement source (images only). */
+  private carvedSource: HTMLCanvasElement | null = null;
   private readonly previewCap: number;
   private readonly abort = new AbortController();
   private adjustments: Adjustments;
@@ -216,6 +218,23 @@ export class CanvasRenderer {
 
   setRotation(deg: number): void {
     this.rotation = deg;
+  }
+
+  /**
+   * Swap in a content-aware-scaled source (or null to restore the original).
+   * All downstream geometry re-derives from the new dimensions.
+   */
+  setCarvedSource(canvas: HTMLCanvasElement | null): void {
+    this.carvedSource = canvas;
+    this.updateFrameGeometry();
+  }
+
+  private srcWidth(): number {
+    return this.carvedSource?.width ?? this.rawWidth;
+  }
+
+  private srcHeight(): number {
+    return this.carvedSource?.height ?? this.rawHeight;
   }
 
   /** Update the stylize effect. */
@@ -389,7 +408,7 @@ export class CanvasRenderer {
 
   /** Oriented source dimensions (raw, uncapped). */
   private orientedSize(): { width: number; height: number } {
-    return orientedDims(this.rawWidth, this.rawHeight, this.orientation);
+    return orientedDims(this.srcWidth(), this.srcHeight(), this.orientation);
   }
 
   private cropActive(): boolean {
@@ -460,12 +479,14 @@ export class CanvasRenderer {
       if (!target) return;
     }
 
+    const sw = this.srcWidth();
+    const sh = this.srcHeight();
     target.save();
     target.setTransform(1, 0, 0, 1, 0, 0);
     target.clearRect(0, 0, this.frameCanvas.width, this.frameCanvas.height);
     applySourceTransform(target, {
-      sourceWidth: this.rawWidth,
-      sourceHeight: this.rawHeight,
+      sourceWidth: sw,
+      sourceHeight: sh,
       orientation: this.orientation,
       flipH: this.flipH,
       flipV: this.flipV,
@@ -473,13 +494,7 @@ export class CanvasRenderer {
       offsetX: cropOn ? this.crop.x * oriented.width * scale : 0,
       offsetY: cropOn ? this.crop.y * oriented.height * scale : 0,
     });
-    target.drawImage(
-      this.source,
-      -this.rawWidth / 2,
-      -this.rawHeight / 2,
-      this.rawWidth,
-      this.rawHeight,
-    );
+    target.drawImage(this.carvedSource ?? this.source, -sw / 2, -sh / 2, sw, sh);
     target.restore();
 
     if (!this.warpSrc || !this.warpScratch) return;

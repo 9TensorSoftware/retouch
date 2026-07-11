@@ -43,7 +43,7 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 6. ✅ Clarity (midtone-weighted large-radius unsharp) + dehaze (shipped)
 7. ✅ Lens corrections — barrel/pincushion distortion + devignette shipped (defish ≈ strong distortion; CA fix still open)
 8. Warp / liquify / mesh (cage) transform
-9. Content-aware scale — seam carving in a worker (see patent note)
+9. ✅ Content-aware scale — seam carving in a Blob-URL worker, Transform pane "Content-aware width" 50–100% (shipped, images only; see patent note. Preview carves a ≤1000px working copy; export carves at ≤1600px)
 10. ✅ Stylize — tilt-shift, duotone, posterize, pixelate, halftone (shipped; per-region pixelate still open)
 11. ✅ Video classical — GIF-of-range with forward/reverse/boomerang loops (gifenc, MIT), deflicker (export-time temporal gain), poster pick (shipped; full mp4 reverse still open — needs frame buffering)
 

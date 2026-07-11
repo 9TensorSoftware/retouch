@@ -34,6 +34,8 @@ export interface ContextDockOptions {
   onKeystoneChange: (vertical: number, horizontal: number) => void;
   /** Lens correction changed. */
   onLensChange: (distortion: number, devignette: number) => void;
+  /** Content-aware width changed (images only; omit to hide the slider). */
+  onSeamWidthChange?: (percent: number) => void;
 }
 
 export interface ContextDockHandle extends ViewHandle {
@@ -50,6 +52,8 @@ export interface ContextDockHandle extends ViewHandle {
   setKeystone(vertical: number, horizontal: number): void;
   /** Sync the lens sliders after an external change (does not fire onLensChange). */
   setLens(distortion: number, devignette: number): void;
+  /** Sync the content-aware width slider; label shows busy state while carving. */
+  setSeamWidth(percent: number, busy?: boolean): void;
 }
 
 const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
@@ -229,6 +233,15 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const lensDevignetteSlider = makeSlider("Devignette", 0, 100, edits.lensDevignette, String, (v) =>
     options.onLensChange(Number.NaN, v),
   );
+  const seamSlider = makeSlider(
+    "Width",
+    50,
+    100,
+    edits.seamWidth,
+    (v) => `${v}%`,
+    (v) => options.onSeamWidthChange?.(v),
+  );
+  const seamLabel = seamSlider.group.querySelector(".rt-dock__slider-label");
 
   const divider = () => h("div", { class: "rt-dock__divider" });
   const cropPane = h(
@@ -257,6 +270,13 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Lens"),
       lensDistortionSlider.group,
       lensDevignetteSlider.group,
+      ...(options.onSeamWidthChange
+        ? [
+            divider(),
+            h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Content-aware"),
+            seamSlider.group,
+          ]
+        : []),
     ),
   );
 
@@ -319,6 +339,10 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     setLens(distortion, devignette) {
       lensDistortionSlider.set(distortion);
       lensDevignetteSlider.set(devignette);
+    },
+    setSeamWidth(percent, busy) {
+      seamSlider.set(percent);
+      if (seamLabel) seamLabel.textContent = busy ? "Carving…" : "Width";
     },
     setCropApplyEnabled(enabled) {
       applyBtn.toggleAttribute("disabled", !enabled);

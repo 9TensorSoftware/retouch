@@ -83,6 +83,8 @@ export interface AiEditOps {
   lensDistortion?: number;
   /** Corner brightness recovery, 0 to 100. */
   lensDevignette?: number;
+  /** Content-aware width (seam carving), 50 to 100 percent. Images only. */
+  seamWidth?: number;
   /** Absolute target orientation. */
   orientation?: Orientation;
   /** Toggle: mirror the displayed image horizontally. */
@@ -276,6 +278,8 @@ export interface ImageEdits {
   lensDistortion: number;
   /** Corner brightness recovery (devignette), 0 to 100. */
   lensDevignette: number;
+  /** Content-aware width (seam carving), 50–100 percent of the original. Images only. */
+  seamWidth: number;
   /** 90°-step rotation applied to the source before cropping. */
   orientation: Orientation;
   /** Mirror the source horizontally (before orientation). */
