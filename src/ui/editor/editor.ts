@@ -130,7 +130,9 @@ export function createEditor(options: EditorOptions): ViewHandle {
   // tools, optionally filtered/ordered by the `tools` option.
   const customTools = getCustomTools().filter((t) => !t.kinds || t.kinds.includes(entry.kind));
   const builtinIds: EditorTool[] =
-    entry.kind === "video" ? ["trim", "crop", "adjust", "filters"] : ["crop", "adjust", "filters"];
+    entry.kind === "video"
+      ? ["trim", "crop", "transform", "adjust", "filters"]
+      : ["crop", "transform", "adjust", "filters"];
   const allIds: EditorTool[] = [...builtinIds, ...customTools.map((t) => t.id)];
   const tools: EditorTool[] = options.tools
     ? options.tools.filter((id) => allIds.includes(id))
@@ -506,10 +508,10 @@ export function createEditor(options: EditorOptions): ViewHandle {
   /** Orange dot per feature group while its edits are away from neutral. */
   function updateToolDots(): void {
     const e = entry.edits;
+    toolbar.setTouched("crop", hasCommittedCrop());
     toolbar.setTouched(
-      "crop",
-      hasCommittedCrop() ||
-        e.rotation !== 0 ||
+      "transform",
+      e.rotation !== 0 ||
         e.keystoneV !== 0 ||
         e.keystoneH !== 0 ||
         e.orientation !== 0 ||

@@ -1119,17 +1119,17 @@ const CSS = /* css */ `
   cursor: pointer;
 }
 
-/* Crop pane: commit/aspect/transform row above, straighten + perspective below */
+/* Stacked dock pane (Transform: turns/straighten row above, perspective below) */
 
-.rt-crop-pane {
+.rt-dock__stack {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 9px;
 }
 
-.rt-crop-pane .rt-dock__slider input[type="range"] {
-  width: 150px;
+.rt-dock__stack .rt-dock__slider input[type="range"] {
+  width: 170px;
 }
 
 .rt-dock__row-title {

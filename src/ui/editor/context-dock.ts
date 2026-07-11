@@ -199,21 +199,20 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const divider = () => h("div", { class: "rt-dock__divider" });
   const cropPane = h(
     "div",
-    { class: "rt-dock__pane rt-crop-pane" },
+    { class: "rt-dock__pane rt-dock__row" },
+    commitGroup,
+    divider(),
+    aspectGroup,
+  );
+
+  // Transform pane: coarse turns/flips, fine straighten, perspective.
+  const transformPane = h(
+    "div",
+    { class: "rt-dock__pane rt-dock__stack" },
+    h("div", { class: "rt-dock__row" }, transformGroup, divider(), straighten.group),
     h(
       "div",
       { class: "rt-dock__row" },
-      commitGroup,
-      divider(),
-      aspectGroup,
-      divider(),
-      transformGroup,
-    ),
-    h(
-      "div",
-      { class: "rt-dock__row" },
-      straighten.group,
-      divider(),
       h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Perspective"),
       keystoneVSlider.group,
       keystoneHSlider.group,
@@ -226,11 +225,12 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const filtersPane = h("div", { class: "rt-dock__pane" }, filtersTool.root);
   const trimPane = trimTool ? h("div", { class: "rt-dock__pane" }, trimTool.root) : null;
 
-  const root = h("div", { class: "rt-dock" }, cropPane, adjustPane, filtersPane);
+  const root = h("div", { class: "rt-dock" }, cropPane, transformPane, adjustPane, filtersPane);
   if (trimPane) root.appendChild(trimPane);
 
   const panes: Partial<Record<EditorTool, HTMLElement>> = {
     crop: cropPane,
+    transform: transformPane,
     adjust: adjustPane,
     filters: filtersPane,
     ...(trimPane ? { trim: trimPane } : {}),

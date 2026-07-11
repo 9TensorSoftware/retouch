@@ -1,6 +1,6 @@
 export type AppState = "idle" | "dropzone" | "gallery" | "editor" | "destroyed";
 
-export type BuiltinEditorTool = "trim" | "crop" | "adjust" | "filters";
+export type BuiltinEditorTool = "trim" | "crop" | "transform" | "adjust" | "filters";
 
 /** Built-in tool ids plus any id registered via `Retouch.registerTool`. */
 export type EditorTool = BuiltinEditorTool | (string & {});
