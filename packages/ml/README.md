@@ -15,6 +15,12 @@ cached via the Cache API.
   ~67 MB), run tile-by-tile with overlap so seams never show. WebGPU when the
   device can take it, automatic WASM fallback when a kernel fails mid-run.
   Inputs are capped at a 2048px long edge; transparency is preserved.
+- **Erase (heal brush)** — LaMa inpainting (Apache-2.0, ~208 MB). Paint over
+  an object, hit Erase: a padded square around the strokes runs through the
+  network and the fill composites back at full resolution, feathered and
+  masked-pixels-only. The result **replaces the image in place** (the editor
+  remounts; undo history restarts). Needs neutral geometry — reset
+  crop/transform/liquify first, or erase before transforming.
 
 ## Usage
 
@@ -56,7 +62,7 @@ both.
 
 ## Licenses
 
-The package is MIT. Default model weights: MODNet (Apache-2.0) and
-Real-ESRGAN x4plus (BSD-3-Clause). ONNX Runtime Web is MIT. See
-`docs/ADVANCED-FEATURES.md` in the repo root for the full per-model license
-audit.
+The package is MIT. Default model weights: MODNet (Apache-2.0),
+Real-ESRGAN x4plus (BSD-3-Clause), and LaMa (Apache-2.0). ONNX Runtime Web
+is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
+per-model license audit.

@@ -168,14 +168,14 @@ transport. Everything is non-destructive until export:
 
 ### ML tools (`@9tensor/retouch-ml`)
 
-On-device background removal and 4× super-resolution — no server, no keys.
-Models run through ONNX Runtime Web (WebGPU with WASM fallback), download on
-first use, and cache in the browser:
+On-device background removal, 4× super-resolution, and an object-erase heal
+brush — no server, no keys. Models run through ONNX Runtime Web (WebGPU with
+WASM fallback), download on first use, and cache in the browser:
 
 ```ts
 import { installMlTools } from "@9tensor/retouch-ml";
 
-installMlTools(retouch); // adds "Cutout" and "Upscale" tabs for images
+installMlTools(retouch); // adds "Cutout", "Upscale", and "Erase" tabs
 ```
 
 ### Plugin feature groups

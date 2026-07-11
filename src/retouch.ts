@@ -178,6 +178,32 @@ export class Retouch {
     }
   }
 
+  /**
+   * Replace an image entry's pixels in place — the destructive counterpart
+   * to the non-destructive edit model, used by tools like ML erase. Edits
+   * are preserved; if the entry is open in the editor, the editor remounts
+   * on the new source (undo history restarts).
+   */
+  async replaceImageSource(id: string, file: File): Promise<void> {
+    const entry = this.media.get(id);
+    if (!entry || entry.kind !== "image") {
+      throw new Error("[Retouch] replaceImageSource needs an existing image entry");
+    }
+    const image = await loadImage(file);
+    revokeThumbnailUrl(entry.thumbnailUrl);
+    entry.file = file;
+    entry.image = image;
+    entry.thumbnailUrl = createThumbnailUrl(file);
+    entry.edited = true;
+    if (this.sm.state === "editor" && this.editingImageId === id) {
+      this.unmountCurrentView();
+      this.mountEditor();
+    } else if (this.sm.state === "gallery") {
+      this.unmountCurrentView();
+      this.mountGallery();
+    }
+  }
+
   openEditor(id: string): void {
     if (!this.media.has(id)) return;
     this.editingImageId = id;
