@@ -1140,6 +1140,47 @@ const CSS = /* css */ `
   letter-spacing: 0.8px;
 }
 
+/* Curves pane: channel chips · curve canvas over histogram · reset */
+
+.rt-curves {
+  gap: 12px;
+}
+
+.rt-curves__canvas {
+  width: 196px;
+  height: 104px;
+  border-radius: 8px;
+  cursor: crosshair;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.rt-curves__channels {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rt-curves__chip {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-left: 3px solid var(--rt-curve-color, transparent);
+  border-radius: 6px;
+}
+
+.rt-curves__side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* White-balance eyedropper */
+
+.rt-editor__canvas-area--picking,
+.rt-editor__canvas-area--picking canvas {
+  cursor: crosshair !important;
+}
+
 /* Adjust pane: slider row above, adjustment chips below */
 
 .rt-adjust {

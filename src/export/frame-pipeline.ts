@@ -1,6 +1,7 @@
 import { FabricImage, StaticCanvas } from "fabric";
 import type { ImageEdits } from "../types";
 import { createCanvas } from "../utils/canvas";
+import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../utils/curves";
 import { buildFabricFilters, drawVignette, isNeutral } from "../utils/filters";
 import { applyKeystone, hasKeystone } from "../utils/perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "../utils/transform";
@@ -83,12 +84,14 @@ export function createFramePipeline(
   const outH = even(cropH * fit);
 
   const warp = hasKeystone(keystoneV, keystoneH);
+  const curveLuts = curvesAreIdentity(edits.curves) ? null : buildCurveLuts(edits.curves);
   const untransformed = orientation === 0 && !flipH && !flipV;
   const neutralVisual =
     isNeutral(adjustments, filter, filterStrength) &&
     adjustments.vignette === 0 &&
     rotation === 0 &&
-    !warp;
+    !warp &&
+    !curveLuts;
   const fullFrame = crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
 
   const cropCanvas = createCanvas(cropW, cropH);
@@ -165,9 +168,12 @@ export function createFramePipeline(
       fabricImg.applyFilters();
       staticCanvas.renderAll();
       const element = staticCanvas.getElement();
-      if (adjustments.vignette > 0) {
-        const ctx = element.getContext("2d");
-        if (ctx) drawVignette(ctx, element.width, element.height, adjustments.vignette);
+      const ctx = element.getContext("2d");
+      if (ctx && curveLuts) {
+        applyCurvesToContext(ctx, element.width, element.height, curveLuts);
+      }
+      if (ctx && adjustments.vignette > 0) {
+        drawVignette(ctx, element.width, element.height, adjustments.vignette);
       }
       return element;
     },

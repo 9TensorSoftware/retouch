@@ -2,6 +2,7 @@ import type { AspectRatioPreset, EditorTool, ImageEdits, ViewHandle } from "../.
 import { h } from "../h";
 import type { AdjustToolHandle } from "./adjust-tool";
 import type { CropToolHandle } from "./crop-tool";
+import type { CurvesToolHandle } from "./curves-tool";
 import type { FiltersToolHandle } from "./filters-tool";
 import type { TrimToolHandle } from "./trim-tool";
 
@@ -10,6 +11,7 @@ export type TransformOp = "rotate-ccw" | "rotate-cw" | "flip-h" | "flip-v";
 export interface ContextDockOptions {
   cropTool: CropToolHandle;
   adjustTool: AdjustToolHandle;
+  curvesTool: CurvesToolHandle;
   filtersTool: FiltersToolHandle;
   /** Present only for video entries. */
   trimTool?: TrimToolHandle;
@@ -77,8 +79,16 @@ const TRANSFORM_BUTTONS: { op: TransformOp; label: string; icon: string }[] = [
  * pane per tool, only the active tool's pane visible.
  */
 export function createContextDock(options: ContextDockOptions): ContextDockHandle {
-  const { cropTool, adjustTool, filtersTool, trimTool, edits, onRotationChange, onTransform } =
-    options;
+  const {
+    cropTool,
+    adjustTool,
+    curvesTool,
+    filtersTool,
+    trimTool,
+    edits,
+    onRotationChange,
+    onTransform,
+  } = options;
   const abort = new AbortController();
   const signal = abort.signal;
 
@@ -222,15 +232,25 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   // ── Tool panes ──
 
   const adjustPane = h("div", { class: "rt-dock__pane" }, adjustTool.root);
+  const curvesPane = h("div", { class: "rt-dock__pane" }, curvesTool.root);
   const filtersPane = h("div", { class: "rt-dock__pane" }, filtersTool.root);
   const trimPane = trimTool ? h("div", { class: "rt-dock__pane" }, trimTool.root) : null;
 
-  const root = h("div", { class: "rt-dock" }, cropPane, transformPane, adjustPane, filtersPane);
+  const root = h(
+    "div",
+    { class: "rt-dock" },
+    cropPane,
+    transformPane,
+    curvesPane,
+    adjustPane,
+    filtersPane,
+  );
   if (trimPane) root.appendChild(trimPane);
 
   const panes: Partial<Record<EditorTool, HTMLElement>> = {
     crop: cropPane,
     transform: transformPane,
+    curves: curvesPane,
     adjust: adjustPane,
     filters: filtersPane,
     ...(trimPane ? { trim: trimPane } : {}),

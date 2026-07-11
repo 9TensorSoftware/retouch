@@ -37,8 +37,8 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 
 1. ✅ Perspective / keystone correction — V/H sliders shipped (separable strip warp); 4-corner "perspective crop" still open
 2. ✅ Auto-crop on straighten — largest inscribed rect, no black corners (shipped)
-3. Curves + Levels + live histogram
-4. HSL mixer · split-toning wheels · white-balance eyedropper
+3. ✅ Curves + live histogram (shipped; Levels still open)
+4. HSL mixer · split-toning wheels (✅ white-balance eyedropper shipped)
 5. Selective (masked) adjustments — linear/radial gradient + brush masks
 6. Clarity / dehaze (CLAHE-style local contrast) · unsharp with radius
 7. Lens corrections — barrel/pincushion, defish, CA fix, devignette

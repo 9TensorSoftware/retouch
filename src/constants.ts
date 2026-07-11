@@ -1,4 +1,4 @@
-import type { Adjustments, CropRect, ImageEdits, VideoEdits } from "./types";
+import type { Adjustments, CropRect, Curves, ImageEdits, VideoEdits } from "./types";
 
 export const VERSION = "0.0.2";
 
@@ -35,6 +35,28 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
   vignette: 0,
 };
 
+/** Identity tone curves (straight diagonal per channel). */
+export function createDefaultCurves(): Curves {
+  return {
+    master: [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ],
+    r: [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ],
+    g: [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ],
+    b: [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ],
+  };
+}
+
 export const DEFAULT_EDITS: ImageEdits = {
   crop: { ...DEFAULT_CROP },
   rotation: 0,
@@ -44,6 +66,7 @@ export const DEFAULT_EDITS: ImageEdits = {
   flipH: false,
   flipV: false,
   adjustments: { ...DEFAULT_ADJUSTMENTS },
+  curves: createDefaultCurves(),
   filter: "none",
   filterStrength: 100,
 };

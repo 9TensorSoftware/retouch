@@ -140,7 +140,8 @@ Opens as a modal overlay: a dark stage that keeps focus on the image, and a clea
 |------|-------------|
 | **Crop** | Commit-style: drag a selection (free-form or fixed aspect — 16:9, 4:3, 1:1, 3:2, 9:16) over a rule-of-thirds grid, then **Apply crop** (or press Enter) — the discarded area disappears everywhere; **Reset crop** brings the full frame back. Works on video too. |
 | **Transform** | Rotate 90° and flip H/V that keep the crop over your content, a straighten slider that auto-crops to the largest inscribed window (no black corners), and vertical/horizontal **perspective (keystone) correction** for converging lines. |
-| **Adjust** | 12 controls in Light / Color / Effects groups: exposure, brightness, contrast, temperature, tint, hue, saturation, vibrance, sharpen, blur, grain, vignette — real-time, live on playing video. Double-click a label to reset it. |
+| **Adjust** | 12 controls in Light / Color / Effects groups: exposure, brightness, contrast, temperature, tint, hue, saturation, vibrance, sharpen, blur, grain, vignette — real-time, live on playing video. Double-click a label to reset it. Includes a **white-balance eyedropper**: click a neutral area and temperature/tint correct themselves. |
+| **Curves** | Photoshop-style tone curves: master + per-channel (R/G/B) with draggable control points over a **live histogram**. Monotone-cubic interpolation (no overshoot), applied identically in the preview, image export, and per-frame video export. |
 | **Filters** | 12 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — with an intensity slider and live thumbnails. |
 | **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging, and 0.25–4× playback speed. |
 | **Draw** | _Planned._ Freehand drawing and annotation directly on the canvas. |

@@ -61,6 +61,11 @@ export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
     label: "Transform",
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9V5a2 2 0 012-2h4M21 15v4a2 2 0 01-2 2h-4M3 15v4a2 2 0 002 2h4M21 9V5a2 2 0 00-2-2h-4"/><path d="M9 15l6-6"/></svg>',
   },
+  curves: {
+    id: "curves",
+    label: "Curves",
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21C10 21 14 3 21 3"/><circle cx="8.2" cy="14.8" r="1.6" fill="currentColor" stroke="none"/><circle cx="15.8" cy="6.4" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  },
   adjust: {
     id: "adjust",
     label: "Adjust",

@@ -1,7 +1,16 @@
 import { Canvas, FabricImage } from "fabric";
-import { IMAGE_PREVIEW_MAX_DIM, PREVIEW_MAX_DIM } from "../../constants";
-import type { Adjustments, CropRect, FilterPreset, ImageEdits, Orientation } from "../../types";
+import { createDefaultCurves, IMAGE_PREVIEW_MAX_DIM, PREVIEW_MAX_DIM } from "../../constants";
+import type {
+  Adjustments,
+  CropRect,
+  Curves,
+  FilterPreset,
+  ImageEdits,
+  Orientation,
+} from "../../types";
 import { createCanvas } from "../../utils/canvas";
+import type { CurveLuts } from "../../utils/curves";
+import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../../utils/curves";
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
 import { applyKeystone, hasKeystone } from "../../utils/perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "../../utils/transform";
@@ -44,6 +53,9 @@ export class CanvasRenderer {
   private rotation = 0;
   private keystoneV = 0;
   private keystoneH = 0;
+  private curves: Curves = createDefaultCurves();
+  /** Cached LUTs; null while the curves are identity. */
+  private curveLuts: CurveLuts | null = null;
   private orientation: Orientation;
   private flipH: boolean;
   private flipV: boolean;
@@ -62,6 +74,7 @@ export class CanvasRenderer {
     this.rotation = edits.rotation;
     this.keystoneV = edits.keystoneV;
     this.keystoneH = edits.keystoneH;
+    this.setCurves(edits.curves);
     this.orientation = edits.orientation;
     this.flipH = edits.flipH;
     this.flipV = edits.flipV;
@@ -107,10 +120,15 @@ export class CanvasRenderer {
 
     this.fabricCanvas.add(this.fabricImage);
 
-    // Vignette is a 2D pass over the composed frame, not a fabric filter.
+    // Curves and vignette are 2D passes over the composed frame, not fabric
+    // filters (curves need an arbitrary per-channel LUT).
     this.fabricCanvas.on("after:render", ({ ctx: renderCtx }) => {
-      if (this.adjustments.vignette > 0 && renderCtx) {
-        const el = this.fabricCanvas.getElement();
+      if (!renderCtx) return;
+      const el = this.fabricCanvas.getElement();
+      if (this.curveLuts) {
+        applyCurvesToContext(renderCtx, el.width, el.height, this.curveLuts);
+      }
+      if (this.adjustments.vignette > 0) {
         drawVignette(renderCtx, el.width, el.height, this.adjustments.vignette);
       }
     });
@@ -150,6 +168,31 @@ export class CanvasRenderer {
 
   setRotation(deg: number): void {
     this.rotation = deg;
+  }
+
+  /** Update the tone curves (LUTs are rebuilt once per change, not per frame). */
+  setCurves(curves: Curves): void {
+    this.curves = structuredClone(curves);
+    this.curveLuts = curvesAreIdentity(curves) ? null : buildCurveLuts(curves);
+  }
+
+  /**
+   * Luminance histogram of the current (cropped/warped, pre-color) frame —
+   * the input the tone curves operate on.
+   */
+  computeHistogram(): Uint32Array {
+    const bins = new Uint32Array(256);
+    const w = this.frameCanvas.width;
+    const h = this.frameCanvas.height;
+    if (w === 0 || h === 0) return bins;
+    const data = this.frameCtx.getImageData(0, 0, w, h).data;
+    // Sample at a stride that caps the work near ~250k pixels.
+    const step = Math.max(1, Math.floor((w * h) / 250_000)) * 4;
+    for (let i = 0; i < data.length; i += step) {
+      const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      bins[Math.min(255, Math.round(lum))]++;
+    }
+    return bins;
   }
 
   /** Update keystone correction; the frame is redrawn through the warp. */

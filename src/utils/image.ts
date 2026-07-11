@@ -1,6 +1,7 @@
 import { FabricImage, StaticCanvas } from "fabric";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../constants";
 import type { FileRejectionReason, ImageEdits, ImageExportOptions, MediaEntry } from "../types";
+import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "./curves";
 import { buildFabricFilters, drawVignette } from "./filters";
 import { applyKeystone, hasKeystone } from "./perspective";
 import { applySourceTransform, orientedDims, straightenFitScale } from "./transform";
@@ -221,6 +222,13 @@ export async function exportImage(
     options.maxDimension && options.maxDimension < longEdge ? options.maxDimension / longEdge : 1;
   const outCanvas = exportCanvas.toCanvasElement(multiplier);
   exportCanvas.dispose();
+
+  if (!curvesAreIdentity(edits.curves)) {
+    const outCtx = outCanvas.getContext("2d");
+    if (outCtx) {
+      applyCurvesToContext(outCtx, outCanvas.width, outCanvas.height, buildCurveLuts(edits.curves));
+    }
+  }
 
   if (adjustments.vignette > 0) {
     const outCtx = outCanvas.getContext("2d");

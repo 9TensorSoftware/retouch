@@ -1,6 +1,6 @@
 export type AppState = "idle" | "dropzone" | "gallery" | "editor" | "destroyed";
 
-export type BuiltinEditorTool = "trim" | "crop" | "transform" | "adjust" | "filters";
+export type BuiltinEditorTool = "trim" | "crop" | "transform" | "curves" | "adjust" | "filters";
 
 /** Built-in tool ids plus any id registered via `Retouch.registerTool`. */
 export type EditorTool = BuiltinEditorTool | (string & {});
@@ -163,6 +163,20 @@ export interface Adjustments {
   vignette: number;
 }
 
+/** One tone-curve control point, both axes normalized 0–1. */
+export interface CurvePoint {
+  x: number;
+  y: number;
+}
+
+/** Tone curves: a master curve plus per-channel curves (identity = 2 corner points). */
+export interface Curves {
+  master: CurvePoint[];
+  r: CurvePoint[];
+  g: CurvePoint[];
+  b: CurvePoint[];
+}
+
 export interface ImageEdits {
   /** Normalized over the oriented (rotated/flipped) source. */
   crop: CropRect;
@@ -179,6 +193,8 @@ export interface ImageEdits {
   /** Mirror the source vertically (before orientation). */
   flipV: boolean;
   adjustments: Adjustments;
+  /** Tone curves applied after adjustments/filters (identity by default). */
+  curves: Curves;
   /** Preset filter applied beneath the adjustments. */
   filter: FilterPreset;
   /** Preset intensity, 0–100. */

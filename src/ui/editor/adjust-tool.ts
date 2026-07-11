@@ -4,6 +4,8 @@ import { h } from "../h";
 export interface AdjustToolOptions {
   adjustments: Adjustments;
   onChange: (adjustments: Adjustments) => void;
+  /** Starts the white-balance eyedropper (click a neutral area on the canvas). */
+  onWhiteBalancePick?: () => void;
 }
 
 export interface AdjustToolHandle {
@@ -96,6 +98,17 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
   label.addEventListener("dblclick", () => setValue(selected.neutral), { signal });
 
   const sliderRow = h("div", { class: "rt-dock__row rt-dock__slider" }, label, input, valueEl);
+  if (options.onWhiteBalancePick) {
+    const wbBtn = h("button", {
+      class: "rt-dock__icon-btn rt-adjust__wb",
+      title: "White balance: click a neutral gray/white area in the image",
+      "aria-label": "White balance eyedropper",
+    });
+    wbBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13.6 4.4l6 6M15.5 8.5L6.2 17.8a2 2 0 01-.9.5l-2.8.7.7-2.8a2 2 0 01.5-.9l9.3-9.3a2.1 2.1 0 013 3z"/></svg>';
+    wbBtn.addEventListener("click", () => options.onWhiteBalancePick?.(), { signal });
+    sliderRow.appendChild(wbBtn);
+  }
 
   // ── Chip row ──
 

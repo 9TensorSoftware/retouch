@@ -1,6 +1,11 @@
 import type { AiContext } from "../../ai/interpreter";
 import { interpretCommand } from "../../ai/interpreter";
-import { createDefaultVideoEdits, DEFAULT_ADJUSTMENTS, DEFAULT_EDITS } from "../../constants";
+import {
+  createDefaultCurves,
+  createDefaultVideoEdits,
+  DEFAULT_ADJUSTMENTS,
+  DEFAULT_EDITS,
+} from "../../constants";
 import type {
   AiEditOps,
   AiOptions,
@@ -11,6 +16,7 @@ import type {
   ViewHandle,
 } from "../../types";
 import { createCanvas } from "../../utils/canvas";
+import { curvesAreIdentity } from "../../utils/curves";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
 import { clamp } from "../../utils/math";
@@ -31,6 +37,7 @@ import { CanvasRenderer } from "./canvas-renderer";
 import type { TransformOp } from "./context-dock";
 import { createContextDock } from "./context-dock";
 import { createCropTool } from "./crop-tool";
+import { createCurvesTool } from "./curves-tool";
 import { createFiltersTool } from "./filters-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools } from "./tool-registry";
@@ -69,6 +76,7 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
   if (next.keystoneV !== prev.keystoneV || next.keystoneH !== prev.keystoneH) {
     parts.push("Perspective");
   }
+  if (JSON.stringify(next.curves) !== JSON.stringify(prev.curves)) parts.push("Curves");
   const pc = prev.crop;
   const nc = next.crop;
   const cropChanged =
@@ -131,8 +139,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const customTools = getCustomTools().filter((t) => !t.kinds || t.kinds.includes(entry.kind));
   const builtinIds: EditorTool[] =
     entry.kind === "video"
-      ? ["trim", "crop", "transform", "adjust", "filters"]
-      : ["crop", "transform", "adjust", "filters"];
+      ? ["trim", "crop", "transform", "adjust", "curves", "filters"]
+      : ["crop", "transform", "adjust", "curves", "filters"];
   const allIds: EditorTool[] = [...builtinIds, ...customTools.map((t) => t.id)];
   const tools: EditorTool[] = options.tools
     ? options.tools.filter((id) => allIds.includes(id))
@@ -319,12 +327,90 @@ export function createEditor(options: EditorOptions): ViewHandle {
     recordEdit();
   }
 
-  // Adjust tool
+  // Adjust tool (with the white-balance eyedropper)
   const adjustTool = createAdjustTool({
     adjustments: entry.edits.adjustments,
     onChange: (adj) => {
       entry.edits.adjustments = adj;
       renderer.setAdjustments(adj);
+      renderer.render();
+      recordEdit();
+    },
+    onWhiteBalancePick: () => startWhiteBalancePick(),
+  });
+
+  /**
+   * One-shot eyedropper: sample the clicked pixel from the rendered canvas
+   * and nudge temperature/tint so that point reads neutral (inverting the
+   * same coefficients adjustmentColorMatrix applies).
+   */
+  function startWhiteBalancePick(): void {
+    canvasArea.classList.add("rt-editor__canvas-area--picking");
+    const cleanup = () => {
+      canvasArea.classList.remove("rt-editor__canvas-area--picking");
+      canvasArea.removeEventListener("pointerdown", onPick, true);
+      document.removeEventListener("keydown", onEsc, true);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        cleanup();
+      }
+    };
+    const onPick = (e: PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cleanup();
+      const canvas = renderer.getCanvasElement();
+      const rect = canvas.getBoundingClientRect();
+      if (
+        e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom
+      ) {
+        return;
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx || rect.width === 0) return;
+      const px = ctx.getImageData(
+        Math.min(
+          canvas.width - 1,
+          Math.round(((e.clientX - rect.left) / rect.width) * canvas.width),
+        ),
+        Math.min(
+          canvas.height - 1,
+          Math.round(((e.clientY - rect.top) / rect.height) * canvas.height),
+        ),
+        1,
+        1,
+      ).data;
+      const [r, g, b] = px;
+      // Deltas that would equalize the sampled channels under our temp/tint model
+      const dTemp = clamp(((b - r) / Math.max(1, 0.16 * (r + b))) * 100, -100, 100);
+      const mean = (r + b) / 2;
+      const dTint = clamp(((g - mean) / Math.max(1, 0.12 * g + 0.08 * mean)) * 100, -100, 100);
+      entry.edits.adjustments = {
+        ...entry.edits.adjustments,
+        temperature: Math.round(clamp(entry.edits.adjustments.temperature + dTemp, -100, 100)),
+        tint: Math.round(clamp(entry.edits.adjustments.tint + dTint, -100, 100)),
+      };
+      adjustTool.setAdjustments(entry.edits.adjustments);
+      renderer.setAdjustments(entry.edits.adjustments);
+      renderer.render();
+      recordEdit();
+    };
+    canvasArea.addEventListener("pointerdown", onPick, { capture: true, once: false });
+    document.addEventListener("keydown", onEsc, true);
+  }
+
+  // Curves tool (tone curves over a live input histogram)
+  const curvesTool = createCurvesTool({
+    curves: entry.edits.curves,
+    getHistogram: () => renderer.computeHistogram(),
+    onChange: (curves) => {
+      entry.edits.curves = curves;
+      renderer.setCurves(curves);
       renderer.render();
       recordEdit();
     },
@@ -406,6 +492,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     customPanes,
     cropTool,
     adjustTool,
+    curvesTool,
     filtersTool,
     trimTool,
     edits: entry.edits,
@@ -436,6 +523,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     dock.setActiveTool(tool);
     customHandles.get(tool)?.onActivate?.();
     renderer.render();
+    if (tool === "curves") curvesTool.refreshHistogram();
     // The committed crop stays applied in every tool — entering Crop just
     // overlays a fresh selection marquee, so the image never resizes.
     cropTool.setVisible(tool === "crop");
@@ -462,7 +550,9 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setTransform(entry.edits.orientation, entry.edits.flipH, entry.edits.flipV);
     renderer.setFilter(entry.edits.filter);
     renderer.setFilterStrength(entry.edits.filterStrength);
+    renderer.setCurves(entry.edits.curves);
     adjustTool.setAdjustments(entry.edits.adjustments);
+    curvesTool.setCurves(entry.edits.curves);
     filtersTool.setFilter(entry.edits.filter);
     filtersTool.setStrength(entry.edits.filterStrength);
     dock.setRotation(entry.edits.rotation);
@@ -493,6 +583,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       entry.edits.flipH = state.flipH;
       entry.edits.flipV = state.flipV;
       entry.edits.adjustments = { ...state.adjustments };
+      entry.edits.curves = structuredClone(state.curves);
       entry.edits.filter = state.filter;
       entry.edits.filterStrength = state.filterStrength;
       if (entry.kind === "video" && "trim" in state) {
@@ -525,6 +616,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       Object.keys(adj).some((k) => adj[k] !== defaults[k]),
     );
     toolbar.setTouched("filters", e.filter !== "none");
+    toolbar.setTouched("curves", !curvesAreIdentity(e.curves));
     if (entry.kind === "video") {
       const v = entry.edits;
       toolbar.setTouched(
@@ -607,6 +699,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setFilter(DEFAULT_EDITS.filter);
     renderer.setRotation(DEFAULT_EDITS.rotation);
     renderer.setKeystone(0, 0);
+    renderer.setCurves(createDefaultCurves());
     renderer.setCropApplied(false);
     renderer.render();
   }
@@ -617,6 +710,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setFilter(entry.edits.filter);
     renderer.setRotation(entry.edits.rotation);
     renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
+    renderer.setCurves(entry.edits.curves);
     renderer.setCropApplied(true);
     renderer.render();
     cropTool.setVisible(activeTool === "crop");
@@ -915,6 +1009,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       seekQueue?.destroy();
       cropTool.destroy();
       adjustTool.destroy();
+      curvesTool.destroy();
       filtersTool.destroy();
       dock.destroy();
       toolbar.destroy();
