@@ -1,0 +1,82 @@
+/**
+ * Model weight fetching with browser-side caching: weights are streamed once
+ * (with download progress) and stored via the Cache API, so subsequent
+ * sessions load instantly and offline.
+ */
+
+const CACHE_NAME = "retouch-ml-models";
+
+export interface FetchProgress {
+  /** Bytes received so far. */
+  loaded: number;
+  /** Total bytes, or 0 when the server doesn't say. */
+  total: number;
+}
+
+/**
+ * Fetch a model file, reporting progress and caching the bytes. Falls back
+ * to a plain fetch where the Cache API is unavailable (private windows).
+ */
+export async function fetchModel(
+  url: string,
+  onProgress?: (progress: FetchProgress) => void,
+): Promise<ArrayBuffer> {
+  let cache: Cache | null = null;
+  try {
+    cache = await caches.open(CACHE_NAME);
+    const hit = await cache.match(url);
+    if (hit) {
+      const buffer = await hit.arrayBuffer();
+      onProgress?.({ loaded: buffer.byteLength, total: buffer.byteLength });
+      return buffer;
+    }
+  } catch {
+    cache = null;
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`[Retouch ML] Failed to download model (${response.status}): ${url}`);
+  }
+
+  const total = Number(response.headers.get("Content-Length") ?? 0);
+  const reader = response.body?.getReader();
+  let buffer: ArrayBuffer;
+  if (reader) {
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.byteLength;
+      onProgress?.({ loaded, total });
+    }
+    const merged = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    buffer = merged.buffer;
+  } else {
+    buffer = await response.arrayBuffer();
+    onProgress?.({ loaded: buffer.byteLength, total: buffer.byteLength });
+  }
+
+  try {
+    await cache?.put(url, new Response(buffer.slice(0), { headers: response.headers }));
+  } catch {
+    // Cache quota/availability problems never block inference.
+  }
+  return buffer;
+}
+
+/** Drop every cached model (frees storage; next run re-downloads). */
+export async function clearModelCache(): Promise<void> {
+  try {
+    await caches.delete(CACHE_NAME);
+  } catch {
+    // Cache API unavailable — nothing to clear.
+  }
+}

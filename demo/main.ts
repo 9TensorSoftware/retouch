@@ -1,3 +1,4 @@
+import { installMlTools } from "../packages/ml/src/index";
 import type { Adjustments, FilterPreset, ToolContext } from "../src/index";
 import { Retouch } from "../src/index";
 
@@ -63,5 +64,8 @@ const editor = new Retouch({
     }
   },
 });
+
+// ML tools (on-device, lazy model download on first use)
+installMlTools(editor);
 
 Object.assign(window, { editor });

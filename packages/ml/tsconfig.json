@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "baseUrl": ".",
+    "paths": {
+      "@9tensor/retouch": ["../../src/index.ts"]
+    }
+  },
+  "include": ["src", "tests", "../../src/gifenc.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

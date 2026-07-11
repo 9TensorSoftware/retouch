@@ -1,8 +1,10 @@
-import type { BuiltinEditorTool, ImageEdits, VideoEdits } from "../../types";
+import type { BuiltinEditorTool, ImageEdits, MediaEntry, VideoEdits } from "../../types";
 
 /** What a custom tool gets to work with. Mutate `edits`, then render + record. */
 export interface ToolContext {
   kind: "image" | "video";
+  /** The entry being edited — source media, file, and edit state. */
+  entry: MediaEntry;
   /** The live, shared edit state (a `VideoEdits` when `kind` is "video"). */
   edits: ImageEdits | VideoEdits;
   /** Push the current edits to the canvas and every tool UI. */

@@ -26,6 +26,14 @@ or self-hosted), never bundled — but defaults must still be permissive.
 | RIFE | MIT | ✅ license-wise; impractical in-browser for real clips — parked |
 | Whisper (tiny/base) | MIT | ✅ browser-proven via transformers.js (captions, stretch) |
 | onnxruntime-web / transformers.js / TF.js | MIT / Apache-2.0 / Apache-2.0 | ✅ runtimes |
+| YuNet (OpenCV Zoo) | MIT | ✅ face detection (~350 KB ONNX) |
+| MediaPipe BlazeFace / Face Mesh | Apache-2.0 | ✅ face detection + landmarks |
+| YOLOX / NanoDet-Plus | Apache-2.0 | ✅ object detection (NanoDet ~4 MB) |
+| OWL-ViT / OWLv2 | Apache-2.0 | ✅ open-vocabulary detection (text-prompted) |
+| Florence-2 base | MIT | ✅ detect+caption+OCR in one (~230 MB) |
+| BLIP | BSD-3-Clause | ✅ captions/tagging |
+| Tesseract.js | Apache-2.0 | ✅ OCR |
+| Ultralytics YOLO v5/v8/v11 | AGPL-3.0 | ❌ viral — same reason as RVM |
 
 Note: RMBG-2.0 is architecturally BiRefNet + BRIA's proprietary data — using
 MIT BiRefNet directly is the clean path.
@@ -49,7 +57,7 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 
 ## Tier B — on-device ML plugin packages (`@9tensor/retouch-ml-*`, lazy-loaded, WebGPU→WASM fallback)
 
-1. Background removal / cutout — **BiRefNet** (MIT), MODNet for speed
+1. ✅ Background removal / cutout — shipped in `@9tensor/retouch-ml` M1: MODNet (Apache-2.0, ~25 MB) default, any BiRefNet ONNX export via `modelUrl`; ORT-web WebGPU→WASM, Cache API weights, result lands as a new gallery image
 2. Object erase / heal brush — **LaMa** (Apache-2.0), **MI-GAN** (MIT) for small installs
 3. Upscale 2–4× — **Real-ESRGAN** (BSD-3)
 4. Depth effects — **Depth Anything V2 Small** (Apache-2.0): bokeh, fog, depth grade
@@ -59,6 +67,8 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 8. Denoise — **NAFNet** (MIT) / SCUNet (Apache-2.0)
 9. Video matting — **MODNet per-frame** (RVM is GPL — excluded)
 10. Auto-captions (stretch) — **Whisper tiny** (MIT) via transformers.js
+11. Detection pack — **YuNet** (MIT) faces + **NanoDet/YOLOX** (Apache-2.0) objects: boxes become Masks-tool entries (face blur/pixelate falls out), smart crop suggestions; open-vocab via **OWL-ViT** later
+12. Face-aware retouch — **MediaPipe Face Mesh** (Apache-2.0) landmarks gating skin smoothing / eye brighten
 
 ## Cut by the fully-client-side constraint
 
@@ -68,6 +78,5 @@ realistic browser path. Revisit only if a server proxy tier is ever wanted.
 
 ## Recommended order
 
-1. Tier A 1–6 (pro-grade editing, zero new deps)
-2. `@9tensor/retouch-ml` package: background removal + upscale + erase (B 1–3)
-3. Depth bokeh + SAM2 select (B 4–5)
+1. ✅ Tier A (all 11 shipped)
+2. `@9tensor/retouch-ml` milestones (agreed 2026-07): ✅ M1 scaffold+cutout → M2 upscale (Real-ESRGAN) → M3 erase (MI-GAN/LaMa) → M4 detection pack (B 11) → M5 SAM2 select → M6+ depth bokeh, colorize, GFPGAN, denoise

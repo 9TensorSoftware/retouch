@@ -166,6 +166,18 @@ transport. Everything is non-destructive until export:
 - **GIF of the trimmed range** — forward, reverse, or boomerang loops with every edit applied ([gifenc](https://github.com/mattdesl/gifenc) loads lazily); **deflicker** smooths brightness on export; **Set poster** picks the gallery thumbnail frame
 - Progress is reported per file (`export:progress` events) with cancellation via `cancelExport()`
 
+### ML tools (`@9tensor/retouch-ml`)
+
+On-device background removal — no server, no keys. Models run through ONNX
+Runtime Web (WebGPU with WASM fallback), download on first use, and cache in
+the browser:
+
+```ts
+import { installMlTools } from "@9tensor/retouch-ml";
+
+installMlTools(retouch); // adds a "Cutout" tab for images
+```
+
 ### Plugin feature groups
 
 The editor's tabs are registry-driven. Register your own feature group — a

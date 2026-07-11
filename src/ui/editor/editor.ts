@@ -688,6 +688,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
   // undoable — same lifecycle the built-ins use.
   const toolCtx: ToolContext = {
     kind: entry.kind,
+    entry,
     edits: entry.edits,
     render: () => syncToolsFromEdits(),
     record: recordEdit,
