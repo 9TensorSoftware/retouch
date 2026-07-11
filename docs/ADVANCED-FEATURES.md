@@ -45,7 +45,7 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 8. Warp / liquify / mesh (cage) transform
 9. Content-aware scale — seam carving in a worker (see patent note)
 10. ✅ Stylize — tilt-shift, duotone, posterize, pixelate, halftone (shipped; per-region pixelate still open)
-11. Video classical — deflicker, reverse, boomerang, GIF-of-range, poster pick, low-light via CLAHE
+11. ✅ Video classical — GIF-of-range with forward/reverse/boomerang loops (gifenc, MIT), deflicker (export-time temporal gain), poster pick (shipped; full mp4 reverse still open — needs frame buffering)
 
 ## Tier B — on-device ML plugin packages (`@9tensor/retouch-ml-*`, lazy-loaded, WebGPU→WASM fallback)
 

@@ -67,6 +67,7 @@
   },
   "dependencies": {
     "fabric": "^7.2.0",
+    "gifenc": "^1.0.3",
     "mediabunny": "^1.46.0"
   }
 }

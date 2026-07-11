@@ -97,6 +97,7 @@ export function createFramePipeline(
   const hueTable = hslIsNeutral(edits.hsl) ? null : buildHueTable(edits.hsl);
   const preparedMasks = masksAreNeutral(edits.masks) ? [] : prepareMasks(edits.masks);
   const stylizeNeutral = stylizeIsNeutral(edits.stylize);
+  const deflicker = "deflicker" in edits && (edits as { deflicker: boolean }).deflicker === true;
   const untransformed = orientation === 0 && !flipH && !flipV;
   const neutralVisual =
     isNeutral(adjustments, filter, filterStrength) &&
@@ -108,7 +109,8 @@ export function createFramePipeline(
     !curveLuts &&
     !hueTable &&
     preparedMasks.length === 0 &&
-    stylizeNeutral;
+    stylizeNeutral &&
+    !deflicker;
   const fullFrame = crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
 
   const cropCanvas = createCanvas(cropW, cropH);
@@ -168,6 +170,31 @@ export function createFramePipeline(
     staticCanvas.add(fabricImg);
   }
 
+  // Deflicker state: exponential moving average of the frame's mean luma.
+  let emaLuma: number | null = null;
+
+  function applyDeflicker(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    const image = ctx.getImageData(0, 0, w, h);
+    const data = image.data;
+    let sum = 0;
+    let count = 0;
+    const stride = Math.max(4, Math.floor(data.length / 4 / 50_000) * 4);
+    for (let i = 0; i < data.length; i += stride) {
+      sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      count++;
+    }
+    const mean = Math.max(1, sum / count);
+    emaLuma = emaLuma === null ? mean : emaLuma * 0.85 + mean * 0.15;
+    const gain = Math.min(1.18, Math.max(0.85, emaLuma / mean));
+    if (Math.abs(gain - 1) < 0.005) return;
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = Math.min(255, data[i] * gain);
+      data[i + 1] = Math.min(255, data[i + 1] * gain);
+      data[i + 2] = Math.min(255, data[i + 2] * gain);
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+
   return {
     outWidth: neutralVisual ? cropW : outW,
     outHeight: neutralVisual ? cropH : outH,
@@ -218,6 +245,9 @@ export function createFramePipeline(
       }
       if (ctx && adjustments.vignette > 0) {
         drawVignette(ctx, element.width, element.height, adjustments.vignette);
+      }
+      if (ctx && deflicker) {
+        applyDeflicker(ctx, element.width, element.height);
       }
       return element;
     },

@@ -1,5 +1,6 @@
 import { ACCEPTED_TYPES, ACCEPTED_VIDEO_TYPES } from "./constants";
 import { EventEmitter } from "./event-emitter";
+import type { GifExportOptions } from "./export/gif-export";
 import { exportVideo, extensionForBlob } from "./export/video-export";
 import { StateMachine } from "./state-machine";
 import { injectStyles } from "./styles";
@@ -391,7 +392,49 @@ export class Retouch {
    * Re-render an entry's gallery thumbnail so the card shows the edited
    * result (crop/filter/adjustments applied). Video uses the current frame.
    */
+  /** Export the trimmed range of a video as an animated GIF. */
+  async exportGif(id: string, options?: GifExportOptions): Promise<Blob> {
+    const entry = this.media.get(id);
+    if (!entry || entry.kind !== "video") {
+      throw new Error("[Retouch] exportGif needs a video entry");
+    }
+    const { exportGif } = await import("./export/gif-export");
+    return exportGif(entry, options);
+  }
+
+  private async exportGifAndDownload(id: string, options?: GifExportOptions): Promise<void> {
+    const entry = this.media.get(id);
+    if (!entry) return;
+    const blob = await this.exportGif(id, options);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${entry.file.name.replace(/\.[^.]+$/, "")}.gif`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /** Use the video's current frame (with edits) as its gallery poster. */
+  private async setPosterFrame(entry: MediaEntry): Promise<void> {
+    if (entry.kind !== "video") return;
+    try {
+      const blob = await exportImage(captureFrame(entry.video), entry.edits, {
+        format: "jpeg",
+        quality: 0.85,
+        maxDimension: 512,
+      });
+      revokeThumbnailUrl(entry.thumbnailUrl);
+      entry.thumbnailUrl = URL.createObjectURL(blob);
+      entry.posterPicked = true;
+    } catch {
+      // keep the existing poster
+    }
+  }
+
   private async refreshThumbnail(entry: MediaEntry): Promise<void> {
+    if (entry.kind === "video" && entry.posterPicked) return;
     try {
       const source = entry.kind === "video" ? captureFrame(entry.video) : entry.image;
       const blob = await exportImage(source, entry.edits, {
@@ -434,6 +477,11 @@ export class Retouch {
         entry.kind === "video"
           ? (canvas, time) => void this.addCapturedFrame(entry, canvas, time)
           : undefined,
+      onExportGif:
+        entry.kind === "video"
+          ? (loop) => this.exportGifAndDownload(entry.id, { loop })
+          : undefined,
+      onSetPoster: entry.kind === "video" ? () => this.setPosterFrame(entry) : undefined,
       ai: this.options.ai,
       tools: this.options.tools,
       onAiEvent: (event) => {

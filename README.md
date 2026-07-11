@@ -162,6 +162,7 @@ transport. Everything is non-destructive until export:
 - **Frame capture** — grab any frame as a new image entry, carrying the video's edits
 - **Audio** — preserved through export; one-tap mute discards the track
 - **Export** — MP4 (WebM fallback) via WebCodecs + lazily-loaded [mediabunny](https://mediabunny.dev/); browsers without WebCodecs fall back to a realtime MediaRecorder pipeline
+- **GIF of the trimmed range** — forward, reverse, or boomerang loops with every edit applied ([gifenc](https://github.com/mattdesl/gifenc) loads lazily); **deflicker** smooths brightness on export; **Set poster** picks the gallery thumbnail frame
 - Progress is reported per file (`export:progress` events) with cancellation via `cancelExport()`
 
 ### Plugin feature groups

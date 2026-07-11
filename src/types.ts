@@ -302,6 +302,8 @@ export interface VideoEdits extends ImageEdits {
   mute: boolean;
   /** Playback rate, 0.25–4. Audio is dropped on export when ≠ 1. */
   speed: number;
+  /** Smooth frame-to-frame brightness flicker on export. */
+  deflicker: boolean;
 }
 
 interface MediaEntryBase {
@@ -329,6 +331,8 @@ export interface VideoEntry extends MediaEntryBase {
   width: number;
   height: number;
   edits: VideoEdits;
+  /** Set when the user picked an explicit poster frame (auto-refresh keeps it). */
+  posterPicked?: boolean;
 }
 
 export type MediaEntry = ImageEntry | VideoEntry;

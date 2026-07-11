@@ -102,6 +102,9 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
     if (next.trim.start !== prev.trim.start || next.trim.end !== prev.trim.end) parts.push("Trim");
     if (next.mute !== prev.mute) parts.push(next.mute ? "Mute" : "Unmute");
     if (next.speed !== prev.speed) parts.push(`Speed ${next.speed}×`);
+    if (next.deflicker !== prev.deflicker) {
+      parts.push(next.deflicker ? "Deflicker on" : "Deflicker off");
+    }
   }
   if (parts.length === 0) return "Edit";
   if (parts.length <= 2) return parts.join(" · ");
@@ -131,6 +134,10 @@ export interface EditorOptions {
   onAiEvent?: (event: EditorAiEvent) => void;
   /** Feature groups to mount, in tab order (defaults to all applicable). */
   tools?: EditorTool[];
+  /** Video only: export the trimmed range as a GIF (downloads on resolve). */
+  onExportGif?: (loop: "forward" | "reverse" | "boomerang") => Promise<void>;
+  /** Video only: use the current frame as the gallery poster. */
+  onSetPoster?: () => Promise<void>;
 }
 
 export function createEditor(options: EditorOptions): ViewHandle {
@@ -238,6 +245,32 @@ export function createEditor(options: EditorOptions): ViewHandle {
     );
     topbarRight.appendChild(captureBtn);
   }
+  if (entry.kind === "video" && options.onSetPoster) {
+    const posterBtn = h("button", {
+      class: "rt-editor__btn-capture",
+      title: "Use the current frame as the gallery poster",
+    });
+    const posterLabel = () => {
+      posterBtn.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 5 5 4-4 4 4"/><circle cx="9" cy="9" r="1.4" fill="currentColor" stroke="none"/></svg><span>Set poster</span>';
+    };
+    posterLabel();
+    let posterRevert = 0;
+    posterBtn.addEventListener(
+      "click",
+      () => {
+        entry.video.pause();
+        void options.onSetPoster?.().then(() => {
+          posterBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12.5l5 5L20 6.5"/></svg><span>Poster set</span>';
+          clearTimeout(posterRevert);
+          posterRevert = window.setTimeout(posterLabel, 1400);
+        });
+      },
+      { signal },
+    );
+    topbarRight.appendChild(posterBtn);
+  }
   topbarRight.append(divider(), doneBtn);
 
   const topbar = h(
@@ -285,6 +318,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
       edits: videoEdits,
       duration: entry.duration,
       transport,
+      onDeflickerChange: (deflicker) => {
+        videoEdits.deflicker = deflicker;
+        recordEdit();
+      },
+      onExportGif: options.onExportGif,
     });
     // Open on the first trimmed frame (the element sits at the poster frame).
     void seekQueue.seek(videoEdits.trim.start);
@@ -647,6 +685,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       transport?.setTrim(entry.edits.trim);
       transport?.setMuted(entry.edits.mute);
       transport?.setSpeed(entry.edits.speed);
+      trimTool?.setDeflicker(entry.edits.deflicker);
     }
     for (const handle of customHandles.values()) handle.sync?.();
     renderer.render();
@@ -681,6 +720,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
         v.trim = { ...state.trim };
         v.mute = state.mute;
         v.speed = state.speed;
+        v.deflicker = state.deflicker;
       }
       syncToolsFromEdits();
     },
@@ -716,7 +756,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
       const v = entry.edits;
       toolbar.setTouched(
         "trim",
-        v.trim.start > 1e-4 || v.trim.end < entry.duration - 1e-4 || v.mute || v.speed !== 1,
+        v.trim.start > 1e-4 ||
+          v.trim.end < entry.duration - 1e-4 ||
+          v.mute ||
+          v.speed !== 1 ||
+          v.deflicker,
       );
     }
   }

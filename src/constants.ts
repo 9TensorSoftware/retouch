@@ -112,6 +112,7 @@ export function createDefaultVideoEdits(duration: number): VideoEdits {
     trim: { start: 0, end: duration },
     mute: false,
     speed: 1,
+    deflicker: false,
   };
 }
 

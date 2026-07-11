@@ -4,6 +4,9 @@ dependencies:
   fabric:
     specifier: ^7.2.0
     version: 7.2.0
+  gifenc:
+    specifier: ^1.0.3
+    version: 1.0.3
   mediabunny:
     specifier: ^1.46.0
     version: 1.46.0
@@ -1341,6 +1344,10 @@ packages:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.1
     dev: true
+
+  /gifenc@1.0.3:
+    resolution: {integrity: sha512-xdr6AdrfGBcfzncONUOlXMBuc5wJDtOueE3c5rdG0oNgtINLD+f2iFZltrBRZYzACRbKr+mSVU/x98zv2u3jmw==}
+    dev: false
 
   /github-from-package@0.0.0:
     resolution: {integrity: sha512-SyHy3T1v2NUXn29OsWdxmK6RwHD+vkj3v8en8AOBZ1wBQ/hCAQ5bAQTD02kW4W9tUp/3Qh6J8r9EvntiyCmOOw==}
