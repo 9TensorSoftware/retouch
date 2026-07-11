@@ -1,5 +1,4 @@
-import { enqueueInference } from "./queue";
-import { loadSession, ort, type RuntimeOptions } from "./runtime";
+import { ort, type RuntimeOptions, runResilient } from "./runtime";
 
 /**
  * Background removal via MODNet (Apache-2.0): the image runs through the
@@ -82,8 +81,6 @@ export async function removeBackground(
   const srcH = "naturalHeight" in source ? source.naturalHeight : source.height;
   if (srcW < 2 || srcH < 2) throw new Error("[Retouch ML] Image too small for cutout");
 
-  const session = await loadSession(options.modelUrl ?? DEFAULT_CUTOUT_MODEL_URL, options);
-
   // Downscale to the network's reference size
   const ref = fitRefSize(srcW, srcH, options.refSize);
   const refCanvas = canvasOf(ref.width, ref.height);
@@ -98,9 +95,12 @@ export async function removeBackground(
     ref.height,
     ref.width,
   ]);
-  const inputName = session.inputNames[0];
-  const outputs = await enqueueInference(() => session.run({ [inputName]: input }));
-  const matte = outputs[session.outputNames[0]].data as Float32Array;
+  const { session, results } = await runResilient(
+    options.modelUrl ?? DEFAULT_CUTOUT_MODEL_URL,
+    options,
+    (s) => ({ [s.inputNames[0]]: input }),
+  );
+  const matte = results[session.outputNames[0]].data as Float32Array;
 
   // Upsample the matte to full resolution with canvas bilinear filtering
   const matteSmall = canvasOf(ref.width, ref.height);

@@ -1,5 +1,6 @@
 import * as ort from "onnxruntime-web";
 import { type FetchProgress, fetchModel } from "./model-cache";
+import { enqueueInference } from "./queue";
 
 /**
  * ONNX Runtime Web session management: WebGPU when the browser has it,
@@ -94,6 +95,47 @@ export async function releaseSession(url: string, options: RuntimeOptions = {}):
     await session.release();
   } catch {
     // Already failed or released — nothing to free.
+  }
+}
+
+/** Model URLs whose WebGPU sessions failed at inference time. */
+const wasmPreferred = new Set<string>();
+
+export interface ResilientRunResult {
+  session: ort.InferenceSession;
+  results: Awaited<ReturnType<ort.InferenceSession["run"]>>;
+}
+
+/**
+ * Load the session for `url` and run `feeds` through it (serialized on the
+ * shared inference queue), falling back to WASM once when a WebGPU kernel
+ * fails at inference time — some devices only reject kernels mid-run. The
+ * fallback sticks per model URL for later calls. An explicit
+ * `executionProviders` list is respected verbatim: no automatic fallback.
+ */
+export async function runResilient(
+  url: string,
+  options: RuntimeOptions,
+  feeds: (session: ort.InferenceSession) => Record<string, ort.Tensor>,
+): Promise<ResilientRunResult> {
+  const explicit = options.executionProviders;
+  const preferWasm = !explicit && wasmPreferred.has(url);
+  let session = await loadSession(
+    url,
+    preferWasm ? { ...options, executionProviders: ["wasm"] } : options,
+  );
+  try {
+    const results = await enqueueInference(() => session.run(feeds(session)));
+    return { session, results };
+  } catch (error) {
+    if (explicit || preferWasm) throw error;
+    wasmPreferred.add(url);
+    console.warn("[Retouch ML] WebGPU inference failed — retrying on WASM", error);
+    // Free the broken session's weights and GPU buffers.
+    void releaseSession(url, options);
+    session = await loadSession(url, { ...options, executionProviders: ["wasm"] });
+    const results = await enqueueInference(() => session.run(feeds(session)));
+    return { session, results };
   }
 }
 

@@ -7,6 +7,16 @@ export {
   removeBackground,
   rgbaToNormalizedChw,
 } from "./cutout";
+export {
+  DEFAULT_FACE_MODEL_URL,
+  type DetectFacesOptions,
+  type Detection,
+  decodeUltraFace,
+  detectFaces,
+  iou,
+  nms,
+  rgbaToUltraFaceTensor,
+} from "./detect";
 export { createEraseSurface, type EraseSurfaceHandle } from "./erase-tool";
 export {
   chw255ToRgba,
@@ -22,7 +32,13 @@ export {
 export { clearModelCache, type FetchProgress, fetchModel } from "./model-cache";
 export { installMlTools, type MlToolsOptions } from "./plugin";
 export { enqueueInference } from "./queue";
-export { loadSession, type RuntimeOptions, releaseSession } from "./runtime";
+export {
+  loadSession,
+  type ResilientRunResult,
+  type RuntimeOptions,
+  releaseSession,
+  runResilient,
+} from "./runtime";
 export { computeTileGrid, type Tile } from "./tiles";
 export {
   chw01ToRgba,

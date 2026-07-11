@@ -1,5 +1,4 @@
-import { enqueueInference } from "./queue";
-import { loadSession, ort, type RuntimeOptions, releaseSession } from "./runtime";
+import { ort, type RuntimeOptions, runResilient } from "./runtime";
 import { computeTileGrid } from "./tiles";
 
 /**
@@ -48,10 +47,6 @@ export function chw01ToRgba(chw: Float32Array, pixelCount: number): Uint8Clamped
   return rgba;
 }
 
-// Once WebGPU inference fails for this model family, skip straight to WASM
-// on later runs instead of re-failing the first tile every time.
-let preferWasm = false;
-
 function canvasOf(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -76,15 +71,6 @@ export async function upscaleImage(
   }
 
   const modelUrl = options.modelUrl ?? DEFAULT_UPSCALE_MODEL_URL;
-  // preferWasm only overrides the defaults — an explicit provider list wins.
-  const useWasmFirst = !options.executionProviders && preferWasm;
-  let session = await loadSession(
-    modelUrl,
-    useWasmFirst ? { ...options, executionProviders: ["wasm"] } : options,
-  );
-  const wasmOnlyExplicit =
-    options.executionProviders?.length === 1 && options.executionProviders[0] === "wasm";
-  let fellBackToWasm = useWasmFirst || wasmOnlyExplicit === true;
 
   const srcCanvas = canvasOf(srcW, srcH);
   const srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true });
@@ -92,8 +78,6 @@ export async function upscaleImage(
   srcCtx.drawImage(source, 0, 0);
 
   const tiles = computeTileGrid(srcW, srcH, options.tileSize ?? 64, options.tileOverlap ?? 8);
-  const inputName = session.inputNames[0];
-  const outputName = session.outputNames[0];
 
   // The true scale comes from the model's own output on the first tile —
   // trusting an option here would silently garble the stitch on a mismatch.
@@ -105,22 +89,10 @@ export async function upscaleImage(
     const t = tiles[i];
     const tileData = srcCtx.getImageData(t.sx, t.sy, t.sw, t.sh).data;
     const input = new ort.Tensor("float32", rgbaToChw01(tileData, t.sw * t.sh), [1, 3, t.sh, t.sw]);
-    let result: Awaited<ReturnType<typeof session.run>>;
-    try {
-      result = await enqueueInference(() => session.run({ [inputName]: input }));
-    } catch (error) {
-      // WebGPU kernels can fail at inference time (buffer limits vary by
-      // device). Fall back to WASM once and redo the tile.
-      if (fellBackToWasm) throw error;
-      fellBackToWasm = true;
-      if (!options.executionProviders) preferWasm = true;
-      console.warn("[Retouch ML] WebGPU inference failed — retrying on WASM", error);
-      // Free the broken session's weights and GPU buffers.
-      void releaseSession(modelUrl, options);
-      session = await loadSession(modelUrl, { ...options, executionProviders: ["wasm"] });
-      result = await enqueueInference(() => session.run({ [inputName]: input }));
-    }
-    const output = result[outputName];
+    const { session, results } = await runResilient(modelUrl, options, (s) => ({
+      [s.inputNames[0]]: input,
+    }));
+    const output = results[session.outputNames[0]];
     const [, , oh, ow] = output.dims as number[];
     if (out === null) {
       scale = ow / t.sw;

@@ -9,6 +9,7 @@ export type {
   AspectRatioPreset,
   BuiltinEditorTool,
   CropRect,
+  EditMask,
   EditorTool,
   FileRejectionReason,
   FilterPreset,

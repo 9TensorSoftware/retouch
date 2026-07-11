@@ -15,6 +15,11 @@ cached via the Cache API.
   ~67 MB), run tile-by-tile with overlap so seams never show. WebGPU when the
   device can take it, automatic WASM fallback when a kernel fails mid-run.
   Inputs are capped at a 2048px long edge; transparency is preserved.
+- **Detect (faces)** — UltraFace (MIT, ~1.2 MB). Finds faces on-device and
+  feeds three one-click actions: add a radial mask per face (tune it in the
+  Masks tab), **pixelate faces** for privacy (replaces the image in place),
+  or **crop to the detected faces**. Mask/crop actions ride the
+  non-destructive edit model, so they undo like any other edit.
 - **Erase (heal brush)** — LaMa inpainting (Apache-2.0, ~208 MB). Paint over
   an object, hit Erase: a padded square around the strokes runs through the
   network and the fill composites back at full resolution, feathered and
@@ -63,6 +68,6 @@ both.
 ## Licenses
 
 The package is MIT. Default model weights: MODNet (Apache-2.0),
-Real-ESRGAN x4plus (BSD-3-Clause), and LaMa (Apache-2.0). ONNX Runtime Web
-is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
+Real-ESRGAN x4plus (BSD-3-Clause), LaMa (Apache-2.0), and UltraFace (MIT).
+ONNX Runtime Web is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
 per-model license audit.

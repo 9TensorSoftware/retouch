@@ -1,5 +1,4 @@
-import { enqueueInference } from "./queue";
-import { loadSession, ort, type RuntimeOptions, releaseSession } from "./runtime";
+import { ort, type RuntimeOptions, runResilient } from "./runtime";
 
 /**
  * Object erase via LaMa (Apache-2.0): the brush strokes define a hole, a
@@ -117,9 +116,6 @@ export function chw255ToRgba(chw: Float32Array, pixelCount: number): Uint8Clampe
   return rgba;
 }
 
-// Once WebGPU inference fails for this model, skip straight to WASM later.
-let preferWasm = false;
-
 function canvasOf(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -165,15 +161,6 @@ export async function inpaintStrokes(
   const region = expandToSquare(padded, srcW, srcH);
 
   const modelUrl = options.modelUrl ?? DEFAULT_INPAINT_MODEL_URL;
-  // preferWasm only overrides the defaults — an explicit provider list wins.
-  const useWasmFirst = !options.executionProviders && preferWasm;
-  let session = await loadSession(
-    modelUrl,
-    useWasmFirst ? { ...options, executionProviders: ["wasm"] } : options,
-  );
-  const wasmOnlyExplicit =
-    options.executionProviders?.length === 1 && options.executionProviders[0] === "wasm";
-  let fellBackToWasm = useWasmFirst || wasmOnlyExplicit === true;
 
   // Crop the region and letterbox-free resize to the model's fixed size
   const patch = canvasOf(MODEL_SIZE, MODEL_SIZE);
@@ -196,33 +183,22 @@ export async function inpaintStrokes(
   const maskData = maskCtx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE).data;
 
   const pixels = MODEL_SIZE * MODEL_SIZE;
-  const feeds = {
-    [session.inputNames[0]]: new ort.Tensor("float32", rgbaToChw(patchData, pixels), [
-      1,
-      3,
-      MODEL_SIZE,
-      MODEL_SIZE,
-    ]),
-    [session.inputNames[1]]: new ort.Tensor("float32", maskToTensor(maskData, pixels), [
-      1,
-      1,
-      MODEL_SIZE,
-      MODEL_SIZE,
-    ]),
-  };
-  let results: Awaited<ReturnType<typeof session.run>>;
-  try {
-    results = await enqueueInference(() => session.run(feeds));
-  } catch (error) {
-    // Some WebGPU kernels only fail at inference time — retry on WASM once.
-    if (fellBackToWasm) throw error;
-    fellBackToWasm = true;
-    if (!options.executionProviders) preferWasm = true;
-    console.warn("[Retouch ML] WebGPU inference failed — retrying on WASM", error);
-    void releaseSession(modelUrl, options);
-    session = await loadSession(modelUrl, { ...options, executionProviders: ["wasm"] });
-    results = await enqueueInference(() => session.run(feeds));
-  }
+  const imageTensor = new ort.Tensor("float32", rgbaToChw(patchData, pixels), [
+    1,
+    3,
+    MODEL_SIZE,
+    MODEL_SIZE,
+  ]);
+  const maskTensor = new ort.Tensor("float32", maskToTensor(maskData, pixels), [
+    1,
+    1,
+    MODEL_SIZE,
+    MODEL_SIZE,
+  ]);
+  const { session, results } = await runResilient(modelUrl, options, (s) => ({
+    [s.inputNames[0]]: imageTensor,
+    [s.inputNames[1]]: maskTensor,
+  }));
   const output = results[session.outputNames[0]];
   const [, , oh, ow] = output.dims as number[];
   if (ow !== MODEL_SIZE || oh !== MODEL_SIZE) {
