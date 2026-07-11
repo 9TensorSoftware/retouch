@@ -259,6 +259,19 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 
 Plus **hold-to-compare** with the original, **Reset** to clear all edits, and **toasts** for rejected files (the `file:rejected` event still fires for custom handling).
 
+**Done commits the edits.** Pressing Done on an image bakes the edits into
+the image itself — the entry's file and pixels become the edited version, and
+its controls read neutral on the next visit. The pristine original stays in a
+buffer on the entry, so **Reset** always brings it back, even across several
+Done rounds or destructive ML tools (erase, face pixelate). `image:commit`
+and `image:restore` events fire around the swap, and
+`restoreOriginal(id)` does it programmatically. Prefer the classic
+non-destructive flow (edits stay parametric until export)? Opt out:
+
+```ts
+new Retouch({ target: "#editor", commitMode: "keep-edits" });
+```
+
 **Export options** — choose the image output format and sizing (videos always export MP4/WebM):
 
 ```ts

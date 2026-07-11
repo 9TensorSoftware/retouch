@@ -128,6 +128,12 @@ export interface RetouchOptions {
   acceptedTypes?: string[];
   /** Accepted video MIME types. Pass [] to disable video. */
   acceptedVideoTypes?: string[];
+  /**
+   * What Done does to an image's edits. "bake" (default) renders them into
+   * the pixels and stashes the pristine original for Reset; "keep-edits"
+   * leaves them non-destructive until export.
+   */
+  commitMode?: "bake" | "keep-edits";
   /** Maximum file size in bytes for any media. Defaults to Infinity. */
   maxFileSize?: number;
   /** Maximum video duration in seconds. Defaults to Infinity. */
@@ -337,6 +343,11 @@ export interface ImageEntry extends MediaEntryBase {
   kind: "image";
   image: HTMLImageElement;
   edits: ImageEdits;
+  /**
+   * The pristine source, stashed the first time the entry's pixels are
+   * replaced (Done-commit or a destructive ML tool). Reset restores it.
+   */
+  original?: { file: File; image: HTMLImageElement };
 }
 
 export interface VideoEntry extends MediaEntryBase {
@@ -362,6 +373,10 @@ export interface RetouchEventMap {
   "images:remove": { id: string };
   "editor:open": { id: string };
   "editor:done": { id: string; edits: ImageEdits | VideoEdits };
+  /** Edits were baked into the image's pixels after Done. */
+  "image:commit": { id: string };
+  /** The pristine original was restored over a committed image. */
+  "image:restore": { id: string };
   "editor:cancel": { id: string };
   "file:rejected": { file: File; reason: FileRejectionReason };
   "frame:capture": { sourceId: string; entry: ImageEntry };

@@ -132,6 +132,10 @@ export type EditorAiEvent =
 export interface EditorOptions {
   entry: MediaEntry;
   onDone: () => void;
+  /** True when the entry has a stashed pristine original (committed image). */
+  hasOriginal?: () => boolean;
+  /** Restore the pristine original (Reset on a committed image). */
+  onRestoreOriginal?: () => void;
   onCancel: () => void;
   /** Video only: receives a full-resolution frame canvas and its timestamp. */
   onCaptureFrame?: (canvas: HTMLCanvasElement, time: number) => void;
@@ -1013,6 +1017,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
   compareBtn.addEventListener("pointercancel", endCompare, { signal });
 
   function resetEdits(): void {
+    // Committed images reset all the way back to the pristine original.
+    if (entry.kind === "image" && options.hasOriginal?.()) {
+      options.onRestoreOriginal?.();
+      return;
+    }
     const defaults =
       entry.kind === "video"
         ? createDefaultVideoEdits(entry.duration)

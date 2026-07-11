@@ -1,4 +1,4 @@
-import { ACCEPTED_TYPES, ACCEPTED_VIDEO_TYPES } from "./constants";
+import { ACCEPTED_TYPES, ACCEPTED_VIDEO_TYPES, DEFAULT_EDITS } from "./constants";
 import { EventEmitter } from "./event-emitter";
 import type { GifExportOptions } from "./export/gif-export";
 import { exportVideo, extensionForBlob } from "./export/video-export";
@@ -23,6 +23,7 @@ import { createGallery } from "./ui/gallery";
 import { h } from "./ui/h";
 import type { ToastHost } from "./ui/toast";
 import { createToastHost, rejectionMessage } from "./ui/toast";
+import { imageEditsAreNeutral } from "./utils/edits";
 import {
   createThumbnailUrl,
   exportImage,
@@ -65,10 +66,13 @@ export class Retouch {
     ai?: RetouchOptions["ai"];
     tools?: RetouchOptions["tools"];
     export?: RetouchOptions["export"];
+    commitMode?: RetouchOptions["commitMode"];
   };
 
   private currentView: ViewHandle | null = null;
   private editingImageId: string | null = null;
+  /** Images whose Done-commit bake is still rendering. */
+  private readonly baking = new Map<string, Promise<void>>();
   private exportAbort: AbortController | null = null;
   private readonly toasts: ToastHost;
 
@@ -93,6 +97,7 @@ export class Retouch {
       ai: options.ai,
       tools: options.tools,
       export: options.export,
+      commitMode: options.commitMode,
     };
 
     injectStyles();
@@ -178,6 +183,73 @@ export class Retouch {
     }
   }
 
+  /** Keep the pristine source around the first time pixels get replaced. */
+  private stashOriginal(entry: ImageEntry): void {
+    if (!entry.original) {
+      entry.original = { file: entry.file, image: entry.image };
+    }
+  }
+
+  /**
+   * Render an image entry's edits into its pixels: the file and element are
+   * replaced by the baked result, the edits reset to neutral, and the
+   * pristine original stays on the entry for Reset. Visuals never change —
+   * baked pixels with neutral edits render identically to original pixels
+   * with the edits applied.
+   */
+  private async bakeEntry(entry: ImageEntry): Promise<void> {
+    const edits = structuredClone(entry.edits);
+    const type = entry.file.type === "image/jpeg" ? "jpeg" : "png";
+    try {
+      const blob = await exportImage(entry.image, edits, {
+        format: type as "jpeg" | "png",
+        quality: 0.95,
+      });
+      const file = new File([blob], entry.file.name, { type: `image/${type}` });
+      const image = await loadImage(file);
+      this.stashOriginal(entry);
+      entry.file = file;
+      entry.image = image;
+      entry.edits = structuredClone(DEFAULT_EDITS);
+      await this.refreshThumbnail(entry);
+      this.emitter.emit("image:commit", { id: entry.id });
+      if (this.sm.state === "gallery") {
+        this.unmountCurrentView();
+        this.mountGallery();
+      }
+    } catch (error) {
+      // Baking failed — the entry simply stays non-destructive.
+      console.error("[Retouch] Failed to commit edits into the image", error);
+    }
+  }
+
+  /**
+   * Restore the pristine original over a committed image: pixels, file, and
+   * neutral edits, as if it was just added. Available once the entry's
+   * pixels were replaced (Done-commit or a destructive ML tool).
+   */
+  async restoreOriginal(id: string): Promise<void> {
+    const entry = this.media.get(id);
+    if (!entry || entry.kind !== "image" || !entry.original) return;
+    const pending = this.baking.get(id);
+    if (pending) await pending;
+    entry.file = entry.original.file;
+    entry.image = entry.original.image;
+    entry.original = undefined;
+    entry.edits = structuredClone(DEFAULT_EDITS);
+    entry.edited = false;
+    revokeThumbnailUrl(entry.thumbnailUrl);
+    entry.thumbnailUrl = createThumbnailUrl(entry.file);
+    this.emitter.emit("image:restore", { id });
+    if (this.sm.state === "editor" && this.editingImageId === id) {
+      this.unmountCurrentView();
+      this.mountEditor();
+    } else if (this.sm.state === "gallery") {
+      this.unmountCurrentView();
+      this.mountGallery();
+    }
+  }
+
   /**
    * Replace an image entry's pixels in place — the destructive counterpart
    * to the non-destructive edit model, used by tools like ML erase. Edits
@@ -190,6 +262,7 @@ export class Retouch {
       throw new Error("[Retouch] replaceImageSource needs an existing image entry");
     }
     const image = await loadImage(file);
+    this.stashOriginal(entry);
     revokeThumbnailUrl(entry.thumbnailUrl);
     entry.file = file;
     entry.image = image;
@@ -206,6 +279,12 @@ export class Retouch {
 
   openEditor(id: string): void {
     if (!this.media.has(id)) return;
+    // A commit may still be baking — reopen once the pixels are final.
+    const pending = this.baking.get(id);
+    if (pending) {
+      void pending.then(() => this.openEditor(id));
+      return;
+    }
     this.editingImageId = id;
     this.emitter.emit("editor:open", { id });
     this.sm.transition("editor");
@@ -220,6 +299,14 @@ export class Retouch {
       entry.edited = true;
       void this.refreshThumbnail(entry);
       this.emitter.emit("editor:done", { id, edits: entry.edits });
+      if (
+        entry.kind === "image" &&
+        this.options.commitMode !== "keep-edits" &&
+        !imageEditsAreNeutral(entry.edits)
+      ) {
+        const bake = this.bakeEntry(entry).finally(() => this.baking.delete(id));
+        this.baking.set(id, bake);
+      }
     } else {
       this.emitter.emit("editor:cancel", { id });
     }
@@ -499,6 +586,8 @@ export class Retouch {
       entry,
       onDone: () => this.closeEditor(true),
       onCancel: () => this.closeEditor(false),
+      hasOriginal: () => entry.kind === "image" && !!entry.original,
+      onRestoreOriginal: () => void this.restoreOriginal(entry.id),
       onCaptureFrame:
         entry.kind === "video"
           ? (canvas, time) => void this.addCapturedFrame(entry, canvas, time)
