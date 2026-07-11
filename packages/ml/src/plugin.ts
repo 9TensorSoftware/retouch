@@ -3,6 +3,7 @@ import { type CutoutOptions, removeBackground } from "./cutout";
 import { type DetectFacesOptions, type Detection, detectFaces } from "./detect";
 import { createEraseSurface } from "./erase-tool";
 import { type InpaintOptions, inpaintStrokes } from "./inpaint";
+import type { FetchProgress } from "./model-cache";
 import { type UpscaleOptions, upscaleImage } from "./upscale";
 
 export interface MlToolsOptions {
@@ -10,6 +11,11 @@ export interface MlToolsOptions {
   upscale?: UpscaleOptions | false;
   erase?: InpaintOptions | false;
   detect?: DetectFacesOptions | false;
+  /**
+   * Open gallery results (cutout, upscale) in the editor when they finish,
+   * so the outcome is visible immediately. Defaults to true.
+   */
+  openResults?: boolean;
 }
 
 const CUTOUT_ICON =
@@ -160,6 +166,35 @@ function resultFileName(sourceName: string, suffix: string, type: string): strin
 // the pane, but the underlying run keeps going.
 const activeRuns = new Set<string>();
 
+/**
+ * Download-progress → status text. The last progress event (and the single
+ * event a cache hit emits) flips to "Processing" — the model is running,
+ * not downloading, and on WASM that phase can take a while.
+ */
+function downloadStatus(
+  status: HTMLElement,
+  forward?: (progress: FetchProgress) => void,
+): (progress: FetchProgress) => void {
+  return (p) => {
+    if (p.total > 0 && p.loaded >= p.total) {
+      status.textContent = "Processing on-device… (first run can take a while)";
+    } else {
+      const pct = p.total > 0 ? ` ${Math.round((p.loaded / p.total) * 100)}%` : "";
+      status.textContent = `Downloading model…${pct}`;
+    }
+    forward?.(p);
+  };
+}
+
+/** Show a just-added gallery entry in the editor so the result is visible. */
+function openLatestResult(retouch: Retouch): void {
+  const media = retouch.getMedia();
+  const latest = media[media.length - 1];
+  if (!latest) return;
+  retouch.closeEditor(true);
+  retouch.openEditor(latest.id);
+}
+
 function encodeCanvas(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -198,21 +233,18 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             status.textContent = "Preparing model…";
             const result = await removeBackground(ctx.entry.image, {
               ...cutoutOptions,
-              onDownloadProgress: (p) => {
-                const pct = p.total > 0 ? ` ${Math.round((p.loaded / p.total) * 100)}%` : "";
-                status.textContent = `Downloading model…${pct}`;
-                cutoutOptions.onDownloadProgress?.(p);
-              },
+              onDownloadProgress: downloadStatus(status, cutoutOptions.onDownloadProgress),
             });
             status.textContent = "Compositing…";
             const blob = await encodeCanvas(result, "image/png");
             const name = resultFileName(ctx.entry.file.name, "cutout", "image/png");
             const before = retouch.getMedia().length;
             await retouch.addFiles([new File([blob], name, { type: "image/png" })]);
-            status.textContent =
-              retouch.getMedia().length > before
-                ? "Done — cutout added to the gallery"
-                : "The result was rejected — likely over the size limit";
+            const added = retouch.getMedia().length > before;
+            status.textContent = added
+              ? "Done — cutout added to the gallery"
+              : "The result was rejected — likely over the size limit";
+            if (added && options.openResults !== false) openLatestResult(retouch);
           } catch (error) {
             status.textContent = "Cutout failed — check the console for details";
             console.error(error);
@@ -291,11 +323,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             status.textContent = "Preparing model…";
             const result = await inpaintStrokes(ctx.entry.image, surface.getStrokes(), {
               ...eraseOptions,
-              onDownloadProgress: (p) => {
-                const pct = p.total > 0 ? ` ${Math.round((p.loaded / p.total) * 100)}%` : "";
-                status.textContent = `Downloading model…${pct}`;
-                eraseOptions.onDownloadProgress?.(p);
-              },
+              onDownloadProgress: downloadStatus(status, eraseOptions.onDownloadProgress),
             });
             status.textContent = "Compositing…";
             const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
@@ -392,11 +420,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             status.textContent = "Detecting…";
             faces = await detectFaces(ctx.entry.image, {
               ...detectOptions,
-              onDownloadProgress: (p) => {
-                const pct = p.total > 0 ? ` ${Math.round((p.loaded / p.total) * 100)}%` : "";
-                status.textContent = `Downloading model…${pct}`;
-                detectOptions.onDownloadProgress?.(p);
-              },
+              onDownloadProgress: downloadStatus(status, detectOptions.onDownloadProgress),
             });
             overlay.draw(faces);
             status.textContent =
@@ -546,11 +570,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             status.textContent = "Preparing model…";
             const result = await upscaleImage(ctx.entry.image, {
               ...upscaleOptions,
-              onDownloadProgress: (p) => {
-                const pct = p.total > 0 ? ` ${Math.round((p.loaded / p.total) * 100)}%` : "";
-                status.textContent = `Downloading model…${pct}`;
-                upscaleOptions.onDownloadProgress?.(p);
-              },
+              onDownloadProgress: downloadStatus(status, upscaleOptions.onDownloadProgress),
               onTileProgress: (done, total) => {
                 status.textContent = `Upscaling… tile ${done}/${total}`;
                 upscaleOptions.onTileProgress?.(done, total);
@@ -563,10 +583,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             const name = resultFileName(ctx.entry.file.name, "upscaled", type);
             const before = retouch.getMedia().length;
             await retouch.addFiles([new File([blob], name, { type })]);
-            status.textContent =
-              retouch.getMedia().length > before
-                ? "Done — upscaled image added to the gallery"
-                : "The result was rejected — likely over the size limit";
+            const added = retouch.getMedia().length > before;
+            status.textContent = added
+              ? "Done — upscaled image added to the gallery"
+              : "The result was rejected — likely over the size limit";
+            if (added && options.openResults !== false) openLatestResult(retouch);
           } catch (error) {
             const message = error instanceof Error ? error.message : "";
             status.textContent = message.includes("input limit")

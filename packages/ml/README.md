@@ -59,7 +59,9 @@ installMlTools(retouch, {
 });
 ```
 
-Pass `cutout: false` or `upscale: false` to skip registering a tool.
+Pass `cutout: false` or `upscale: false` to skip registering a tool. Cutout
+and Upscale open their result in the editor when done; pass
+`openResults: false` to leave it in the gallery quietly.
 `wasmPaths` is page-global — setting it in either tool's options applies to
 both.
 
