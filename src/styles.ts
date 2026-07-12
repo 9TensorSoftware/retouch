@@ -862,6 +862,46 @@ const CSS = /* css */ `
   padding: 8px 24px 16px;
 }
 
+.rt-editor__canvas-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.rt-editor__canvas-area--split {
+  gap: 16px;
+}
+
+.rt-compare-pane canvas {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 2px;
+}
+
+.rt-compare-pane__label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.rt-editor__icon-btn--active,
+.rt-editor__icon-btn--active:hover {
+  color: var(--rt-accent);
+}
+
 .rt-editor__canvas-container {
   position: relative;
   max-width: 100%;

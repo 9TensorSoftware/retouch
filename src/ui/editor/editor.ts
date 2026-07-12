@@ -302,9 +302,13 @@ export function createEditor(options: EditorOptions): ViewHandle {
     topbarRight,
   );
 
-  // Canvas
+  // Canvas — the container sits in a pane so a compare pane can flex in
+  // beside it (the renderer fits itself to the pane's width).
   const canvasContainer = h("div", { class: "rt-editor__canvas-container" });
-  const canvasArea = h("div", { class: "rt-editor__canvas-area" }, canvasContainer);
+  const editedLabel = h("span", { class: "rt-compare-pane__label" }, "Edited");
+  editedLabel.style.display = "none";
+  const canvasPane = h("div", { class: "rt-editor__canvas-pane" }, canvasContainer, editedLabel);
+  const canvasArea = h("div", { class: "rt-editor__canvas-area" }, canvasPane);
   const renderer = new CanvasRenderer(
     canvasContainer,
     entry.kind === "video" ? entry.video : entry.image,
@@ -1004,17 +1008,66 @@ export function createEditor(options: EditorOptions): ViewHandle {
     cropTool.setVisible(activeTool === "crop");
     if (activeTool === "crop") cropTool.refresh();
   }
-  compareBtn.addEventListener(
-    "pointerdown",
-    (e) => {
-      e.preventDefault();
-      compareBtn.setPointerCapture(e.pointerId);
-      startCompare();
-    },
-    { signal },
-  );
-  compareBtn.addEventListener("pointerup", endCompare, { signal });
-  compareBtn.addEventListener("pointercancel", endCompare, { signal });
+  // ── Side-by-side compare (images): the eye toggles a split view whose
+  // left pane shows the pristine original (the stashed buffer when the
+  // image has committed edits). Videos keep the momentary hold-compare. ──
+
+  let splitOn = false;
+  let beforePane: HTMLElement | null = null;
+
+  function buildBeforePane(): HTMLElement {
+    const pane = h("div", { class: "rt-editor__canvas-pane rt-compare-pane" });
+    if (entry.kind === "image") {
+      const source = entry.original?.image ?? entry.image;
+      const canvas = document.createElement("canvas");
+      const cap = Math.min(1, 1600 / Math.max(source.naturalWidth, source.naturalHeight, 1));
+      canvas.width = Math.max(1, Math.round(source.naturalWidth * cap));
+      canvas.height = Math.max(1, Math.round(source.naturalHeight * cap));
+      canvas.getContext("2d")?.drawImage(source, 0, 0, canvas.width, canvas.height);
+      pane.appendChild(canvas);
+    }
+    pane.appendChild(h("span", { class: "rt-compare-pane__label" }, "Original"));
+    return pane;
+  }
+
+  function setSplit(on: boolean): void {
+    if (entry.kind !== "image" || on === splitOn) return;
+    splitOn = on;
+    compareBtn.classList.toggle("rt-editor__icon-btn--active", on);
+    compareBtn.setAttribute("aria-pressed", String(on));
+    if (on) {
+      beforePane = buildBeforePane();
+      canvasArea.insertBefore(beforePane, canvasPane);
+      canvasArea.classList.add("rt-editor__canvas-area--split");
+      editedLabel.style.display = "";
+    } else {
+      beforePane?.remove();
+      beforePane = null;
+      canvasArea.classList.remove("rt-editor__canvas-area--split");
+      editedLabel.style.display = "none";
+    }
+    renderer.render();
+    cropTool.refresh();
+    if (activeTool === "masks") masksOverlay.refresh();
+  }
+
+  if (entry.kind === "image") {
+    compareBtn.title = "Compare with the original side by side";
+    compareBtn.setAttribute("aria-pressed", "false");
+    compareBtn.addEventListener("click", () => setSplit(!splitOn), { signal });
+  } else {
+    compareBtn.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        compareBtn.setPointerCapture(e.pointerId);
+        startCompare();
+      },
+      { signal },
+    );
+    compareBtn.addEventListener("pointerup", endCompare, { signal });
+    compareBtn.addEventListener("pointercancel", endCompare, { signal });
+  }
 
   function resetEdits(): void {
     // Committed images reset all the way back to the pristine original.

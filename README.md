@@ -257,7 +257,12 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | `Esc` | Cancel · `Cmd/Ctrl+Enter` | Done |
 | `1`–`4` | Switch tool · `Space` | Play/pause (video) |
 
-Plus **hold-to-compare** with the original, **Reset** to clear all edits, and **toasts** for rejected files (the `file:rejected` event still fires for custom handling).
+Plus a **side-by-side compare view** — the eye button splits the canvas into
+"Original" and "Edited" panes (the original comes from the pristine buffer
+once edits have been committed); toggle it off to go back to the single
+canvas. Videos keep the momentary hold-to-compare gesture. **Reset** clears
+all edits, and **toasts** announce rejected files (the `file:rejected` event
+still fires for custom handling).
 
 **Done commits the edits.** Pressing Done on an image bakes the edits into
 the image itself — the entry's file and pixels become the edited version, and
