@@ -138,3 +138,41 @@ describe("createHistory", () => {
     expect(history.entries().map((s) => s.value)).toEqual([0, 9]);
   });
 });
+
+describe("no-op deduplication", () => {
+  it("does not record a checkpoint when the state is unchanged", () => {
+    vi.useFakeTimers();
+    const state = { value: 1 };
+    const history = createHistory({
+      snapshot: () => ({ ...state }),
+      restore: (s) => Object.assign(state, s),
+    });
+    history.record(); // nothing changed since the initial snapshot
+    vi.runAllTimers();
+    expect(history.entries()).toHaveLength(1);
+    expect(history.canUndo()).toBe(false);
+
+    state.value = 2;
+    history.record();
+    vi.runAllTimers();
+    expect(history.entries()).toHaveLength(2);
+    expect(history.canUndo()).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("treats a change-and-revert within one debounce window as a no-op", () => {
+    vi.useFakeTimers();
+    const state = { value: 1 };
+    const history = createHistory({
+      snapshot: () => ({ ...state }),
+      restore: (s) => Object.assign(state, s),
+    });
+    state.value = 5;
+    history.record();
+    state.value = 1;
+    history.record();
+    vi.runAllTimers();
+    expect(history.entries()).toHaveLength(1);
+    vi.useRealTimers();
+  });
+});

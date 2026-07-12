@@ -46,9 +46,17 @@ export function createHistory<T>(options: HistoryOptions<T>): HistoryController<
 
   function commit(): void {
     timer = 0;
+    const next = options.snapshot();
+    // No-op edits (Reset with nothing to reset, re-picking the active
+    // preset) record nothing — otherwise phantom steps pile up in the
+    // history panel with no describable change.
+    if (JSON.stringify(next) === JSON.stringify(stack[index])) {
+      notify();
+      return;
+    }
     // Drop any redo tail, then push the new checkpoint.
     stack.length = index + 1;
-    stack.push(options.snapshot());
+    stack.push(next);
     index = stack.length - 1;
     notify();
   }
