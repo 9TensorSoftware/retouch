@@ -921,8 +921,9 @@ const CSS = /* css */ `
   padding: 0 13px;
   border: 1px solid var(--rt-dark-line);
   border-radius: 999px;
-  background: transparent;
-  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
@@ -936,6 +937,7 @@ const CSS = /* css */ `
 
 .rt-editor__compare-btn:hover {
   border-color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .rt-editor__compare-btn--active,
