@@ -257,10 +257,10 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | `Esc` | Cancel · `Cmd/Ctrl+Enter` | Done |
 | `1`–`4` | Switch tool · `Space` | Play/pause (video) |
 
-Plus a **side-by-side compare view** — the eye button splits the canvas into
-"Original" and "Edited" panes (the original comes from the pristine buffer
-once edits have been committed); toggle it off to go back to the single
-canvas. Videos keep the momentary hold-to-compare gesture. **Reset** clears
+Plus a **side-by-side compare view** — the labeled Compare button splits the
+canvas into bordered "Original" and "Edited" panels (the original comes from
+the pristine buffer once edits have been committed); click again to go back
+to the single canvas. Videos keep the momentary hold-to-compare gesture. **Reset** clears
 all edits, and **toasts** announce rejected files (the `file:rejected` event
 still fires for custom handling).
 

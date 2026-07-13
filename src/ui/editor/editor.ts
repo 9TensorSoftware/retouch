@@ -225,11 +225,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const historyGroup = h("div", { class: "rt-editor__history" }, undoBtn, redoBtn, historyWrap);
 
   const compareBtn = h("button", {
-    class: "rt-editor__icon-btn",
+    class: "rt-editor__compare-btn",
     title: "Hold to compare with the original",
     "aria-label": "Compare with original",
   });
-  compareBtn.innerHTML = EYE_ICON;
+  compareBtn.innerHTML = `${EYE_ICON}<span>Compare</span>`;
   const resetBtn = h("button", { class: "rt-editor__text-btn", title: "Reset all edits" }, "Reset");
 
   const divider = () => h("div", { class: "rt-editor__divider" });
@@ -303,11 +303,13 @@ export function createEditor(options: EditorOptions): ViewHandle {
   );
 
   // Canvas — the container sits in a pane so a compare pane can flex in
-  // beside it (the renderer fits itself to the pane's width).
+  // beside it. The renderer measures the pane's content area, so the
+  // header bar never eats into the canvas fit.
   const canvasContainer = h("div", { class: "rt-editor__canvas-container" });
-  const editedLabel = h("span", { class: "rt-compare-pane__label" }, "Edited");
-  editedLabel.style.display = "none";
-  const canvasPane = h("div", { class: "rt-editor__canvas-pane" }, canvasContainer, editedLabel);
+  const editedHeader = h("div", { class: "rt-compare-header" }, "Edited");
+  editedHeader.style.display = "none";
+  const paneContent = h("div", { class: "rt-editor__pane-content" }, canvasContainer);
+  const canvasPane = h("div", { class: "rt-editor__canvas-pane" }, editedHeader, paneContent);
   const canvasArea = h("div", { class: "rt-editor__canvas-area" }, canvasPane);
   const renderer = new CanvasRenderer(
     canvasContainer,
@@ -1016,7 +1018,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
   let beforePane: HTMLElement | null = null;
 
   function buildBeforePane(): HTMLElement {
-    const pane = h("div", { class: "rt-editor__canvas-pane rt-compare-pane" });
+    const content = h("div", { class: "rt-editor__pane-content" });
     if (entry.kind === "image") {
       const source = entry.original?.image ?? entry.image;
       const canvas = document.createElement("canvas");
@@ -1024,27 +1026,31 @@ export function createEditor(options: EditorOptions): ViewHandle {
       canvas.width = Math.max(1, Math.round(source.naturalWidth * cap));
       canvas.height = Math.max(1, Math.round(source.naturalHeight * cap));
       canvas.getContext("2d")?.drawImage(source, 0, 0, canvas.width, canvas.height);
-      pane.appendChild(canvas);
+      content.appendChild(canvas);
     }
-    pane.appendChild(h("span", { class: "rt-compare-pane__label" }, "Original"));
-    return pane;
+    return h(
+      "div",
+      { class: "rt-editor__canvas-pane rt-compare-pane" },
+      h("div", { class: "rt-compare-header" }, "Original"),
+      content,
+    );
   }
 
   function setSplit(on: boolean): void {
     if (entry.kind !== "image" || on === splitOn) return;
     splitOn = on;
-    compareBtn.classList.toggle("rt-editor__icon-btn--active", on);
+    compareBtn.classList.toggle("rt-editor__compare-btn--active", on);
     compareBtn.setAttribute("aria-pressed", String(on));
     if (on) {
       beforePane = buildBeforePane();
       canvasArea.insertBefore(beforePane, canvasPane);
       canvasArea.classList.add("rt-editor__canvas-area--split");
-      editedLabel.style.display = "";
+      editedHeader.style.display = "";
     } else {
       beforePane?.remove();
       beforePane = null;
       canvasArea.classList.remove("rt-editor__canvas-area--split");
-      editedLabel.style.display = "none";
+      editedHeader.style.display = "none";
     }
     renderer.render();
     cropTool.refresh();

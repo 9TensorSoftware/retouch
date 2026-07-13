@@ -868,13 +868,43 @@ const CSS = /* css */ `
   min-height: 0;
   align-self: stretch;
   display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.rt-editor__pane-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
 }
 
 .rt-editor__canvas-area--split {
-  gap: 16px;
+  gap: 24px;
+}
+
+.rt-editor__canvas-area--split .rt-editor__canvas-pane {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--rt-dark-line);
+  border-radius: 12px;
+  padding: 0 14px 14px;
+  overflow: hidden;
+}
+
+.rt-compare-header {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rt-dark-line);
+  margin-bottom: 14px;
+  flex: none;
 }
 
 .rt-compare-pane canvas {
@@ -883,23 +913,36 @@ const CSS = /* css */ `
   border-radius: 2px;
 }
 
-.rt-compare-pane__label {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  padding: 2px 9px;
+.rt-editor__compare-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 13px;
+  border: 1px solid var(--rt-dark-line);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.55);
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  pointer-events: none;
-  z-index: 4;
+  background: transparent;
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.rt-editor__icon-btn--active,
-.rt-editor__icon-btn--active:hover {
-  color: var(--rt-accent);
+.rt-editor__compare-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-editor__compare-btn:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.rt-editor__compare-btn--active,
+.rt-editor__compare-btn--active:hover {
+  background: var(--rt-accent);
+  border-color: var(--rt-accent);
+  color: #fff;
 }
 
 .rt-editor__canvas-container {
