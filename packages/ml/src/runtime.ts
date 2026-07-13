@@ -21,8 +21,23 @@ export interface RuntimeOptions {
 }
 
 let defaultApplied = false;
+let runtimeConfigured = false;
 
 function configure(options: RuntimeOptions): void {
+  if (!runtimeConfigured) {
+    runtimeConfigured = true;
+    // Run inference off the main thread. Heavy models (upscale, inpaint) —
+    // and especially the WASM fallback when a WebGPU kernel fails mid-run —
+    // would otherwise block the UI thread and freeze the editor for the
+    // whole run. Proxy mode hosts the wasm/JSEP backend in a worker, so
+    // `session.run()` resolves asynchronously without ever blocking paint.
+    if (typeof Worker !== "undefined") {
+      ort.env.wasm.proxy = true;
+    }
+    // Quiet ORT's own node-assignment warnings; real errors still surface
+    // through the promise rejection our fallback handles.
+    ort.env.logLevel = "error";
+  }
   if (options.wasmPaths) {
     // Explicit paths always apply, no matter which tool configured first.
     ort.env.wasm.wasmPaths = options.wasmPaths;
@@ -107,6 +122,21 @@ export interface ResilientRunResult {
 }
 
 /**
+ * Proxy mode posts input buffers to the worker with transfer, which
+ * *detaches* the source ArrayBuffer. A WebGPU→WASM retry reuses the same
+ * feed tensors, so it would hit a detached buffer — hand each run a
+ * throwaway copy and the caller's tensors survive every attempt.
+ */
+function cloneFeeds(feeds: Record<string, ort.Tensor>): Record<string, ort.Tensor> {
+  const out: Record<string, ort.Tensor> = {};
+  for (const [name, tensor] of Object.entries(feeds)) {
+    const data = tensor.data as { slice(): ort.Tensor["data"] };
+    out[name] = new ort.Tensor(tensor.type, data.slice(), tensor.dims);
+  }
+  return out;
+}
+
+/**
  * Load the session for `url` and run `feeds` through it (serialized on the
  * shared inference queue), falling back to WASM once when a WebGPU kernel
  * fails at inference time — some devices only reject kernels mid-run. The
@@ -125,7 +155,7 @@ export async function runResilient(
     preferWasm ? { ...options, executionProviders: ["wasm"] } : options,
   );
   try {
-    const results = await enqueueInference(() => session.run(feeds(session)));
+    const results = await enqueueInference(() => session.run(cloneFeeds(feeds(session))));
     return { session, results };
   } catch (error) {
     if (explicit || preferWasm) throw error;
@@ -134,7 +164,7 @@ export async function runResilient(
     // Free the broken session's weights and GPU buffers.
     void releaseSession(url, options);
     session = await loadSession(url, { ...options, executionProviders: ["wasm"] });
-    const results = await enqueueInference(() => session.run(feeds(session)));
+    const results = await enqueueInference(() => session.run(cloneFeeds(feeds(session))));
     return { session, results };
   }
 }
