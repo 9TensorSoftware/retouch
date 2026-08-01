@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   chw255ToRgba,
+  dilateMask,
   expandToSquare,
+  maskBoundingBox,
   maskToTensor,
   rgbaToChw,
   strokesBoundingBox,
@@ -82,5 +84,78 @@ describe("tensor conversions", () => {
     expect(rgba[1]).toBe(0);
     expect(rgba[2]).toBe(128);
     expect(rgba[3]).toBe(255);
+  });
+});
+
+describe("maskBoundingBox", () => {
+  const grayMask = (w: number, h: number, bright: Array<[number, number]>): Uint8ClampedArray => {
+    const gray = new Uint8ClampedArray(w * h * 4);
+    for (let i = 3; i < gray.length; i += 4) gray[i] = 255;
+    for (const [x, y] of bright) gray[(y * w + x) * 4] = 255;
+    return gray;
+  };
+
+  it("returns null for an empty mask", () => {
+    expect(maskBoundingBox(grayMask(10, 8, []), 10, 8, 4)).toBeNull();
+  });
+
+  it("bounds bright pixels with padding, clamped to the image", () => {
+    const box = maskBoundingBox(
+      grayMask(20, 20, [
+        [5, 6],
+        [9, 10],
+      ]),
+      20,
+      20,
+      3,
+    );
+    expect(box).toEqual({ x: 2, y: 3, w: 11, h: 11 });
+  });
+
+  it("clamps at the image edges", () => {
+    const box = maskBoundingBox(grayMask(10, 10, [[0, 0]]), 10, 10, 5);
+    expect(box).toEqual({ x: 0, y: 0, w: 6, h: 6 });
+  });
+
+  it("ignores dim (\u2264127) pixels", () => {
+    const gray = grayMask(10, 10, []);
+    gray[(5 * 10 + 5) * 4] = 100;
+    expect(maskBoundingBox(gray, 10, 10, 0)).toBeNull();
+  });
+});
+
+describe("dilateMask", () => {
+  const singleDot = (w: number, h: number, x: number, y: number): Uint8ClampedArray => {
+    const gray = new Uint8ClampedArray(w * h * 4);
+    for (let i = 3; i < gray.length; i += 4) gray[i] = 255;
+    gray[(y * w + x) * 4] = 255;
+    return gray;
+  };
+
+  it("is an identity at radius 0", () => {
+    const gray = singleDot(9, 9, 4, 4);
+    expect(Array.from(dilateMask(gray, 9, 9, 0))).toEqual(Array.from(gray));
+  });
+
+  it("grows a single pixel into a (2r+1)\u00b2 Chebyshev square", () => {
+    const out = dilateMask(singleDot(9, 9, 4, 4), 9, 9, 2);
+    let bright = 0;
+    for (let y = 0; y < 9; y++) {
+      for (let x = 0; x < 9; x++) {
+        if (out[(y * 9 + x) * 4] > 127) {
+          bright++;
+          expect(Math.abs(x - 4)).toBeLessThanOrEqual(2);
+          expect(Math.abs(y - 4)).toBeLessThanOrEqual(2);
+        }
+      }
+    }
+    expect(bright).toBe(25);
+  });
+
+  it("clamps growth at the borders and keeps alpha opaque", () => {
+    const out = dilateMask(singleDot(5, 5, 0, 0), 5, 5, 3);
+    expect(out[0]).toBe(255);
+    expect(out[(4 * 5 + 4) * 4]).toBe(0);
+    for (let i = 3; i < out.length; i += 4) expect(out[i]).toBe(255);
   });
 });

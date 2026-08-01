@@ -20,6 +20,12 @@ cached via the Cache API.
   Masks tab), **pixelate faces** for privacy (replaces the image in place),
   or **crop to the detected faces**. Mask/crop actions ride the
   non-destructive edit model, so they undo like any other edit.
+- **Select (click-to-segment)** — SlimSAM-77 (Apache-2.0, ~38 MB in two
+  files). Click any object to segment it on-device, refine with more clicks
+  (Subtract mode / shift-click removes), then **Cut out** to a transparent
+  PNG or **Erase object** in place (dilated mask through the LaMa
+  inpainter). The image encodes once and is cached, so refinement clicks
+  land in tens of milliseconds.
 - **Erase (heal brush)** — LaMa inpainting (Apache-2.0, ~208 MB). Paint over
   an object, hit Erase: a padded square around the strokes runs through the
   network and the fill composites back at full resolution, feathered and
@@ -56,6 +62,7 @@ By default, model weights load from the Hugging Face CDN and the ONNX Runtime
 installMlTools(retouch, {
   cutout: { modelUrl: "https://your.cdn/models/modnet.onnx", wasmPaths: "https://your.cdn/ort/" },
   upscale: { modelUrl: "https://your.cdn/models/realesrgan-x4plus.onnx" },
+  select: { encoderUrl: "https://your.cdn/models/sam-encoder.onnx", decoderUrl: "https://your.cdn/models/sam-decoder.onnx" },
 });
 ```
 
@@ -70,6 +77,7 @@ both.
 ## Licenses
 
 The package is MIT. Default model weights: MODNet (Apache-2.0),
-Real-ESRGAN x4plus (BSD-3-Clause), LaMa (Apache-2.0), and UltraFace (MIT).
+Real-ESRGAN x4plus (BSD-3-Clause), LaMa (Apache-2.0), UltraFace (MIT), and
+SlimSAM-77 (Apache-2.0).
 ONNX Runtime Web is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
 per-model license audit.

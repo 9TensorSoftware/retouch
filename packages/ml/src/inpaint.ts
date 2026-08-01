@@ -84,6 +84,89 @@ export function expandToSquare(region: Region, width: number, height: number): R
   };
 }
 
+/**
+ * Pixel bounding box of the bright (>127) pixels of a grayscale RGBA mask,
+ * plus padding, clamped to the image. Null when the mask is empty.
+ */
+export function maskBoundingBox(
+  gray: Uint8ClampedArray,
+  width: number,
+  height: number,
+  pad: number,
+): Region | null {
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (gray[(y * width + x) * 4] > 127) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return null;
+  const x = Math.max(0, minX - pad);
+  const y = Math.max(0, minY - pad);
+  const x1 = Math.min(width, maxX + 1 + pad);
+  const y1 = Math.min(height, maxY + 1 + pad);
+  return { x, y, w: x1 - x, h: y1 - y };
+}
+
+/**
+ * Grow the bright region of a grayscale RGBA mask by `radius` pixels
+ * (Chebyshev/square growth via a separable two-pass max filter) — used to
+ * dilate tight segmentation masks before inpainting so edges don't halo.
+ */
+export function dilateMask(
+  gray: Uint8ClampedArray,
+  width: number,
+  height: number,
+  radius: number,
+): Uint8ClampedArray {
+  const r = Math.max(0, Math.floor(radius));
+  const out = new Uint8ClampedArray(gray.length);
+  out.set(gray);
+  if (r === 0) return out;
+  const a = new Uint8ClampedArray(width * height);
+  for (let p = 0; p < width * height; p++) a[p] = gray[p * 4];
+  const b = new Uint8ClampedArray(width * height);
+  // Horizontal max
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let m = 0;
+      const lo = Math.max(0, x - r);
+      const hi = Math.min(width - 1, x + r);
+      for (let k = lo; k <= hi; k++) {
+        const v = a[y * width + k];
+        if (v > m) m = v;
+      }
+      b[y * width + x] = m;
+    }
+  }
+  // Vertical max
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      let m = 0;
+      const lo = Math.max(0, y - r);
+      const hi = Math.min(height - 1, y + r);
+      for (let k = lo; k <= hi; k++) {
+        const v = b[k * width + x];
+        if (v > m) m = v;
+      }
+      const p = (y * width + x) * 4;
+      out[p] = m;
+      out[p + 1] = m;
+      out[p + 2] = m;
+      out[p + 3] = 255;
+    }
+  }
+  return out;
+}
+
 /** RGBA bytes → CHW float tensor data in 0–1. */
 export function rgbaToChw(data: Uint8ClampedArray, pixelCount: number): Float32Array {
   const chw = new Float32Array(pixelCount * 3);
@@ -139,25 +222,29 @@ function drawStrokes(
 }
 
 /**
- * Erase the brushed region of an image. Returns a full-resolution canvas:
- * the original pixels everywhere, the network's fill where the strokes are.
+ * Erase the masked region of an image (white = remove on a black mask
+ * canvas at source resolution). Returns a full-resolution canvas: the
+ * original pixels everywhere, the network's fill where the mask is.
  */
-export async function inpaintStrokes(
+export async function inpaintMask(
   source: HTMLImageElement | HTMLCanvasElement,
-  strokes: MaskStroke[],
+  mask: HTMLCanvasElement,
   options: InpaintOptions = {},
 ): Promise<HTMLCanvasElement> {
   const srcW = "naturalWidth" in source ? source.naturalWidth : source.width;
   const srcH = "naturalHeight" in source ? source.naturalHeight : source.height;
   if (srcW < 2 || srcH < 2) throw new Error("[Retouch ML] Image too small to erase from");
+  const maskCtx0 = mask.getContext("2d");
+  if (!maskCtx0) throw new Error("[Retouch ML] Failed to read the mask");
+  const maskGray = maskCtx0.getImageData(0, 0, srcW, srcH).data;
 
-  // Context padding: a third of the brushed extent, at least 48px, so the
+  // Context padding: a third of the masked extent, at least 48px, so the
   // network sees enough surroundings to hallucinate a coherent fill.
-  const rough = strokesBoundingBox(strokes, srcW, srcH, 0);
-  if (!rough) throw new Error("[Retouch ML] Nothing brushed to erase");
+  const rough = maskBoundingBox(maskGray, srcW, srcH, 0);
+  if (!rough) throw new Error("[Retouch ML] Nothing masked to erase");
   const pad = Math.max(48, Math.round(Math.max(rough.w, rough.h) / 3));
-  const padded = strokesBoundingBox(strokes, srcW, srcH, pad);
-  if (!padded) throw new Error("[Retouch ML] Nothing brushed to erase");
+  const padded = maskBoundingBox(maskGray, srcW, srcH, pad);
+  if (!padded) throw new Error("[Retouch ML] Nothing masked to erase");
   const region = expandToSquare(padded, srcW, srcH);
 
   const modelUrl = options.modelUrl ?? DEFAULT_INPAINT_MODEL_URL;
@@ -169,17 +256,13 @@ export async function inpaintStrokes(
   patchCtx.drawImage(source, region.x, region.y, region.w, region.h, 0, 0, MODEL_SIZE, MODEL_SIZE);
   const patchData = patchCtx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE).data;
 
-  // Rasterize the strokes into the same patch space
+  // The mask region resized into the same patch space
   const maskCanvas = canvasOf(MODEL_SIZE, MODEL_SIZE);
   const maskCtx = maskCanvas.getContext("2d");
   if (!maskCtx) throw new Error("[Retouch ML] Failed to create canvas context");
   maskCtx.fillStyle = "#000";
   maskCtx.fillRect(0, 0, MODEL_SIZE, MODEL_SIZE);
-  maskCtx.save();
-  maskCtx.scale(MODEL_SIZE / region.w, MODEL_SIZE / region.h);
-  maskCtx.translate(-region.x, -region.y);
-  drawStrokes(maskCtx, strokes, srcW, srcH, "#fff");
-  maskCtx.restore();
+  maskCtx.drawImage(mask, region.x, region.y, region.w, region.h, 0, 0, MODEL_SIZE, MODEL_SIZE);
   const maskData = maskCtx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE).data;
 
   const pixels = MODEL_SIZE * MODEL_SIZE;
@@ -215,13 +298,13 @@ export async function inpaintStrokes(
       0,
     );
 
-  // Feathered stroke mask at full resolution — masked pixels only, so the
+  // Feathered mask at full resolution — masked pixels only, so the
   // (resized) network patch never degrades the untouched surroundings.
   const feather = canvasOf(srcW, srcH);
   const featherCtx = feather.getContext("2d");
   if (!featherCtx) throw new Error("[Retouch ML] Failed to create canvas context");
   featherCtx.filter = "blur(2px)";
-  drawStrokes(featherCtx, strokes, srcW, srcH, "#fff");
+  featherCtx.drawImage(mask, 0, 0);
   featherCtx.filter = "none";
 
   const patchFull = canvasOf(srcW, srcH);
@@ -249,4 +332,28 @@ export async function inpaintStrokes(
   outCtx.drawImage(source, 0, 0);
   outCtx.drawImage(patchFull, 0, 0);
   return out;
+}
+
+/**
+ * Erase the brushed region of an image — rasterizes the strokes into a
+ * full-resolution mask and delegates to `inpaintMask`. (Circles are now
+ * rasterized at source resolution and downscaled with the mask, which is
+ * visually identical to the previous vector redraw after thresholding.)
+ */
+export async function inpaintStrokes(
+  source: HTMLImageElement | HTMLCanvasElement,
+  strokes: MaskStroke[],
+  options: InpaintOptions = {},
+): Promise<HTMLCanvasElement> {
+  const srcW = "naturalWidth" in source ? source.naturalWidth : source.width;
+  const srcH = "naturalHeight" in source ? source.naturalHeight : source.height;
+  if (srcW < 2 || srcH < 2) throw new Error("[Retouch ML] Image too small to erase from");
+  if (strokes.length === 0) throw new Error("[Retouch ML] Nothing brushed to erase");
+  const mask = canvasOf(srcW, srcH);
+  const ctx = mask.getContext("2d");
+  if (!ctx) throw new Error("[Retouch ML] Failed to create canvas context");
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, srcW, srcH);
+  drawStrokes(ctx, strokes, srcW, srcH, "#fff");
+  return inpaintMask(source, mask, options);
 }

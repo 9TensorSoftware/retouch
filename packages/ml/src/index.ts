@@ -21,10 +21,13 @@ export { createEraseSurface, type EraseSurfaceHandle } from "./erase-tool";
 export {
   chw255ToRgba,
   DEFAULT_INPAINT_MODEL_URL,
+  dilateMask,
   expandToSquare,
   type InpaintOptions,
+  inpaintMask,
   inpaintStrokes,
   type MaskStroke,
+  maskBoundingBox,
   maskToTensor,
   type Region,
   strokesBoundingBox,
@@ -39,6 +42,23 @@ export {
   releaseSession,
   runResilient,
 } from "./runtime";
+export {
+  clearSamCache,
+  DEFAULT_SAM_DECODER_URL,
+  DEFAULT_SAM_ENCODER_URL,
+  decodeSamClicks,
+  encodeSamImage,
+  maskLogitsToGray,
+  pickBestMask,
+  pointsToSamTensors,
+  rgbaToSamTensor,
+  SAM_SIZE,
+  type SamEmbeddings,
+  type SamOptions,
+  type SamPoint,
+  samResizedSize,
+} from "./sam";
+export { createSelectSurface, type SelectSurfaceHandle } from "./select-tool";
 export { computeTileGrid, type Tile } from "./tiles";
 export {
   chw01ToRgba,

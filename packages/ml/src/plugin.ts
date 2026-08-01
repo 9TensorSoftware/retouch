@@ -1,9 +1,11 @@
 import type { EditMask, ImageEdits, Retouch, ToolContext } from "@9tensor/retouch";
-import { type CutoutOptions, removeBackground } from "./cutout";
+import { applyMatteAlpha, type CutoutOptions, removeBackground } from "./cutout";
 import { type DetectFacesOptions, type Detection, detectFaces } from "./detect";
 import { createEraseSurface } from "./erase-tool";
-import { type InpaintOptions, inpaintStrokes } from "./inpaint";
+import { dilateMask, type InpaintOptions, inpaintMask, inpaintStrokes } from "./inpaint";
 import type { FetchProgress } from "./model-cache";
+import { decodeSamClicks, encodeSamImage, type SamOptions, type SamPoint } from "./sam";
+import { createSelectSurface } from "./select-tool";
 import { type UpscaleOptions, upscaleImage } from "./upscale";
 
 export interface MlToolsOptions {
@@ -11,6 +13,7 @@ export interface MlToolsOptions {
   upscale?: UpscaleOptions | false;
   erase?: InpaintOptions | false;
   detect?: DetectFacesOptions | false;
+  select?: SamOptions | false;
   /**
    * Open gallery results (cutout, upscale) in the editor when they finish,
    * so the outcome is visible immediately. Defaults to true.
@@ -26,6 +29,9 @@ const DETECT_ICON =
 
 const ERASE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 4l6 6-9 9H7l-4-4 11-11z"/><path d="M9 9l6 6M3 21h18"/></svg>';
+
+const SELECT_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="6" stroke-dasharray="3 3"/><circle cx="11" cy="11" r="1.6" fill="currentColor" stroke="none"/><path d="M15.5 15.5L21 21"/></svg>';
 
 const UPSCALE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 15l-4 4M8 19H5v-3M15 9l4-4M16 5h3v3"/></svg>';
@@ -354,6 +360,237 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         root.appendChild(sizeGroup);
         root.appendChild(clearBtn);
         root.appendChild(runBtn);
+        return {
+          root,
+          onActivate() {
+            surface.setVisible(true);
+            syncState();
+          },
+          onDeactivate() {
+            surface.setVisible(false);
+          },
+          sync() {
+            syncState();
+          },
+          destroy() {
+            surface.destroy();
+          },
+        };
+      },
+    });
+  }
+
+  if (options.select !== false) {
+    const selectOptions = options.select ?? {};
+    ctor.registerTool({
+      id: "select",
+      label: "Select",
+      icon: SELECT_ICON,
+      kinds: ["image"],
+      mount(ctx: ToolContext) {
+        const root = document.createElement("div");
+        root.className = "rt-dock__row";
+        const status = document.createElement("span");
+        status.className = "rt-dock__slider-label";
+
+        const addBtn = document.createElement("button");
+        addBtn.className = "rt-dock__chip rt-dock__chip--active";
+        addBtn.textContent = "+ Add";
+        addBtn.setAttribute("aria-pressed", "true");
+        const subBtn = document.createElement("button");
+        subBtn.className = "rt-dock__chip";
+        subBtn.textContent = "− Subtract";
+        subBtn.setAttribute("aria-pressed", "false");
+        const cutBtn = document.createElement("button");
+        cutBtn.className = "rt-dock__chip";
+        cutBtn.textContent = "Cut out";
+        const eraseBtn = document.createElement("button");
+        eraseBtn.className = "rt-dock__chip";
+        eraseBtn.textContent = "Erase object";
+        const clearBtn = document.createElement("button");
+        clearBtn.className = "rt-dock__chip";
+        clearBtn.textContent = "Clear";
+
+        let subtractMode = false;
+        let points: SamPoint[] = [];
+        let mask: HTMLCanvasElement | null = null;
+        let busy = false;
+
+        function setMode(subtract: boolean): void {
+          subtractMode = subtract;
+          addBtn.classList.toggle("rt-dock__chip--active", !subtract);
+          addBtn.setAttribute("aria-pressed", String(!subtract));
+          subBtn.classList.toggle("rt-dock__chip--active", subtract);
+          subBtn.setAttribute("aria-pressed", String(subtract));
+        }
+        addBtn.addEventListener("click", () => setMode(false));
+        subBtn.addEventListener("click", () => setMode(true));
+
+        function syncState(): void {
+          const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
+          if (!neutral) {
+            status.textContent =
+              "Select needs the un-transformed image — reset crop/transform/liquify first";
+          } else if (busy) {
+            // status text is being driven by the run
+          } else if (mask) {
+            status.textContent = "Selection ready — click to refine, or pick an action";
+          } else {
+            status.textContent = "Click an object to select it (shift-click removes)";
+          }
+          const usable = neutral && mask !== null && !busy;
+          cutBtn.disabled = !usable;
+          eraseBtn.disabled = !usable;
+          clearBtn.disabled = points.length === 0 || busy;
+        }
+
+        function clearSelection(): void {
+          points = [];
+          mask = null;
+          surface.setPoints(points);
+          surface.setMask(null);
+          syncState();
+        }
+
+        const surface = createSelectSurface(ctx.canvasArea, (x, y, shiftKey) => {
+          if (busy || activeRuns.has("select") || ctx.entry.kind !== "image") return;
+          if (!geometryIsNeutral(ctx.edits as ImageEdits)) return;
+          points.push({ x, y, label: shiftKey || subtractMode ? 0 : 1 });
+          surface.setPoints(points);
+          void refine();
+        });
+
+        async function refine(): Promise<void> {
+          if (ctx.entry.kind !== "image") return;
+          busy = true;
+          activeRuns.add("select");
+          syncState();
+          try {
+            status.textContent = "Preparing model…";
+            const embeddings = await encodeSamImage(ctx.entry.image, {
+              ...selectOptions,
+              onDownloadProgress: downloadStatus(status, selectOptions.onDownloadProgress),
+            });
+            status.textContent = "Segmenting…";
+            const result = await decodeSamClicks(embeddings, points, selectOptions);
+            mask = result.mask;
+            surface.setMask(mask);
+          } catch (error) {
+            status.textContent = "Select failed — check the console for details";
+            console.error(error);
+          } finally {
+            busy = false;
+            activeRuns.delete("select");
+            syncState();
+          }
+        }
+
+        clearBtn.addEventListener("click", () => {
+          if (!busy) clearSelection();
+        });
+
+        cutBtn.addEventListener("click", async () => {
+          if (cutBtn.disabled || busy || !mask || ctx.entry.kind !== "image") return;
+          busy = true;
+          activeRuns.add("select");
+          syncState();
+          try {
+            status.textContent = "Compositing…";
+            const image = ctx.entry.image;
+            const out = document.createElement("canvas");
+            out.width = image.naturalWidth;
+            out.height = image.naturalHeight;
+            const outCtx = out.getContext("2d");
+            if (!outCtx) throw new Error("[Retouch ML] Failed to create canvas context");
+            outCtx.drawImage(image, 0, 0);
+            const outImage = outCtx.getImageData(0, 0, out.width, out.height);
+            const maskCtx = mask.getContext("2d");
+            if (!maskCtx) throw new Error("[Retouch ML] Failed to read the mask");
+            applyMatteAlpha(outImage.data, maskCtx.getImageData(0, 0, out.width, out.height).data);
+            outCtx.putImageData(outImage, 0, 0);
+            const blob = await encodeCanvas(out, "image/png");
+            const name = resultFileName(ctx.entry.file.name, "cutout", "image/png");
+            const before = retouch.getMedia().length;
+            await retouch.addFiles([new File([blob], name, { type: "image/png" })]);
+            const added = retouch.getMedia().length > before;
+            status.textContent = added
+              ? "Done — cutout added to the gallery"
+              : "The result was rejected — likely over the size limit";
+            if (added) {
+              clearSelection();
+              if (options.openResults !== false) openLatestResult(retouch);
+            }
+          } catch (error) {
+            status.textContent = "Cut out failed — check the console for details";
+            console.error(error);
+          } finally {
+            busy = false;
+            activeRuns.delete("select");
+            syncState();
+          }
+        });
+
+        eraseBtn.addEventListener("click", async () => {
+          if (eraseBtn.disabled || busy || !mask || ctx.entry.kind !== "image") return;
+          if (activeRuns.has("erase")) return;
+          busy = true;
+          activeRuns.add("select");
+          activeRuns.add("erase");
+          syncState();
+          try {
+            status.textContent = "Preparing model…";
+            const image = ctx.entry.image;
+            const maskCtx = mask.getContext("2d");
+            if (!maskCtx) throw new Error("[Retouch ML] Failed to read the mask");
+            // Dilate so the fill covers the object's soft edge, not just its
+            // core — segmentation hugs the object tighter than its anti-aliased
+            // and compressed boundary actually extends.
+            const radius = Math.max(6, Math.round(0.012 * Math.max(mask.width, mask.height)));
+            const dilated = dilateMask(
+              maskCtx.getImageData(0, 0, mask.width, mask.height).data,
+              mask.width,
+              mask.height,
+              radius,
+            );
+            const dilatedCanvas = document.createElement("canvas");
+            dilatedCanvas.width = mask.width;
+            dilatedCanvas.height = mask.height;
+            dilatedCanvas
+              .getContext("2d")
+              ?.putImageData(new ImageData(dilated, mask.width, mask.height), 0, 0);
+            // The inpaint model honors a self-hosted `erase` URL when set.
+            const eraseModel = options.erase !== false ? options.erase : undefined;
+            const result = await inpaintMask(image, dilatedCanvas, {
+              ...selectOptions,
+              modelUrl: eraseModel?.modelUrl,
+              onDownloadProgress: downloadStatus(status, selectOptions.onDownloadProgress),
+            });
+            status.textContent = "Compositing…";
+            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
+            const blob = await encodeCanvas(result, type);
+            // In place — replaceImageSource remounts the editor and this pane.
+            await retouch.replaceImageSource(
+              ctx.entry.id,
+              new File([blob], ctx.entry.file.name, { type }),
+            );
+          } catch (error) {
+            status.textContent = "Erase failed — check the console for details";
+            console.error(error);
+          } finally {
+            busy = false;
+            activeRuns.delete("select");
+            activeRuns.delete("erase");
+            syncState();
+          }
+        });
+
+        syncState();
+        root.appendChild(status);
+        root.appendChild(addBtn);
+        root.appendChild(subBtn);
+        root.appendChild(cutBtn);
+        root.appendChild(eraseBtn);
+        root.appendChild(clearBtn);
         return {
           root,
           onActivate() {
