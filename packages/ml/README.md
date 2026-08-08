@@ -15,10 +15,11 @@ cached via the Cache API.
   ~67 MB), run tile-by-tile with overlap so seams never show. WebGPU when the
   device can take it, automatic WASM fallback when a kernel fails mid-run.
   Inputs are capped at a 2048px long edge; transparency is preserved.
-- **Detect (faces)** — UltraFace (MIT, ~1.2 MB). Finds faces on-device and
-  feeds three one-click actions: add a radial mask per face (tune it in the
-  Masks tab), **pixelate faces** for privacy (replaces the image in place),
-  or **crop to the detected faces**. Mask/crop actions ride the
+- **Detect (faces + objects)** — UltraFace (MIT, ~1.2 MB) for faces and
+  YOLOX-nano (Apache-2.0, ~3.5 MB) for 80 COCO object classes with labeled
+  boxes. Either feeds three one-click actions: add a radial mask per box
+  (tune it in the Masks tab), **pixelate** for privacy (replaces the image
+  in place), or **crop to the detected boxes**. Mask/crop actions ride the
   non-destructive edit model, so they undo like any other edit.
 - **Select (click-to-segment)** — SlimSAM-77 (Apache-2.0, ~38 MB in two
   files). Click any object to segment it on-device, refine with more clicks
@@ -77,7 +78,7 @@ both.
 ## Licenses
 
 The package is MIT. Default model weights: MODNet (Apache-2.0),
-Real-ESRGAN x4plus (BSD-3-Clause), LaMa (Apache-2.0), UltraFace (MIT), and
-SlimSAM-77 (Apache-2.0).
+Real-ESRGAN x4plus (BSD-3-Clause), LaMa (Apache-2.0), UltraFace (MIT),
+YOLOX-nano (Apache-2.0), and SlimSAM-77 (Apache-2.0).
 ONNX Runtime Web is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
 per-model license audit.

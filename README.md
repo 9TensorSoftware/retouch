@@ -169,7 +169,8 @@ transport. Everything is non-destructive until export:
 ### ML tools (`@9tensor/retouch-ml`)
 
 On-device background removal, 4× super-resolution, an object-erase heal
-brush, face detection (masks, privacy pixelate, crop-to-subject), and
+brush, face and object detection (labeled COCO boxes, masks, privacy
+pixelate, crop-to-subject), and
 **click-to-select** — click any object to segment it, then cut it out or
 magic-erase it in place. No server, no keys. Models run through ONNX Runtime
 Web (WebGPU with WASM fallback), download on first use, and cache in the

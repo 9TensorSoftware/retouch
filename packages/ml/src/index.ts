@@ -8,14 +8,21 @@ export {
   rgbaToNormalizedChw,
 } from "./cutout";
 export {
+  buildYoloxGrid,
+  COCO_CLASSES,
   DEFAULT_FACE_MODEL_URL,
   type DetectFacesOptions,
   type Detection,
+  type DetectObjectsOptions,
   decodeUltraFace,
+  decodeYolox,
   detectFaces,
+  detectObjects,
   iou,
   nms,
+  nmsByClass,
   rgbaToUltraFaceTensor,
+  rgbaToYoloxTensor,
 } from "./detect";
 export { createEraseSurface, type EraseSurfaceHandle } from "./erase-tool";
 export {

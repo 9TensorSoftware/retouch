@@ -69,7 +69,7 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 8. Denoise — **NAFNet** (MIT) / SCUNet (Apache-2.0)
 9. Video matting — **MODNet per-frame** (RVM is GPL — excluded)
 10. Auto-captions (stretch) — **Whisper tiny** (MIT) via transformers.js
-11. Detection pack — faces ✅ shipped in `@9tensor/retouch-ml` M4: **UltraFace** (MIT, ~1.2 MB, in-graph prior decode + local NMS). The Detect tab finds faces and feeds three actions: radial Masks-tool entries per face, destructive privacy **pixelate** (in place via replaceImageSource), and **crop-to-faces**. Objects (NanoDet/YOLOX, Apache-2.0) and open-vocab (OWL-ViT) still open
+11. ✅ Detection pack — shipped in `@9tensor/retouch-ml` M4 + M4b: **UltraFace** faces (MIT, ~1.2 MB, in-graph prior decode) and **YOLOX-nano** objects (Apache-2.0, ~3.5 MB, 80 COCO classes — raw per-anchor output decoded in TS with per-class NMS; **BGR** input confirmed empirically, person 0.90 vs 0.78 RGB). The Detect tab finds either and feeds the same actions: radial Masks-tool entries, destructive privacy **pixelate** (in place), and **crop-to-boxes**. Open-vocab (OWL-ViT) still open
 12. Face-aware retouch — **MediaPipe Face Mesh** (Apache-2.0) landmarks gating skin smoothing / eye brighten
 
 ## Cut by the fully-client-side constraint
@@ -81,4 +81,4 @@ realistic browser path. Revisit only if a server proxy tier is ever wanted.
 ## Recommended order
 
 1. ✅ Tier A (all 11 shipped)
-2. `@9tensor/retouch-ml` milestones (agreed 2026-07): ✅ M1 scaffold+cutout → ✅ M2 upscale (Real-ESRGAN) → ✅ M3 erase (LaMa) → ✅ M4 detection pack, faces (objects open) → ✅ M5 SlimSAM select → M6+ objects (M4b), depth bokeh, colorize, GFPGAN, denoise
+2. `@9tensor/retouch-ml` milestones (agreed 2026-07): ✅ M1 scaffold+cutout → ✅ M2 upscale (Real-ESRGAN) → ✅ M3 erase (LaMa) → ✅ M4 detection pack (faces + ✅ M4b objects) → ✅ M5 SlimSAM select → M6+ depth bokeh, colorize, GFPGAN, denoise

@@ -1,6 +1,12 @@
 import type { EditMask, ImageEdits, Retouch, ToolContext } from "@9tensor/retouch";
 import { applyMatteAlpha, type CutoutOptions, removeBackground } from "./cutout";
-import { type DetectFacesOptions, type Detection, detectFaces } from "./detect";
+import {
+  type DetectFacesOptions,
+  type Detection,
+  type DetectObjectsOptions,
+  detectFaces,
+  detectObjects,
+} from "./detect";
 import { createEraseSurface } from "./erase-tool";
 import { dilateMask, type InpaintOptions, inpaintMask, inpaintStrokes } from "./inpaint";
 import type { FetchProgress } from "./model-cache";
@@ -12,7 +18,7 @@ export interface MlToolsOptions {
   cutout?: CutoutOptions | false;
   upscale?: UpscaleOptions | false;
   erase?: InpaintOptions | false;
-  detect?: DetectFacesOptions | false;
+  detect?: (DetectFacesOptions & { objects?: DetectObjectsOptions }) | false;
   select?: SamOptions | false;
   /**
    * Open gallery results (cutout, upscale) in the editor when they finish,
@@ -111,7 +117,10 @@ function createBoxOverlay(canvasArea: HTMLElement): {
     ctx.fillStyle = "rgba(94, 210, 120, 0.95)";
     for (const b of boxes) {
       ctx.strokeRect(b.x * w, b.y * h, b.w * w, b.h * h);
-      ctx.fillText(`${Math.round(b.score * 100)}%`, b.x * w + 3, b.y * h - 4);
+      const tag = b.label
+        ? `${b.label} ${Math.round(b.score * 100)}%`
+        : `${Math.round(b.score * 100)}%`;
+      ctx.fillText(tag, b.x * w + 3, b.y * h - 4);
     }
   }
 
@@ -623,11 +632,14 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         root.className = "rt-dock__row";
         const status = document.createElement("span");
         status.className = "rt-dock__slider-label";
-        status.textContent = "Find faces on-device, then mask, pixelate, or crop to them";
+        status.textContent = "Find faces or objects on-device, then mask, pixelate, or crop";
 
         const findBtn = document.createElement("button");
         findBtn.className = "rt-dock__chip";
         findBtn.textContent = "Find faces";
+        const objectsBtn = document.createElement("button");
+        objectsBtn.className = "rt-dock__chip";
+        objectsBtn.textContent = "Find objects";
         const maskBtn = document.createElement("button");
         maskBtn.className = "rt-dock__chip";
         maskBtn.textContent = "Add masks";
@@ -636,7 +648,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         pixelateBtn.textContent = "Pixelate";
         const cropBtn = document.createElement("button");
         cropBtn.className = "rt-dock__chip";
-        cropBtn.textContent = "Crop to faces";
+        cropBtn.textContent = "Crop to boxes";
 
         const overlay = createBoxOverlay(ctx.canvasArea);
         let faces: Detection[] = [];
@@ -673,6 +685,36 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           } finally {
             activeRuns.delete("detect");
             findBtn.disabled = false;
+            syncActions();
+          }
+        });
+
+        objectsBtn.addEventListener("click", async () => {
+          if (activeRuns.has("detect") || ctx.entry.kind !== "image") return;
+          activeRuns.add("detect");
+          objectsBtn.disabled = true;
+          try {
+            status.textContent = "Detecting…";
+            const objectOptions = detectOptions.objects ?? {};
+            faces = await detectObjects(ctx.entry.image, {
+              ...objectOptions,
+              onDownloadProgress: downloadStatus(status, objectOptions.onDownloadProgress),
+            });
+            overlay.draw(faces);
+            const labels = [...new Set(faces.map((f) => f.label).filter(Boolean))];
+            status.textContent =
+              faces.length === 0
+                ? "No objects found"
+                : `${faces.length} object${faces.length > 1 ? "s" : ""}: ${labels.slice(0, 4).join(", ")}${labels.length > 4 ? "…" : ""}`;
+            if (faces.length > 0 && !geometryIsNeutral(ctx.edits as ImageEdits)) {
+              status.textContent += " — reset crop/transform to use the actions";
+            }
+          } catch (error) {
+            status.textContent = "Detection failed — check the console for details";
+            console.error(error);
+          } finally {
+            activeRuns.delete("detect");
+            objectsBtn.disabled = false;
             syncActions();
           }
         });
@@ -765,6 +807,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
         root.appendChild(status);
         root.appendChild(findBtn);
+        root.appendChild(objectsBtn);
         root.appendChild(maskBtn);
         root.appendChild(pixelateBtn);
         root.appendChild(cropBtn);
