@@ -8,6 +8,22 @@ export {
   rgbaToNormalizedChw,
 } from "./cutout";
 export {
+  type BokehPrep,
+  blendWeights,
+  clearDepthCache,
+  composeBokeh,
+  DEFAULT_DEPTH_MODEL_URL,
+  type DepthMap,
+  type DepthOptions,
+  depthAt,
+  depthResizedSize,
+  estimateDepth,
+  normalizeDepth,
+  prepareBokeh,
+  rgbaToDepthTensor,
+} from "./depth";
+export { createDepthSurface, type DepthSurfaceHandle } from "./depth-tool";
+export {
   buildYoloxGrid,
   COCO_CLASSES,
   DEFAULT_FACE_MODEL_URL,

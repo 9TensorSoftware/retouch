@@ -27,6 +27,11 @@ cached via the Cache API.
   PNG or **Erase object** in place (dilated mask through the LaMa
   inpainter). The image encodes once and is cached, so refinement clicks
   land in tens of milliseconds.
+- **Depth (bokeh)** — Depth Anything V2 Small (Apache-2.0, ~27 MB). One
+  analysis produces a depth map; then click anything to set the focal plane
+  and scrub Aperture with instant feedback (pre-blurred levels are blended
+  per pixel, so the controls never re-run a blur). Apply renders the
+  depth-of-field at full resolution and replaces the image in place.
 - **Erase (heal brush)** — LaMa inpainting (Apache-2.0, ~208 MB). Paint over
   an object, hit Erase: a padded square around the strokes runs through the
   network and the fill composites back at full resolution, feathered and
@@ -64,6 +69,7 @@ installMlTools(retouch, {
   cutout: { modelUrl: "https://your.cdn/models/modnet.onnx", wasmPaths: "https://your.cdn/ort/" },
   upscale: { modelUrl: "https://your.cdn/models/realesrgan-x4plus.onnx" },
   select: { encoderUrl: "https://your.cdn/models/sam-encoder.onnx", decoderUrl: "https://your.cdn/models/sam-decoder.onnx" },
+  depth: { modelUrl: "https://your.cdn/models/depth-anything-v2-small.onnx" },
 });
 ```
 
@@ -79,6 +85,7 @@ both.
 
 The package is MIT. Default model weights: MODNet (Apache-2.0),
 Real-ESRGAN x4plus (BSD-3-Clause), LaMa (Apache-2.0), UltraFace (MIT),
-YOLOX-nano (Apache-2.0), and SlimSAM-77 (Apache-2.0).
+YOLOX-nano (Apache-2.0), SlimSAM-77 (Apache-2.0), and Depth Anything V2
+Small (Apache-2.0).
 ONNX Runtime Web is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
 per-model license audit.

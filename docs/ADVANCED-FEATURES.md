@@ -14,7 +14,7 @@ or self-hosted), never bundled — but defaults must still be permissive.
 | LaMa | Apache-2.0 | ✅ object erase (ONNX ports exist, ~200 MB) |
 | MI-GAN (Picsart) | MIT | ✅ small object-erase alternative |
 | Real-ESRGAN | BSD-3-Clause | ✅ upscale |
-| Depth Anything V2 **Small** | Apache-2.0 | ✅ depth effects (Small ONLY) |
+| Depth Anything V2 **Small** | Apache-2.0 | ✅ shipped (quantized 27 MB, 0.9993-correlated with fp32; fp16 export trips an ORT layer-norm fusion bug — avoided). Base/Large/Giant stay ❌ CC-BY-NC |
 | Depth Anything V2 Base/Large/Giant | CC-BY-NC-4.0 | ❌ non-commercial |
 | SAM2 | Apache-2.0 | ⚠️ upstream fine; the ONNX export repos carry no license + 134 MB external-data blobs — not shipped |
 | SlimSAM-77 (Xenova ONNX) | Apache-2.0 | ✅ click-to-select (shipped default — 38 MB across encoder+decoder) |
@@ -62,7 +62,7 @@ wild; OSS implements it widely, but commercial adopters should be aware.
 1. ✅ Background removal / cutout — shipped in `@9tensor/retouch-ml` M1: MODNet (Apache-2.0, ~25 MB) default, any BiRefNet ONNX export via `modelUrl`; ORT-web WebGPU→WASM, Cache API weights, result lands as a new gallery image
 2. ✅ Object erase / heal brush — shipped in `@9tensor/retouch-ml` M3: LaMa (Apache-2.0, Carve ONNX, ~208 MB — the MI-GAN HF mirrors lack license metadata, so LaMa is the provenance-clean pick). Brush-painted mask → padded square around the strokes runs at the model's fixed 512², fill composites back at full res (feathered, masked pixels only). Result replaces the image in place via the new core `replaceImageSource`; requires neutral geometry (guarded in the pane)
 3. ✅ Upscale 4× — shipped in `@9tensor/retouch-ml` M2: Real-ESRGAN x4plus ONNX (BSD-3, ~67 MB, dynamic shapes), overlap-padded tile inference (64px cores + 8px context, no seams), WebGPU with run-level WASM fallback (some devices fail Conv buffers only at inference time), alpha carried via canvas upsampling, 2048px input cap
-4. Depth effects — **Depth Anything V2 Small** (Apache-2.0): bokeh, fog, depth grade
+4. ✅ Depth bokeh — shipped in `@9tensor/retouch-ml` M6: **Depth Anything V2 Small** (Apache-2.0, quantized 27 MB, dynamic multiple-of-14 dims, higher = closer verified). The Depth tab analyzes once, then click-to-focus + Aperture recompose instantly from pre-blurred levels; Apply renders full-res in place (original buffered). Fog/depth-grade variants still open
 5. ✅ Click-to-select — shipped in `@9tensor/retouch-ml` M5 as **SlimSAM-77** (Apache-2.0, ~38 MB: 1024² encoder cached per image + per-click prompt decoder, int64 labels). The Select tab segments on click with add/subtract refinement, then **Cut out** (transparent PNG) or **Erase object** (dilated mask → LaMa inpaint, in place). SlimSAM chosen over SAM2 for size and export licensing; SAM2 revisit open
 6. Colorize B&W — **DDColor** (Apache-2.0)
 7. Face restoration — **GFPGAN** (Apache-2.0) — not CodeFormer
@@ -81,4 +81,4 @@ realistic browser path. Revisit only if a server proxy tier is ever wanted.
 ## Recommended order
 
 1. ✅ Tier A (all 11 shipped)
-2. `@9tensor/retouch-ml` milestones (agreed 2026-07): ✅ M1 scaffold+cutout → ✅ M2 upscale (Real-ESRGAN) → ✅ M3 erase (LaMa) → ✅ M4 detection pack (faces + ✅ M4b objects) → ✅ M5 SlimSAM select → M6+ depth bokeh, colorize, GFPGAN, denoise
+2. `@9tensor/retouch-ml` milestones (agreed 2026-07): ✅ M1 scaffold+cutout → ✅ M2 upscale (Real-ESRGAN) → ✅ M3 erase (LaMa) → ✅ M4 detection pack (faces + ✅ M4b objects) → ✅ M5 SlimSAM select → ✅ M6 depth bokeh → M7+ colorize, GFPGAN, denoise

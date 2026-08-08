@@ -1,5 +1,7 @@
 import type { EditMask, ImageEdits, Retouch, ToolContext } from "@9tensor/retouch";
 import { applyMatteAlpha, type CutoutOptions, removeBackground } from "./cutout";
+import { composeBokeh, type DepthOptions, depthAt, estimateDepth, prepareBokeh } from "./depth";
+import { createDepthSurface } from "./depth-tool";
 import {
   type DetectFacesOptions,
   type Detection,
@@ -20,6 +22,7 @@ export interface MlToolsOptions {
   erase?: InpaintOptions | false;
   detect?: (DetectFacesOptions & { objects?: DetectObjectsOptions }) | false;
   select?: SamOptions | false;
+  depth?: DepthOptions | false;
   /**
    * Open gallery results (cutout, upscale) in the editor when they finish,
    * so the outcome is visible immediately. Defaults to true.
@@ -35,6 +38,9 @@ const DETECT_ICON =
 
 const ERASE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 4l6 6-9 9H7l-4-4 11-11z"/><path d="M9 9l6 6M3 21h18"/></svg>';
+
+const DEPTH_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.6" opacity="0.55"/><circle cx="12" cy="12" r="9.6" opacity="0.25"/></svg>';
 
 const SELECT_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="6" stroke-dasharray="3 3"/><circle cx="11" cy="11" r="1.6" fill="currentColor" stroke="none"/><path d="M15.5 15.5L21 21"/></svg>';
@@ -599,6 +605,171 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         root.appendChild(subBtn);
         root.appendChild(cutBtn);
         root.appendChild(eraseBtn);
+        root.appendChild(clearBtn);
+        return {
+          root,
+          onActivate() {
+            surface.setVisible(true);
+            syncState();
+          },
+          onDeactivate() {
+            surface.setVisible(false);
+          },
+          sync() {
+            syncState();
+          },
+          destroy() {
+            surface.destroy();
+          },
+        };
+      },
+    });
+  }
+
+  if (options.depth !== false) {
+    const depthOptions = options.depth ?? {};
+    ctor.registerTool({
+      id: "depth",
+      label: "Depth",
+      icon: DEPTH_ICON,
+      kinds: ["image"],
+      mount(ctx: ToolContext) {
+        const root = document.createElement("div");
+        root.className = "rt-dock__row";
+        const status = document.createElement("span");
+        status.className = "rt-dock__slider-label";
+
+        const analyzeBtn = document.createElement("button");
+        analyzeBtn.className = "rt-dock__chip";
+        analyzeBtn.textContent = "Analyze depth";
+        const apertureLabel = document.createElement("span");
+        apertureLabel.className = "rt-dock__slider-label";
+        apertureLabel.textContent = "Aperture";
+        const apertureInput = document.createElement("input");
+        apertureInput.type = "range";
+        apertureInput.min = "10";
+        apertureInput.max = "100";
+        apertureInput.value = "60";
+        apertureInput.setAttribute("aria-label", "Aperture strength");
+        const applyBtn = document.createElement("button");
+        applyBtn.className = "rt-dock__chip";
+        applyBtn.textContent = "Apply";
+        const clearBtn = document.createElement("button");
+        clearBtn.className = "rt-dock__chip";
+        clearBtn.textContent = "Clear";
+
+        let prep: ReturnType<typeof prepareBokeh> | null = null;
+        let depthMapRef: Awaited<ReturnType<typeof estimateDepth>> | null = null;
+        let focus = 0.75;
+        let busy = false;
+
+        function syncState(): void {
+          const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
+          if (!neutral) {
+            status.textContent =
+              "Depth needs the un-transformed image — reset crop/transform/liquify first";
+          } else if (busy) {
+            // run drives the status
+          } else if (prep) {
+            status.textContent = "Click to focus, tune Aperture, then Apply";
+          } else {
+            status.textContent = "Analyze the photo, then click what should stay sharp";
+          }
+          analyzeBtn.disabled = busy || !neutral;
+          applyBtn.disabled = busy || !prep || !neutral;
+          clearBtn.disabled = busy || !prep;
+          apertureInput.disabled = !prep;
+        }
+
+        function recompose(): void {
+          if (!prep) return;
+          surface.setPreview(composeBokeh(prep, focus, Number(apertureInput.value) / 100));
+        }
+
+        const surface = createDepthSurface(ctx.canvasArea, (x, y) => {
+          if (!prep || !depthMapRef || busy) return;
+          focus = depthAt(depthMapRef, x, y);
+          recompose();
+          status.textContent = "Focus set — tune Aperture, then Apply";
+        });
+
+        analyzeBtn.addEventListener("click", async () => {
+          if (busy || activeRuns.has("depth") || ctx.entry.kind !== "image") return;
+          if (!geometryIsNeutral(ctx.edits as ImageEdits)) return;
+          busy = true;
+          activeRuns.add("depth");
+          syncState();
+          try {
+            status.textContent = "Preparing model…";
+            depthMapRef = await estimateDepth(ctx.entry.image, {
+              ...depthOptions,
+              onDownloadProgress: downloadStatus(status, depthOptions.onDownloadProgress),
+            });
+            status.textContent = "Preparing preview…";
+            await new Promise((r) => setTimeout(r, 0));
+            prep = prepareBokeh(ctx.entry.image, depthMapRef, 1280);
+            recompose();
+          } catch (error) {
+            status.textContent = "Depth analysis failed — check the console for details";
+            console.error(error);
+          } finally {
+            busy = false;
+            activeRuns.delete("depth");
+            syncState();
+          }
+        });
+
+        apertureInput.addEventListener("input", recompose);
+
+        clearBtn.addEventListener("click", () => {
+          if (busy) return;
+          prep = null;
+          surface.setPreview(null);
+          syncState();
+        });
+
+        applyBtn.addEventListener("click", async () => {
+          if (applyBtn.disabled || busy || !depthMapRef || ctx.entry.kind !== "image") return;
+          busy = true;
+          activeRuns.add("depth");
+          syncState();
+          try {
+            status.textContent = "Rendering at full resolution…";
+            await new Promise((r) => setTimeout(r, 0));
+            const image = ctx.entry.image;
+            const fullPrep = prepareBokeh(
+              image,
+              depthMapRef,
+              Math.max(image.naturalWidth, image.naturalHeight),
+            );
+            const result = composeBokeh(fullPrep, focus, Number(apertureInput.value) / 100);
+            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
+            const blob = await encodeCanvas(result, type);
+            // In place — replaceImageSource remounts the editor and this pane.
+            await retouch.replaceImageSource(
+              ctx.entry.id,
+              new File([blob], ctx.entry.file.name, { type }),
+            );
+          } catch (error) {
+            status.textContent = "Apply failed — check the console for details";
+            console.error(error);
+          } finally {
+            busy = false;
+            activeRuns.delete("depth");
+            syncState();
+          }
+        });
+
+        syncState();
+        const apertureGroup = document.createElement("div");
+        apertureGroup.className = "rt-dock__group rt-dock__slider";
+        apertureGroup.appendChild(apertureLabel);
+        apertureGroup.appendChild(apertureInput);
+
+        root.appendChild(status);
+        root.appendChild(analyzeBtn);
+        root.appendChild(apertureGroup);
+        root.appendChild(applyBtn);
         root.appendChild(clearBtn);
         return {
           root,
