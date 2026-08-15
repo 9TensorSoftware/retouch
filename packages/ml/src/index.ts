@@ -8,6 +8,15 @@ export {
   rgbaToNormalizedChw,
 } from "./cutout";
 export {
+  ceilToMultiple,
+  DEFAULT_DENOISE_DATA_URL,
+  DEFAULT_DENOISE_MODEL_URL,
+  DENOISE_DIM_MULTIPLE,
+  type DenoiseOptions,
+  denoiseImage,
+  padRgbaReplicate,
+} from "./denoise";
+export {
   type BokehPrep,
   blendWeights,
   clearDepthCache,

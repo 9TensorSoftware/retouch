@@ -32,6 +32,11 @@ cached via the Cache API.
   and scrub Aperture with instant feedback (pre-blurred levels are blended
   per pixel, so the controls never re-run a blur). Apply renders the
   depth-of-field at full resolution and replaces the image in place.
+- **Denoise** — SCUNet real-PSNR (Apache-2.0, ~77 MB as a small graph stub
+  plus a weights sidecar). One click removes real-world noise — sensor
+  grain, compression speckle — tile-by-tile at native resolution and
+  replaces the image in place; transparency is preserved and Reset brings
+  the original back. Inputs are capped at a 2048px long edge.
 - **Erase (heal brush)** — LaMa inpainting (Apache-2.0, ~208 MB). Paint over
   an object, hit Erase: a padded square around the strokes runs through the
   network and the fill composites back at full resolution, feathered and
@@ -70,6 +75,10 @@ installMlTools(retouch, {
   upscale: { modelUrl: "https://your.cdn/models/realesrgan-x4plus.onnx" },
   select: { encoderUrl: "https://your.cdn/models/sam-encoder.onnx", decoderUrl: "https://your.cdn/models/sam-decoder.onnx" },
   depth: { modelUrl: "https://your.cdn/models/depth-anything-v2-small.onnx" },
+  denoise: {
+    modelUrl: "https://your.cdn/models/scunet.onnx",
+    externalDataUrl: "https://your.cdn/models/scunet.onnx.data",
+  },
 });
 ```
 
@@ -81,11 +90,17 @@ both.
 
 `clearModelCache()` drops the cached weights.
 
+The denoise default is a split export: a graph stub plus a `.onnx.data`
+weights sidecar. When self-hosting it, keep the sidecar's filename identical
+to the location the graph references (`scunet_color_real_psnr.onnx.data` for
+the default). A custom `modelUrl` without `externalDataUrl` is treated as a
+single-file export — no sidecar is fetched.
+
 ## Licenses
 
 The package is MIT. Default model weights: MODNet (Apache-2.0),
 Real-ESRGAN x4plus (BSD-3-Clause), LaMa (Apache-2.0), UltraFace (MIT),
-YOLOX-nano (Apache-2.0), SlimSAM-77 (Apache-2.0), and Depth Anything V2
-Small (Apache-2.0).
+YOLOX-nano (Apache-2.0), SlimSAM-77 (Apache-2.0), Depth Anything V2
+Small (Apache-2.0), and SCUNet (Apache-2.0).
 ONNX Runtime Web is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
 per-model license audit.

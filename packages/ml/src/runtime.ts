@@ -17,6 +17,12 @@ export interface RuntimeOptions {
   wasmPaths?: string;
   /** Execution providers in preference order. Defaults to WebGPU → WASM. */
   executionProviders?: string[];
+  /**
+   * Sidecar weights for exports split into a graph stub plus an
+   * `.onnx.data` blob. Both files download through the model cache; the
+   * sidecar's filename must match what the graph references.
+   */
+  externalDataUrl?: string;
   onDownloadProgress?: (progress: FetchProgress) => void;
 }
 
@@ -73,20 +79,35 @@ export function loadSession(
 
   const create = (async () => {
     configure(options);
+    // The big sidecar (when present) downloads first so its progress is
+    // what the user watches; the small stub follows.
+    let externalData: Array<{ data: Uint8Array; path: string }> | undefined;
+    if (options.externalDataUrl) {
+      const data = await fetchModel(options.externalDataUrl, options.onDownloadProgress);
+      const path = options.externalDataUrl.split("/").pop() ?? "model.onnx.data";
+      externalData = [{ data: new Uint8Array(data), path }];
+    }
     const buffer = await fetchModel(url, options.onDownloadProgress);
     const providers = options.executionProviders ?? ["webgpu", "wasm"];
+    const base = {
+      graphOptimizationLevel: "all" as const,
+      ...(externalData ? { externalData } : {}),
+    };
     try {
       return await ort.InferenceSession.create(buffer, {
+        ...base,
         executionProviders: providers,
-        graphOptimizationLevel: "all",
       });
     } catch (error) {
       // With WASM alone there is nothing left to fall back to — surface the
       // real failure (blocked .wasm fetch, OOM) instead of masking it.
       if (providers.length === 1 && providers[0] === "wasm") throw error;
-      return await ort.InferenceSession.create(buffer, {
+      // Proxy mode transferred (detached) `buffer` to the worker on the
+      // first attempt — re-read it from the cache for the retry.
+      const retryBuffer = await fetchModel(url, options.onDownloadProgress);
+      return await ort.InferenceSession.create(retryBuffer, {
+        ...base,
         executionProviders: ["wasm"],
-        graphOptimizationLevel: "all",
       });
     }
   })();

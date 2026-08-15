@@ -1,5 +1,6 @@
 import type { EditMask, ImageEdits, Retouch, ToolContext } from "@9tensor/retouch";
 import { applyMatteAlpha, type CutoutOptions, removeBackground } from "./cutout";
+import { type DenoiseOptions, denoiseImage } from "./denoise";
 import { composeBokeh, type DepthOptions, depthAt, estimateDepth, prepareBokeh } from "./depth";
 import { createDepthSurface } from "./depth-tool";
 import {
@@ -23,6 +24,7 @@ export interface MlToolsOptions {
   detect?: (DetectFacesOptions & { objects?: DetectObjectsOptions }) | false;
   select?: SamOptions | false;
   depth?: DepthOptions | false;
+  denoise?: DenoiseOptions | false;
   /**
    * Open gallery results (cutout, upscale) in the editor when they finish,
    * so the outcome is visible immediately. Defaults to true.
@@ -44,6 +46,9 @@ const DEPTH_ICON =
 
 const SELECT_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="6" stroke-dasharray="3 3"/><circle cx="11" cy="11" r="1.6" fill="currentColor" stroke="none"/><path d="M15.5 15.5L21 21"/></svg>';
+
+const DENOISE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="0.9" fill="currentColor" stroke="none"/><circle cx="12.5" cy="6.8" r="0.7" fill="currentColor" stroke="none"/><circle cx="16.8" cy="8.6" r="0.8" fill="currentColor" stroke="none"/><circle cx="7" cy="12.5" r="0.7" fill="currentColor" stroke="none"/><path d="M14.5 12.5l1.1 2.4 2.4 1.1-2.4 1.1-1.1 2.4-1.1-2.4-2.4-1.1 2.4-1.1z" fill="currentColor" stroke="none" opacity="0.9"/></svg>';
 
 const UPSCALE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 15l-4 4M8 19H5v-3M15 9l4-4M16 5h3v3"/></svg>';
@@ -1048,6 +1053,58 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           } finally {
             busy = false;
             activeRuns.delete("upscale");
+            button.disabled = false;
+          }
+        });
+        return { root };
+      },
+    });
+  }
+
+  if (options.denoise !== false) {
+    const denoiseOptions = options.denoise ?? {};
+    ctor.registerTool({
+      id: "denoise",
+      label: "Denoise",
+      icon: DENOISE_ICON,
+      kinds: ["image"],
+      mount(ctx: ToolContext) {
+        const hint = "On-device noise removal — replaces this image in place";
+        const { root, status, button } = buildRunPane(hint, "Remove noise");
+        let busy = false;
+        button.addEventListener("click", async () => {
+          if (busy || activeRuns.has("denoise") || ctx.entry.kind !== "image") return;
+          busy = true;
+          activeRuns.add("denoise");
+          button.disabled = true;
+          try {
+            status.textContent = "Preparing model…";
+            const result = await denoiseImage(ctx.entry.image, {
+              ...denoiseOptions,
+              onDownloadProgress: downloadStatus(status, denoiseOptions.onDownloadProgress),
+              onTileProgress: (done, total) => {
+                status.textContent = `Denoising… tile ${done}/${total}`;
+                denoiseOptions.onTileProgress?.(done, total);
+              },
+            });
+            status.textContent = "Encoding…";
+            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
+            const blob = await encodeCanvas(result, type);
+            // In place — replaceImageSource remounts the editor and this pane.
+            // Pixels map 1:1, so existing crop/mask edits stay valid.
+            await retouch.replaceImageSource(
+              ctx.entry.id,
+              new File([blob], ctx.entry.file.name, { type }),
+            );
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            status.textContent = message.includes("input limit")
+              ? `Image is too large to denoise (${denoiseOptions.maxInputDim ?? 2048}px max edge)`
+              : "Denoise failed — check the console for details";
+            console.error(error);
+          } finally {
+            busy = false;
+            activeRuns.delete("denoise");
             button.disabled = false;
           }
         });
