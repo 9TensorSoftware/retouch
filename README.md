@@ -130,7 +130,7 @@ Once images are loaded they appear in a responsive grid (or list). Each thumbnai
 
 ### 3. Editor
 
-Opens as a modal overlay: a dark stage that keeps focus on the image, and a clearly separated control tray below it. The active tool's controls sit in a horizontal strip (aspect chips, one-slider adjustments, a filter filmstrip), with prominent feature-group tabs underneath — no sidebars. Tabs are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
+Opens as a modal overlay: a true-neutral dark stage that keeps focus — and color judgment — on the image, an icon rail of feature-group tabs down the left edge, and a contextual control strip beneath the canvas (aspect chips, one-slider adjustments, a filter filmstrip). Tabs are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
 
 <br />
 
@@ -222,9 +222,57 @@ Custom tools write through the same non-destructive edit model as the
 built-ins, so previews, undo/redo, AI ops, and export work unchanged. (Tools
 that need their own render passes — draw/text layers — are on the roadmap.)
 
+A slider in a custom pane gets the built-in filled-track treatment by calling
+`refreshRangeFill(input)` (exported from `@9tensor/retouch`) after creating it,
+from its `input` listener, and wherever you set `input.value` programmatically.
+
+### Theming
+
+All chrome resolves through CSS custom properties, so restyling is a matter of
+overriding tokens — no class overrides, no rebuild. Rétouch is two worlds:
+the shell (drop zone + gallery) reads its tokens from `.rt-root`, while the
+editor, export progress, and toasts attach to `<body>` and read a dark set
+from `.rt-editor-overlay, .rt-export-overlay, .rt-toasts`. Override whichever
+world you want to change:
+
+```css
+/* Brand the accent (shell + gallery) */
+.rt-root {
+  --rt-accent: #2563EB;
+  --rt-accent-hover: #1D4ED8;
+  --rt-accent-text: #1D4ED8;      /* accent used as text — keep ≥4.5:1 */
+  --rt-focus: #2563EB;
+}
+
+/* And the editor's darkroom chrome */
+.rt-editor-overlay, .rt-export-overlay, .rt-toasts {
+  --rt-accent: #60A5FA;
+  --rt-accent-hover: #93C5FD;
+  --rt-accent-text: #60A5FA;
+  --rt-focus: #60A5FA;
+}
+```
+
+The main tokens (each defined per world):
+
+| Token | Role |
+|---|---|
+| `--rt-surface`, `--rt-surface-raised`, `--rt-surface-overlay`, `--rt-surface-subtle` | Stage, tray/cards, menus/toasts, inset wells |
+| `--rt-control`, `--rt-control-hover` | Idle/hover washes on chips and buttons |
+| `--rt-text-1/2/3`, `--rt-text-disabled` | Text hierarchy |
+| `--rt-line`, `--rt-line-strong`, `--rt-line-loud` | Hairlines → emphasized borders |
+| `--rt-accent`, `--rt-accent-hover`, `--rt-accent-soft`, `--rt-accent-glow`, `--rt-accent-text`, `--rt-on-accent` | The accent ramp: fills, washes, accent-as-text, text-on-accent |
+| `--rt-success`, `--rt-danger`, `--rt-danger-soft` | Status colors |
+| `--rt-focus` | The `:focus-visible` ring |
+| `--rt-radius-sm/md/lg/xl` | 6 / 10 / 16 / 24 px |
+| `--rt-dur-1/2/3`, `--rt-ease`, `--rt-ease-decel` | Motion (respects `prefers-reduced-motion`) |
+
+Colors drawn onto canvases (the curves editor, ML overlays) can't read CSS
+variables and keep matching constants in TypeScript.
+
 ### AI edits
 
-A **✦ Ask AI** pill sits at the bottom-left of the canvas — click it (or press
+A **✦ Ask AI** pill sits at the top-right of the stage — click it (or press
 **⌘K**) and it opens a vertical chat panel. Type what you want — *"moody and
 cinematic, crop to a square"*, *"rotate it upright and speed it up 2×"* — and a
 vision model maps it onto the same non-destructive edit operations the manual

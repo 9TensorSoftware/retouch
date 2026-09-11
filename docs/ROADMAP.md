@@ -52,7 +52,8 @@ Status: ✅ shipped · 🚧 in progress · ⬜ planned.
 | ⬜ | P2 | Paste-from-clipboard + URL import |
 | ⬜ | P2 | `getEdits()/setEdits()` JSON round-trip for host persistence |
 | ⬜ | P2 | README truth pass (docs match the real API) |
-| ⬜ | P3 | i18n strings option · documented CSS-var theming · React wrapper · Vue/Svelte wrappers |
+| ✅ | P3 | Documented CSS-var theming (README "Theming": semantic tokens, light on `.rt-root`, dark on the overlay roots) |
+| ⬜ | P3 | i18n strings option · React wrapper · Vue/Svelte wrappers |
 
 ## E. Video editing
 
