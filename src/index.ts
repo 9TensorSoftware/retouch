@@ -31,4 +31,5 @@ export type {
   ToolContext,
   ToolPaneHandle,
 } from "./ui/editor/tool-registry";
+export { refreshRangeFill } from "./ui/range-fill";
 export { isImageEntry, isVideoEntry } from "./utils/video";

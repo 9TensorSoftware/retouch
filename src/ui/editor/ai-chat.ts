@@ -1,5 +1,6 @@
 import type { AiOptions } from "../../types";
 import { h } from "../h";
+import { ICON_CLOSE, ICON_SEND, ICON_SPARKLE } from "../icons";
 
 export interface AiChatOptions {
   ai: AiOptions;
@@ -15,12 +16,9 @@ export interface AiChatHandle {
 }
 
 const KEY_STORAGE = "rt-ai-key";
-const SPARKLE_ICON =
-  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3zM19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z"/></svg>';
-const SEND_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
-const CLOSE_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const SPARKLE_ICON = ICON_SPARKLE;
+const SEND_ICON = ICON_SEND;
+const CLOSE_ICON = ICON_CLOSE;
 
 export function getStoredAiKey(): string | null {
   try {

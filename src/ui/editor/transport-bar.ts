@@ -4,6 +4,7 @@ import { clamp } from "../../utils/math";
 import type { SeekQueue } from "../../utils/video";
 import { clampTrim, formatTime, generateFilmstrip, snapTime } from "../../utils/video";
 import { h } from "../h";
+import { ICON_MUTED, ICON_PAUSE, ICON_PLAY, ICON_SOUND } from "../icons";
 
 export interface TransportBarOptions {
   video: HTMLVideoElement;
@@ -33,14 +34,10 @@ export interface TransportBarHandle extends ViewHandle {
   onTrimChange(fn: (range: TrimRange) => void): () => void;
 }
 
-const PLAY_ICON =
-  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
-const PAUSE_ICON =
-  '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
-const SOUND_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 9a4 4 0 010 6"/></svg>';
-const MUTED_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 9l5 6M21 9l-5 6"/></svg>';
+const PLAY_ICON = ICON_PLAY;
+const PAUSE_ICON = ICON_PAUSE;
+const SOUND_ICON = ICON_SOUND;
+const MUTED_ICON = ICON_MUTED;
 
 /** How close to the trim end counts as "reached it", in seconds. */
 const LOOP_EPSILON = 0.03;

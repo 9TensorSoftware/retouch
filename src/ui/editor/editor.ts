@@ -37,6 +37,15 @@ import {
 import type { SeekQueue } from "../../utils/video";
 import { captureFrame, createSeekQueue, formatDuration } from "../../utils/video";
 import { h } from "../h";
+import {
+  ICON_CAMERA,
+  ICON_CHECK,
+  ICON_EYE,
+  ICON_HISTORY,
+  ICON_POSTER,
+  ICON_REDO,
+  ICON_UNDO,
+} from "../icons";
 import { createAdjustTool } from "./adjust-tool";
 import type { AiChatHandle } from "./ai-chat";
 import { createAiChat, getStoredAiKey } from "./ai-chat";
@@ -60,14 +69,10 @@ import { createTransportBar } from "./transport-bar";
 import type { TrimToolHandle } from "./trim-tool";
 import { createTrimTool } from "./trim-tool";
 
-const UNDO_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-1"/></svg>';
-const REDO_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 7l5 5-5 5M20 12H9a5 5 0 000 10h1"/></svg>';
-const EYE_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
-const HISTORY_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 12a8.5 8.5 0 108.5-8.5A8.8 8.8 0 005.6 6.1L3.5 8.2"/><path d="M3.5 3.5v4.7h4.7"/><path d="M12 7.5V12l3.2 1.9"/></svg>';
+const UNDO_ICON = ICON_UNDO;
+const REDO_ICON = ICON_REDO;
+const EYE_ICON = ICON_EYE;
+const HISTORY_ICON = ICON_HISTORY;
 
 /** Human label for the change between two history snapshots. */
 function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdits): string {
@@ -246,8 +251,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       title: "Capture current frame as image",
     });
     const captureLabel = () => {
-      captureBtn.innerHTML =
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Capture frame</span>';
+      captureBtn.innerHTML = `${ICON_CAMERA}<span>Capture frame</span>`;
     };
     captureLabel();
     let revertId = 0;
@@ -257,8 +261,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
         entry.video.pause();
         const canvas = captureFrame(entry.video);
         options.onCaptureFrame?.(canvas, entry.video.currentTime);
-        captureBtn.innerHTML =
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12.5l5 5L20 6.5"/></svg><span>Captured</span>';
+        captureBtn.innerHTML = `${ICON_CHECK}<span>Captured</span>`;
         clearTimeout(revertId);
         revertId = window.setTimeout(captureLabel, 1400);
       },
@@ -272,8 +275,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       title: "Use the current frame as the gallery poster",
     });
     const posterLabel = () => {
-      posterBtn.innerHTML =
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 5 5 4-4 4 4"/><circle cx="9" cy="9" r="1.4" fill="currentColor" stroke="none"/></svg><span>Set poster</span>';
+      posterBtn.innerHTML = `${ICON_POSTER}<span>Set poster</span>`;
     };
     posterLabel();
     let posterRevert = 0;
@@ -282,8 +284,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       () => {
         entry.video.pause();
         void options.onSetPoster?.().then(() => {
-          posterBtn.innerHTML =
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12.5l5 5L20 6.5"/></svg><span>Poster set</span>';
+          posterBtn.innerHTML = `${ICON_CHECK}<span>Poster set</span>`;
           clearTimeout(posterRevert);
           posterRevert = window.setTimeout(posterLabel, 1400);
         });

@@ -1,6 +1,7 @@
 import type { EditMask, LocalAdjust, MaskKind } from "../../types";
 import { createDefaultLocalAdjust } from "../../utils/masks";
 import { h } from "../h";
+import { refreshRangeFill } from "../range-fill";
 
 export interface MasksToolOptions {
   masks: EditMask[];
@@ -68,6 +69,7 @@ export function createMasksTool(options: MasksToolOptions): MasksToolHandle {
     value: 0,
     "aria-label": "Mask exposure",
   }) as HTMLInputElement;
+  refreshRangeFill(input);
   input.addEventListener(
     "input",
     () => {
@@ -75,6 +77,7 @@ export function createMasksTool(options: MasksToolOptions): MasksToolHandle {
       if (!mask) return;
       mask.adjust[adjKey] = Number(input.value);
       valueEl.textContent = format(mask.adjust[adjKey]);
+      refreshRangeFill(input);
       syncAdjDots();
       emit();
     },
@@ -125,6 +128,7 @@ export function createMasksTool(options: MasksToolOptions): MasksToolHandle {
     const value = mask ? mask.adjust[adjKey] : 0;
     input.value = String(value);
     valueEl.textContent = format(value);
+    refreshRangeFill(input);
     input.toggleAttribute("disabled", !mask);
   }
 

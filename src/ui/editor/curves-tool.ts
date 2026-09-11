@@ -64,10 +64,12 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
     const hgt = HEIGHT * dpr;
     ctx.clearRect(0, 0, w, hgt);
 
-    // Panel + quarter grid
-    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    // Panel + quarter grid. Canvas can't read CSS custom properties, so
+    // these literals mirror the darkroom tokens in styles.ts
+    // (--rt-surface-wash / --rt-line / histogram ≈ --rt-control-hover).
+    ctx.fillStyle = "rgba(255,255,255,0.04)";
     ctx.fillRect(0, 0, w, hgt);
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
     ctx.lineWidth = dpr;
     for (let i = 1; i < 4; i++) {
       ctx.beginPath();
@@ -87,7 +89,7 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
     }
 
     // Identity reference
-    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.strokeStyle = "rgba(255,255,255,0.16)";
     ctx.setLineDash([4 * dpr, 4 * dpr]);
     ctx.beginPath();
     ctx.moveTo(0, hgt);

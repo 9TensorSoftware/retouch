@@ -1,5 +1,7 @@
 import type { Adjustments } from "../../types";
 import { h } from "../h";
+import { ICON_EYEDROPPER } from "../icons";
+import { refreshRangeFill } from "../range-fill";
 
 export interface AdjustToolOptions {
   adjustments: Adjustments;
@@ -82,6 +84,7 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
     value: adj[selected.key],
     "aria-label": selected.label,
   }) as HTMLInputElement;
+  refreshRangeFill(input, selected.neutral);
 
   function syncChipDot(key: keyof Adjustments): void {
     const def = DEFS.find((d) => d.key === key);
@@ -92,6 +95,7 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
     adj[selected.key] = value;
     input.value = String(value);
     valueEl.textContent = formatValue(value, selected.neutral);
+    refreshRangeFill(input, selected.neutral);
     syncChipDot(selected.key);
     options.onChange({ ...adj });
   }
@@ -106,8 +110,7 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
       title: "White balance: click a neutral gray/white area in the image",
       "aria-label": "White balance eyedropper",
     });
-    wbBtn.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13.6 4.4l6 6M15.5 8.5L6.2 17.8a2 2 0 01-.9.5l-2.8.7.7-2.8a2 2 0 01.5-.9l9.3-9.3a2.1 2.1 0 013 3z"/></svg>';
+    wbBtn.innerHTML = ICON_EYEDROPPER;
     wbBtn.addEventListener("click", () => options.onWhiteBalancePick?.(), { signal });
     sliderRow.appendChild(wbBtn);
   }
@@ -124,6 +127,7 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
     input.value = String(adj[def.key]);
     input.setAttribute("aria-label", def.label);
     valueEl.textContent = formatValue(adj[def.key], def.neutral);
+    refreshRangeFill(input, def.neutral);
   }
 
   const chipRow = h("div", { class: "rt-dock__row rt-dock__chips" });
@@ -163,6 +167,7 @@ export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
       }
       input.value = String(adj[selected.key]);
       valueEl.textContent = formatValue(adj[selected.key], selected.neutral);
+      refreshRangeFill(input, selected.neutral);
     },
     destroy() {
       abort.abort();

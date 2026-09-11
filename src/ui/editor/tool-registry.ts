@@ -1,4 +1,17 @@
 import type { BuiltinEditorTool, ImageEdits, MediaEntry, VideoEdits } from "../../types";
+import {
+  ICON_TOOL_ADJUST,
+  ICON_TOOL_CROP,
+  ICON_TOOL_CURVES,
+  ICON_TOOL_FALLBACK,
+  ICON_TOOL_FILTERS,
+  ICON_TOOL_HSL,
+  ICON_TOOL_LIQUIFY,
+  ICON_TOOL_MASKS,
+  ICON_TOOL_STYLIZE,
+  ICON_TOOL_TRANSFORM,
+  ICON_TOOL_TRIM,
+} from "../icons";
 
 /** What a custom tool gets to work with. Mutate `edits`, then render + record. */
 export interface ToolContext {
@@ -48,60 +61,19 @@ export interface ToolDef {
 }
 
 export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
-  trim: {
-    id: "trim",
-    label: "Trim",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 8L21 19M8.5 16L21 5"/></svg>',
-  },
-  crop: {
-    id: "crop",
-    label: "Crop",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18"/></svg>',
-  },
-  transform: {
-    id: "transform",
-    label: "Transform",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9V5a2 2 0 012-2h4M21 15v4a2 2 0 01-2 2h-4M3 15v4a2 2 0 002 2h4M21 9V5a2 2 0 00-2-2h-4"/><path d="M9 15l6-6"/></svg>',
-  },
-  liquify: {
-    id: "liquify",
-    label: "Liquify",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L21 21M3 21c3-1 4.5-3 5-6"/></svg>',
-  },
-  curves: {
-    id: "curves",
-    label: "Curves",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21C10 21 14 3 21 3"/><circle cx="8.2" cy="14.8" r="1.6" fill="currentColor" stroke="none"/><circle cx="15.8" cy="6.4" r="1.6" fill="currentColor" stroke="none"/></svg>',
-  },
-  hsl: {
-    id: "hsl",
-    label: "Color mix",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18M12 3a9 9 0 00-4.5 16.8M12 12l6.4-6.4M12 12l-8.5 3"/></svg>',
-  },
-  masks: {
-    id: "masks",
-    label: "Masks",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 000 18z" fill="currentColor" stroke="none" opacity="0.55"/></svg>',
-  },
-  stylize: {
-    id: "stylize",
-    label: "Stylize",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 4V2M15 10V8M11 6h2M19 6h2M17.5 7.5L21 11l-9.5 9.5a1.77 1.77 0 01-2.5-2.5L18.5 8.5z"/></svg>',
-  },
-  adjust: {
-    id: "adjust",
-    label: "Adjust",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>',
-  },
-  filters: {
-    id: "filters",
-    label: "Filters",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/></svg>',
-  },
+  trim: { id: "trim", label: "Trim", icon: ICON_TOOL_TRIM },
+  crop: { id: "crop", label: "Crop", icon: ICON_TOOL_CROP },
+  transform: { id: "transform", label: "Transform", icon: ICON_TOOL_TRANSFORM },
+  liquify: { id: "liquify", label: "Liquify", icon: ICON_TOOL_LIQUIFY },
+  curves: { id: "curves", label: "Curves", icon: ICON_TOOL_CURVES },
+  hsl: { id: "hsl", label: "Color mix", icon: ICON_TOOL_HSL },
+  masks: { id: "masks", label: "Masks", icon: ICON_TOOL_MASKS },
+  stylize: { id: "stylize", label: "Stylize", icon: ICON_TOOL_STYLIZE },
+  adjust: { id: "adjust", label: "Adjust", icon: ICON_TOOL_ADJUST },
+  filters: { id: "filters", label: "Filters", icon: ICON_TOOL_FILTERS },
 };
 
-const FALLBACK_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6"/></svg>';
+const FALLBACK_ICON = ICON_TOOL_FALLBACK;
 
 const customTools: EditorToolPlugin[] = [];
 

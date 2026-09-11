@@ -1,5 +1,7 @@
 import type { AspectRatioPreset, EditorTool, ImageEdits, ViewHandle } from "../../types";
 import { h } from "../h";
+import { ICON_FLIP_H, ICON_FLIP_V, ICON_ROTATE_CCW, ICON_ROTATE_CW } from "../icons";
+import { refreshRangeFill } from "../range-fill";
 import type { AdjustToolHandle } from "./adjust-tool";
 import type { CropToolHandle } from "./crop-tool";
 import type { CurvesToolHandle } from "./curves-tool";
@@ -68,26 +70,10 @@ const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
 ];
 
 const TRANSFORM_BUTTONS: { op: TransformOp; label: string; icon: string }[] = [
-  {
-    op: "rotate-ccw",
-    label: "Rotate left",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10a8 8 0 108-8"/><path d="M4 3v7h7"/></svg>',
-  },
-  {
-    op: "rotate-cw",
-    label: "Rotate right",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 10a8 8 0 10-8-8"/><path d="M20 3v7h-7"/></svg>',
-  },
-  {
-    op: "flip-h",
-    label: "Flip horizontal",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2v20M8 7H4v10h4zM16 7h4v10h-4z"/></svg>',
-  },
-  {
-    op: "flip-v",
-    label: "Flip vertical",
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12h20M7 8V4h10v4zM7 16v4h10v-4z"/></svg>',
-  },
+  { op: "rotate-ccw", label: "Rotate left", icon: ICON_ROTATE_CCW },
+  { op: "rotate-cw", label: "Rotate right", icon: ICON_ROTATE_CW },
+  { op: "flip-h", label: "Flip horizontal", icon: ICON_FLIP_H },
+  { op: "flip-v", label: "Flip vertical", icon: ICON_FLIP_V },
 ];
 
 /**
@@ -181,10 +167,12 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       value,
       "aria-label": label,
     }) as HTMLInputElement;
+    refreshRangeFill(input);
     input.addEventListener(
       "input",
       () => {
         valueEl.textContent = format(Number(input.value));
+        refreshRangeFill(input);
         onInput(Number(input.value));
       },
       { signal },
@@ -199,6 +187,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       () => {
         input.value = "0";
         valueEl.textContent = format(0);
+        refreshRangeFill(input);
         onInput(0);
       },
       { signal },
@@ -207,6 +196,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     const set = (v: number): void => {
       input.value = String(v);
       valueEl.textContent = format(v);
+      refreshRangeFill(input);
     };
     return { group, set };
   }

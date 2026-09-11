@@ -1,5 +1,6 @@
 import type { ViewHandle } from "../types";
 import { h } from "./h";
+import { ICON_UPLOAD, iconElement } from "./icons";
 
 export interface DropZoneOptions {
   onFiles: (files: File[]) => void;
@@ -22,7 +23,7 @@ export function createDropZone(options: DropZoneOptions): ViewHandle {
   const zone = h(
     "div",
     { class: "rt-dropzone" },
-    h("div", { class: "rt-dropzone__icon" }, createUploadIcon()),
+    h("div", { class: "rt-dropzone__icon" }, iconElement(ICON_UPLOAD)),
     h("div", { class: "rt-dropzone__text" }, options.label, h("strong", null, "browse")),
     h("div", { class: "rt-dropzone__hint" }, options.hint),
     input,
@@ -102,22 +103,4 @@ export function createDropZone(options: DropZoneOptions): ViewHandle {
       root.remove();
     },
   };
-}
-
-function createUploadIcon(): SVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.5");
-
-  const p1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  p1.setAttribute("d", "M4 14.899A7 7 0 1115.71 8h1.79a4.5 4.5 0 012.5 8.242");
-
-  const p2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  p2.setAttribute("d", "M12 12v9m0-9l-3 3m3-3 3 3");
-
-  svg.appendChild(p1);
-  svg.appendChild(p2);
-  return svg;
 }

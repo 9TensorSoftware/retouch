@@ -1,6 +1,7 @@
 import type { HslBand, HslMixer } from "../../types";
 import { HSL_BANDS } from "../../utils/hsl";
 import { h } from "../h";
+import { refreshRangeFill } from "../range-fill";
 
 export interface HslToolOptions {
   hsl: HslMixer;
@@ -71,6 +72,7 @@ export function createHslTool(options: HslToolOptions): HslToolHandle {
     for (const [key, control] of sliders) {
       control.input.value = String(hsl[band][key]);
       control.valueEl.textContent = format(hsl[band][key]);
+      refreshRangeFill(control.input);
     }
   }
 
@@ -87,11 +89,13 @@ export function createHslTool(options: HslToolOptions): HslToolHandle {
       value: hsl[band][axis.key],
       "aria-label": `${BAND_LABELS[band]} ${axis.label.toLowerCase()}`,
     }) as HTMLInputElement;
+    refreshRangeFill(input);
     input.addEventListener(
       "input",
       () => {
         hsl[band][axis.key] = Number(input.value);
         valueEl.textContent = format(hsl[band][axis.key]);
+        refreshRangeFill(input);
         syncChipDot(band);
         options.onChange(structuredClone(hsl));
       },
@@ -108,6 +112,7 @@ export function createHslTool(options: HslToolOptions): HslToolHandle {
         hsl[band][axis.key] = 0;
         input.value = "0";
         valueEl.textContent = "0";
+        refreshRangeFill(input);
         syncChipDot(band);
         options.onChange(structuredClone(hsl));
       },

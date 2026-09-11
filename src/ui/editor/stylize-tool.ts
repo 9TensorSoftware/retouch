@@ -1,5 +1,6 @@
 import type { StylizeEffect, StylizeKind } from "../../types";
 import { h } from "../h";
+import { refreshRangeFill } from "../range-fill";
 
 export interface StylizeToolOptions {
   stylize: StylizeEffect;
@@ -48,11 +49,13 @@ export function createStylizeTool(options: StylizeToolOptions): StylizeToolHandl
     value: effect.amount,
     "aria-label": "Effect amount",
   }) as HTMLInputElement;
+  refreshRangeFill(amountInput);
   amountInput.addEventListener(
     "input",
     () => {
       effect.amount = Number(amountInput.value);
       amountValue.textContent = amountInput.value;
+      refreshRangeFill(amountInput);
       emit();
     },
     { signal },
@@ -78,11 +81,13 @@ export function createStylizeTool(options: StylizeToolOptions): StylizeToolHandl
     value: Math.round(effect.position * 100),
     "aria-label": "Sharp band position",
   }) as HTMLInputElement;
+  refreshRangeFill(positionInput);
   positionInput.addEventListener(
     "input",
     () => {
       effect.position = Number(positionInput.value) / 100;
       positionValue.textContent = positionInput.value;
+      refreshRangeFill(positionInput);
       emit();
     },
     { signal },
@@ -175,8 +180,10 @@ export function createStylizeTool(options: StylizeToolOptions): StylizeToolHandl
       chips.get(effect.kind)?.classList.add("rt-dock__chip--active");
       amountInput.value = String(effect.amount);
       amountValue.textContent = String(effect.amount);
+      refreshRangeFill(amountInput);
       positionInput.value = String(Math.round(effect.position * 100));
       positionValue.textContent = String(Math.round(effect.position * 100));
+      refreshRangeFill(positionInput);
       shadowInput.value = effect.shadow;
       highlightInput.value = effect.highlight;
       syncParamVisibility();

@@ -1,6 +1,20 @@
 import type { GalleryViewMode, MediaEntry, ViewHandle } from "../types";
 import { formatDuration } from "../utils/video";
 import { h } from "./h";
+import {
+  ICON_DOWNLOAD,
+  ICON_EDIT,
+  ICON_PLAY_BADGE,
+  ICON_REMOVE,
+  ICON_UPLOAD,
+  ICON_VIEW_COLS_2,
+  ICON_VIEW_COLS_3,
+  ICON_VIEW_COLS_4,
+  ICON_VIEW_HEIGHT_FIT,
+  ICON_VIEW_LIST,
+  ICON_VIEW_WIDTH_FIT,
+  iconElement,
+} from "./icons";
 
 export interface GalleryOptions {
   images: MediaEntry[];
@@ -12,38 +26,13 @@ export interface GalleryOptions {
   onDownload: (id: string) => void;
 }
 
-// SVG path data for view mode icons
 const VIEW_ICONS: { mode: GalleryViewMode; svg: string; title: string }[] = [
-  {
-    mode: "cols-2",
-    title: "2 Columns",
-    svg: '<rect x="1" y="1" width="5" height="12" rx="0.5"/><rect x="8" y="1" width="5" height="12" rx="0.5"/>',
-  },
-  {
-    mode: "cols-3",
-    title: "3 Columns",
-    svg: '<rect x="0.5" y="1" width="3.5" height="12" rx="0.5"/><rect x="5.25" y="1" width="3.5" height="12" rx="0.5"/><rect x="10" y="1" width="3.5" height="12" rx="0.5"/>',
-  },
-  {
-    mode: "cols-4",
-    title: "4 Columns",
-    svg: '<rect x="0.5" y="1" width="2.5" height="12" rx="0.5"/><rect x="4" y="1" width="2.5" height="12" rx="0.5"/><rect x="7.5" y="1" width="2.5" height="12" rx="0.5"/><rect x="11" y="1" width="2.5" height="12" rx="0.5"/>',
-  },
-  {
-    mode: "width-fit",
-    title: "Width Fit",
-    svg: '<rect x="1" y="3" width="12" height="8" rx="0.5"/>',
-  },
-  {
-    mode: "height-fit",
-    title: "Height Fit",
-    svg: '<rect x="1" y="3.5" width="7" height="7" rx="0.5"/><rect x="9" y="3.5" width="4" height="7" rx="0.5"/>',
-  },
-  {
-    mode: "list",
-    title: "List",
-    svg: '<rect x="1" y="2" width="12" height="2" rx="0.5"/><rect x="1" y="6" width="12" height="2" rx="0.5"/><rect x="1" y="10" width="12" height="2" rx="0.5"/>',
-  },
+  { mode: "cols-2", title: "2 Columns", svg: ICON_VIEW_COLS_2 },
+  { mode: "cols-3", title: "3 Columns", svg: ICON_VIEW_COLS_3 },
+  { mode: "cols-4", title: "4 Columns", svg: ICON_VIEW_COLS_4 },
+  { mode: "width-fit", title: "Width Fit", svg: ICON_VIEW_WIDTH_FIT },
+  { mode: "height-fit", title: "Height Fit", svg: ICON_VIEW_HEIGHT_FIT },
+  { mode: "list", title: "List", svg: ICON_VIEW_LIST },
 ];
 
 export function createGallery(options: GalleryOptions): ViewHandle {
@@ -79,7 +68,7 @@ export function createGallery(options: GalleryOptions): ViewHandle {
       class: `rt-gallery__view-btn${def.mode === currentMode ? " rt-gallery__view-btn--active" : ""}`,
       title: def.title,
     });
-    btn.innerHTML = `<svg viewBox="0 0 14 14" fill="currentColor">${def.svg}</svg>`;
+    btn.innerHTML = def.svg;
     btn.addEventListener(
       "click",
       () => {
@@ -99,7 +88,7 @@ export function createGallery(options: GalleryOptions): ViewHandle {
   const addZone = h(
     "div",
     { class: "rt-gallery__add-zone", role: "button", tabindex: 0, title: "Add more files" },
-    createUploadIcon(),
+    iconElement(ICON_UPLOAD),
     h("span", null, "Drop files or ", h("strong", null, "browse")),
   );
   addZone.addEventListener("click", () => input.click(), { signal: rootSignal });
@@ -332,8 +321,7 @@ function appendVideoBadges(item: HTMLElement, entry: MediaEntry): void {
     h("span", { class: "rt-gallery__item-duration" }, formatDuration(entry.duration)),
   );
   const play = h("div", { class: "rt-gallery__item-play" });
-  play.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 6.5v11l9-5.5z"/></svg>';
+  play.innerHTML = ICON_PLAY_BADGE;
   item.appendChild(play);
 }
 
@@ -342,9 +330,12 @@ function createOverlay(
   options: GalleryOptions,
   signal: AbortSignal,
 ): HTMLElement {
-  const downloadBtn = h("button", { class: "rt-gallery__item-download" });
-  downloadBtn.innerHTML =
-    '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 2v8M4 8l3 3 3-3"/><path d="M2 12h10"/></svg>';
+  const downloadBtn = h("button", {
+    class: "rt-gallery__item-download",
+    "aria-label": "Download",
+    title: "Download",
+  });
+  downloadBtn.innerHTML = ICON_DOWNLOAD;
   downloadBtn.addEventListener(
     "click",
     (e) => {
@@ -355,8 +346,7 @@ function createOverlay(
   );
 
   const editBtn = h("button", { class: "rt-gallery__item-edit" });
-  editBtn.innerHTML =
-    '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8.5 1.5a1.414 1.414 0 012 2L4 10l-2.5.5L2 8l6.5-6.5z"/></svg> Edit';
+  editBtn.innerHTML = `${ICON_EDIT} Edit`;
   editBtn.addEventListener(
     "click",
     (e) => {
@@ -391,9 +381,12 @@ function createRemoveButton(
   options: GalleryOptions,
   signal: AbortSignal,
 ): HTMLElement {
-  const btn = h("button", { class: "rt-gallery__item-remove" });
-  btn.innerHTML =
-    '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>';
+  const btn = h("button", {
+    class: "rt-gallery__item-remove",
+    "aria-label": "Remove",
+    title: "Remove",
+  });
+  btn.innerHTML = ICON_REMOVE;
   btn.addEventListener(
     "click",
     (e) => {
@@ -424,19 +417,28 @@ function createNameRow(
     : "rt-gallery__item-status--pending";
   const status = h("div", { class: `rt-gallery__item-status ${statusCls}` });
 
-  const downloadBtn = h("button", null);
-  downloadBtn.innerHTML =
-    '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 2v8M4 8l3 3 3-3"/><path d="M2 12h10"/></svg>';
+  const downloadBtn = h("button", {
+    class: "rt-gallery__names-btn",
+    "aria-label": "Download",
+    title: "Download",
+  });
+  downloadBtn.innerHTML = ICON_DOWNLOAD;
   downloadBtn.addEventListener("click", () => options.onDownload(entry.id), { signal });
 
-  const editBtn = h("button", null);
-  editBtn.innerHTML =
-    '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8.5 1.5a1.414 1.414 0 012 2L4 10l-2.5.5L2 8l6.5-6.5z"/></svg>';
+  const editBtn = h("button", {
+    class: "rt-gallery__names-btn",
+    "aria-label": "Edit",
+    title: "Edit",
+  });
+  editBtn.innerHTML = ICON_EDIT;
   editBtn.addEventListener("click", () => options.onEdit(entry.id), { signal });
 
-  const removeBtn = h("button", null);
-  removeBtn.innerHTML =
-    '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>';
+  const removeBtn = h("button", {
+    class: "rt-gallery__names-btn",
+    "aria-label": "Remove",
+    title: "Remove",
+  });
+  removeBtn.innerHTML = ICON_REMOVE;
 
   const sizeText =
     entry.kind === "video"
@@ -471,22 +473,6 @@ function createNameRow(
   );
 
   return row;
-}
-
-function createUploadIcon(): SVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.5");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  const p1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  p1.setAttribute("d", "M4 14.899A7 7 0 1115.71 8h1.79a4.5 4.5 0 012.5 8.242");
-  const p2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  p2.setAttribute("d", "M12 12v9m0-9l-3 3m3-3 3 3");
-  svg.append(p1, p2);
-  return svg;
 }
 
 function formatFileSize(bytes: number): string {

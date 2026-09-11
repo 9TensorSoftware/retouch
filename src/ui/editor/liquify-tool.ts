@@ -1,4 +1,5 @@
 import { h } from "../h";
+import { refreshRangeFill } from "../range-fill";
 
 export interface LiquifyToolOptions {
   /** Restore the untouched frame (clears the whole field). */
@@ -44,10 +45,12 @@ export function createLiquifyTool(options: LiquifyToolOptions): LiquifyToolHandl
       value,
       "aria-label": label,
     }) as HTMLInputElement;
+    refreshRangeFill(input);
     input.addEventListener(
       "input",
       () => {
         valueEl.textContent = input.value;
+        refreshRangeFill(input);
         onInput(Number(input.value));
       },
       { signal },

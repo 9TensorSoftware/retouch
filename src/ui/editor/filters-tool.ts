@@ -2,6 +2,7 @@ import { FabricImage, StaticCanvas } from "fabric";
 import type { FilterPreset } from "../../types";
 import { buildPresetFilter, FILTER_PRESETS } from "../../utils/filters";
 import { h } from "../h";
+import { refreshRangeFill } from "../range-fill";
 
 export interface FiltersToolOptions {
   /** Preview source — the image itself, or a captured frame canvas for video. */
@@ -42,10 +43,12 @@ export function createFiltersTool(options: FiltersToolOptions): FiltersToolHandl
     value: options.strength,
     "aria-label": "Filter intensity",
   }) as HTMLInputElement;
+  refreshRangeFill(strengthInput);
   strengthInput.addEventListener(
     "input",
     () => {
       strengthValue.textContent = strengthInput.value;
+      refreshRangeFill(strengthInput);
       options.onStrengthChange(Number(strengthInput.value));
     },
     { signal },
@@ -111,6 +114,7 @@ export function createFiltersTool(options: FiltersToolOptions): FiltersToolHandl
     setStrength(strength) {
       strengthInput.value = String(strength);
       strengthValue.textContent = String(strength);
+      refreshRangeFill(strengthInput);
     },
     destroy() {
       abort.abort();
