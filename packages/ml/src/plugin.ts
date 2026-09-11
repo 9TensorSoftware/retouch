@@ -1,4 +1,11 @@
-import type { EditMask, ImageEdits, Retouch, ToolContext } from "@9tensor/retouch";
+import {
+  type EditMask,
+  type ImageEdits,
+  type Retouch,
+  refreshRangeFill,
+  type ToolContext,
+} from "@9tensor/retouch";
+import { KEEP_RGB, ON_KEEP, rgba } from "./colors";
 import { applyMatteAlpha, type CutoutOptions, removeBackground } from "./cutout";
 import { type DenoiseOptions, denoiseImage } from "./denoise";
 import { composeBokeh, type DepthOptions, depthAt, estimateDepth, prepareBokeh } from "./depth";
@@ -11,6 +18,15 @@ import {
   detectObjects,
 } from "./detect";
 import { createEraseSurface } from "./erase-tool";
+import {
+  CUTOUT_ICON,
+  DENOISE_ICON,
+  DEPTH_ICON,
+  DETECT_ICON,
+  ERASE_ICON,
+  SELECT_ICON,
+  UPSCALE_ICON,
+} from "./icons";
 import { dilateMask, type InpaintOptions, inpaintMask, inpaintStrokes } from "./inpaint";
 import type { FetchProgress } from "./model-cache";
 import { decodeSamClicks, encodeSamImage, type SamOptions, type SamPoint } from "./sam";
@@ -32,27 +48,6 @@ export interface MlToolsOptions {
   openResults?: boolean;
 }
 
-const CUTOUT_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3a9 9 0 109 9" stroke-dasharray="3 3"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19c1-2.5 3-4 5.5-4s4.5 1.5 5.5 4"/></svg>';
-
-const DETECT_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="10" cy="11" r="2.4"/><path d="M14.5 15.5c-.9-1.4-2.6-2.3-4.5-2.3s-3.6.9-4.5 2.3" transform="translate(1.5 -1)"/></svg>';
-
-const ERASE_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 4l6 6-9 9H7l-4-4 11-11z"/><path d="M9 9l6 6M3 21h18"/></svg>';
-
-const DEPTH_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.6" opacity="0.55"/><circle cx="12" cy="12" r="9.6" opacity="0.25"/></svg>';
-
-const SELECT_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="6" stroke-dasharray="3 3"/><circle cx="11" cy="11" r="1.6" fill="currentColor" stroke="none"/><path d="M15.5 15.5L21 21"/></svg>';
-
-const DENOISE_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="0.9" fill="currentColor" stroke="none"/><circle cx="12.5" cy="6.8" r="0.7" fill="currentColor" stroke="none"/><circle cx="16.8" cy="8.6" r="0.8" fill="currentColor" stroke="none"/><circle cx="7" cy="12.5" r="0.7" fill="currentColor" stroke="none"/><path d="M14.5 12.5l1.1 2.4 2.4 1.1-2.4 1.1-1.1 2.4-1.1-2.4-2.4-1.1 2.4-1.1z" fill="currentColor" stroke="none" opacity="0.9"/></svg>';
-
-const UPSCALE_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 15l-4 4M8 19H5v-3M15 9l4-4M16 5h3v3"/></svg>';
-
 interface RunPaneParts {
   root: HTMLElement;
   status: HTMLElement;
@@ -62,15 +57,22 @@ interface RunPaneParts {
 function buildRunPane(hint: string, action: string): RunPaneParts {
   const root = document.createElement("div");
   root.className = "rt-dock__row";
-  const status = document.createElement("span");
-  status.className = "rt-dock__slider-label";
-  status.textContent = hint;
+  const status = buildStatus(hint);
   const button = document.createElement("button");
-  button.className = "rt-dock__chip";
+  button.className = "rt-dock__chip rt-dock__chip--primary";
   button.textContent = action;
   root.appendChild(status);
   root.appendChild(button);
   return { root, status, button };
+}
+
+/** Status line: announced politely so model progress reaches screen readers. */
+function buildStatus(text = ""): HTMLElement {
+  const status = document.createElement("span");
+  status.className = "rt-dock__slider-label rt-dock__status";
+  status.setAttribute("aria-live", "polite");
+  status.textContent = text;
+  return status;
 }
 
 /**
@@ -122,16 +124,26 @@ function createBoxOverlay(canvasArea: HTMLElement): {
     const ctx = overlay.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = "rgba(94, 210, 120, 0.95)";
+    ctx.strokeStyle = rgba(KEEP_RGB, 0.95);
     ctx.lineWidth = 2;
-    ctx.font = "11px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(94, 210, 120, 0.95)";
+    ctx.font = "600 11px system-ui, sans-serif";
     for (const b of boxes) {
       ctx.strokeRect(b.x * w, b.y * h, b.w * w, b.h * h);
       const tag = b.label
         ? `${b.label} ${Math.round(b.score * 100)}%`
         : `${Math.round(b.score * 100)}%`;
-      ctx.fillText(tag, b.x * w + 3, b.y * h - 4);
+      // Label chip: measured rounded pill in the box color, ink text on top.
+      const chipH = 17;
+      const padX = 6;
+      const chipW = ctx.measureText(tag).width + padX * 2;
+      const cx = Math.max(0, b.x * w - 1);
+      const cy = Math.max(0, b.y * h - chipH - 3);
+      ctx.fillStyle = rgba(KEEP_RGB, 0.95);
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, chipW, chipH, 4);
+      ctx.fill();
+      ctx.fillStyle = ON_KEEP;
+      ctx.fillText(tag, cx + padX, cy + 12.5);
     }
   }
 
@@ -295,8 +307,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         const root = document.createElement("div");
         root.className = "rt-dock__row";
-        const status = document.createElement("span");
-        status.className = "rt-dock__slider-label";
+        const status = buildStatus();
 
         const sizeLabel = document.createElement("span");
         sizeLabel.className = "rt-dock__slider-label";
@@ -307,12 +318,16 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         sizeInput.max = "20";
         sizeInput.value = "6";
         sizeInput.setAttribute("aria-label", "Brush size");
+        const sizeValue = document.createElement("span");
+        sizeValue.className = "rt-dock__slider-value";
+        sizeValue.textContent = sizeInput.value;
+        refreshRangeFill(sizeInput);
 
         const clearBtn = document.createElement("button");
         clearBtn.className = "rt-dock__chip";
         clearBtn.textContent = "Clear";
         const runBtn = document.createElement("button");
-        runBtn.className = "rt-dock__chip";
+        runBtn.className = "rt-dock__chip rt-dock__chip--primary";
         runBtn.textContent = "Erase";
 
         const surface = createEraseSurface(ctx.canvasArea, () => {
@@ -333,6 +348,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         syncState();
 
         sizeInput.addEventListener("input", () => {
+          sizeValue.textContent = sizeInput.value;
+          refreshRangeFill(sizeInput);
           surface.setBrush(Number(sizeInput.value) / 100);
         });
         clearBtn.addEventListener("click", () => surface.clear());
@@ -375,6 +392,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         sizeGroup.className = "rt-dock__group rt-dock__slider";
         sizeGroup.appendChild(sizeLabel);
         sizeGroup.appendChild(sizeInput);
+        sizeGroup.appendChild(sizeValue);
 
         root.appendChild(status);
         root.appendChild(sizeGroup);
@@ -410,8 +428,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         const root = document.createElement("div");
         root.className = "rt-dock__row";
-        const status = document.createElement("span");
-        status.className = "rt-dock__slider-label";
+        const status = buildStatus();
 
         const addBtn = document.createElement("button");
         addBtn.className = "rt-dock__chip rt-dock__chip--active";
@@ -641,8 +658,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         const root = document.createElement("div");
         root.className = "rt-dock__row";
-        const status = document.createElement("span");
-        status.className = "rt-dock__slider-label";
+        const status = buildStatus();
 
         const analyzeBtn = document.createElement("button");
         analyzeBtn.className = "rt-dock__chip";
@@ -656,8 +672,12 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         apertureInput.max = "100";
         apertureInput.value = "60";
         apertureInput.setAttribute("aria-label", "Aperture strength");
+        const apertureValue = document.createElement("span");
+        apertureValue.className = "rt-dock__slider-value";
+        apertureValue.textContent = apertureInput.value;
+        refreshRangeFill(apertureInput);
         const applyBtn = document.createElement("button");
-        applyBtn.className = "rt-dock__chip";
+        applyBtn.className = "rt-dock__chip rt-dock__chip--primary";
         applyBtn.textContent = "Apply";
         const clearBtn = document.createElement("button");
         clearBtn.className = "rt-dock__chip";
@@ -724,7 +744,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           }
         });
 
-        apertureInput.addEventListener("input", recompose);
+        apertureInput.addEventListener("input", () => {
+          apertureValue.textContent = apertureInput.value;
+          refreshRangeFill(apertureInput);
+          recompose();
+        });
 
         clearBtn.addEventListener("click", () => {
           if (busy) return;
@@ -770,6 +794,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         apertureGroup.className = "rt-dock__group rt-dock__slider";
         apertureGroup.appendChild(apertureLabel);
         apertureGroup.appendChild(apertureInput);
+        apertureGroup.appendChild(apertureValue);
 
         root.appendChild(status);
         root.appendChild(analyzeBtn);
@@ -806,8 +831,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         const root = document.createElement("div");
         root.className = "rt-dock__row";
-        const status = document.createElement("span");
-        status.className = "rt-dock__slider-label";
+        const status = buildStatus();
         status.textContent = "Find faces or objects on-device, then mask, pixelate, or crop";
 
         const findBtn = document.createElement("button");

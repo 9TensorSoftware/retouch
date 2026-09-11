@@ -1,3 +1,4 @@
+import { REMOVE_RGB, rgba } from "./colors";
 import type { MaskStroke } from "./inpaint";
 
 /**
@@ -46,7 +47,7 @@ export function createEraseSurface(
     const ctx = overlay.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
-    ctx.fillStyle = "rgba(228, 77, 58, 0.45)";
+    ctx.fillStyle = rgba(REMOVE_RGB, 0.45);
     for (const s of strokes) {
       ctx.beginPath();
       ctx.arc(s.x * overlay.width, s.y * overlay.height, s.r * overlay.height, 0, Math.PI * 2);

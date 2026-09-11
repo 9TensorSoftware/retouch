@@ -1,3 +1,4 @@
+import { KEEP_RGB, REMOVE_RGB, rgba } from "./colors";
 import type { SamPoint } from "./sam";
 
 /**
@@ -51,9 +52,9 @@ export function createSelectSurface(
         const d = image.data;
         for (let i = 0; i < d.length; i += 4) {
           if (d[i] > 127) {
-            d[i] = 94;
-            d[i + 1] = 210;
-            d[i + 2] = 120;
+            d[i] = KEEP_RGB[0];
+            d[i + 1] = KEEP_RGB[1];
+            d[i + 2] = KEEP_RGB[2];
             d[i + 3] = 110;
           } else {
             d[i + 3] = 0;
@@ -66,7 +67,7 @@ export function createSelectSurface(
     for (const p of points) {
       ctx.beginPath();
       ctx.arc(p.x * w, p.y * h, 5, 0, Math.PI * 2);
-      ctx.fillStyle = p.label === 1 ? "rgba(94, 210, 120, 0.95)" : "rgba(228, 77, 58, 0.95)";
+      ctx.fillStyle = p.label === 1 ? rgba(KEEP_RGB, 0.95) : rgba(REMOVE_RGB, 0.95);
       ctx.fill();
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = "rgba(255,255,255,0.9)";
