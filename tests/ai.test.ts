@@ -256,10 +256,14 @@ describe("AI chat panel", () => {
     const { chat } = makeChat();
     chat.open();
     const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
-    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    const escapeEvent = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
     const documentSpy = vi.fn();
     document.addEventListener("keydown", documentSpy, { once: true });
-    input.dispatchEvent(escape);
+    input.dispatchEvent(escapeEvent);
     expect(chat.root.classList.contains("rt-ai--open")).toBe(false);
     expect(documentSpy).not.toHaveBeenCalled(); // stopPropagation kept it from the editor
 

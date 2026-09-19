@@ -11,20 +11,85 @@ describe("imageEditsAreNeutral", () => {
   });
 
   const cases: Array<[string, (e: ImageEdits) => void]> = [
-    ["adjustment", (e) => (e.adjustments.exposure = 10)],
-    ["vignette", (e) => (e.adjustments.vignette = 20)],
-    ["clarity", (e) => (e.adjustments.clarity = 15)],
-    ["dehaze", (e) => (e.adjustments.dehaze = 15)],
-    ["filter", (e) => (e.filter = "warm")],
-    ["crop", (e) => (e.crop = { x: 0.1, y: 0, width: 0.9, height: 1 })],
-    ["rotation", (e) => (e.rotation = 3)],
-    ["keystone", (e) => (e.keystoneV = 10)],
-    ["lens", (e) => (e.lensDistortion = -20)],
-    ["seam width", (e) => (e.seamWidth = 80)],
-    ["orientation", (e) => (e.orientation = 90)],
-    ["flip", (e) => (e.flipH = true)],
+    [
+      "adjustment",
+      (e) => {
+        e.adjustments.exposure = 10;
+      },
+    ],
+    [
+      "vignette",
+      (e) => {
+        e.adjustments.vignette = 20;
+      },
+    ],
+    [
+      "clarity",
+      (e) => {
+        e.adjustments.clarity = 15;
+      },
+    ],
+    [
+      "dehaze",
+      (e) => {
+        e.adjustments.dehaze = 15;
+      },
+    ],
+    [
+      "filter",
+      (e) => {
+        e.filter = "warm";
+      },
+    ],
+    [
+      "crop",
+      (e) => {
+        e.crop = { x: 0.1, y: 0, width: 0.9, height: 1 };
+      },
+    ],
+    [
+      "rotation",
+      (e) => {
+        e.rotation = 3;
+      },
+    ],
+    [
+      "keystone",
+      (e) => {
+        e.keystoneV = 10;
+      },
+    ],
+    [
+      "lens",
+      (e) => {
+        e.lensDistortion = -20;
+      },
+    ],
+    [
+      "seam width",
+      (e) => {
+        e.seamWidth = 80;
+      },
+    ],
+    [
+      "orientation",
+      (e) => {
+        e.orientation = 90;
+      },
+    ],
+    [
+      "flip",
+      (e) => {
+        e.flipH = true;
+      },
+    ],
     ["curves", (e) => e.curves.master.splice(1, 0, { x: 0.5, y: 0.6 })],
-    ["hsl", (e) => (e.hsl.red.s = -30)],
+    [
+      "hsl",
+      (e) => {
+        e.hsl.red.s = -30;
+      },
+    ],
     [
       "mask",
       (e) =>
@@ -46,7 +111,12 @@ describe("imageEditsAreNeutral", () => {
           },
         }),
     ],
-    ["stylize", (e) => (e.stylize = { ...e.stylize, kind: "duotone" })],
+    [
+      "stylize",
+      (e) => {
+        e.stylize = { ...e.stylize, kind: "duotone" };
+      },
+    ],
     [
       "liquify",
       (e) => {
