@@ -3,32 +3,42 @@
 Feature catalog and build order. Priorities: **P1** = next, **P2** = soon, **P3** = later.
 Status: ✅ shipped · 🚧 in progress · ⬜ planned.
 
+Release history lives in [CHANGELOG.md](../CHANGELOG.md); the research and
+license audit behind the ML and advanced-feature rows is in
+[ADVANCED-FEATURES.md](ADVANCED-FEATURES.md).
+
 ## A. Usability & editor polish
 
 | Status | P | Feature |
 |--------|---|---------|
-| ✅ | P1 | Undo/redo history (Cmd/Ctrl+Z / ⇧Z) over the edits object |
-| ✅ | P1 | Keyboard: Esc=cancel, Cmd/Ctrl+Enter=done, number-key tool hotkeys, Space=play, arrow-nudge trim handles |
-| ✅ | P1 | Focus trap + `role="dialog"` + ARIA in editor; full keyboard operability |
-| ✅ | P1 | Error feedback: toast on rejected files (type/size/count) + `file:rejected` event |
-| ✅ | P1 | Before/after compare (hold button) · Reset-all |
-| ⬜ | P2 | Zoom & pan canvas (wheel/pinch, fit/100%) |
-| ✅ | P2 | EXIF orientation (handled by the browser's default `image-orientation: from-image`) |
-| ✅ | P2 | Filter intensity slider (0–100% preset blend) |
-| ✅ | P2 | 12 adjustments: exposure, temperature/tint, hue, vibrance, sharpen, blur, grain, vignette |
-| ✅ | P2 | Rotate 90° + flip H/V buttons (crop-tracking transforms) |
-| ⬜ | P2 | Mobile: responsive editor (panel → bottom sheet), touch-size hit targets |
-| ⬜ | P3 | Curves editor · per-color HSL mixer · highlights/shadows recovery (researched: Lightroom/Snapseed baseline) |
-| ⬜ | P3 | Clarity/dehaze · denoise · custom LUT import · auto-enhance |
-| ⬜ | P3 | Histogram · straighten-with-grid · loading skeletons · pixel-size readout on crop |
+| ✅ | — | Undo/redo history (Cmd/Ctrl+Z / ⇧Z / Y) over the edits object |
+| ✅ | — | Keyboard: Esc=cancel, Cmd/Ctrl+Enter=done, Cmd/Ctrl+K=AI, 1–9 tool hotkeys, Enter=apply crop, Space=play, arrow-nudge trim handles |
+| ✅ | — | Focus trap + `role="dialog"` + ARIA in editor; full keyboard operability; `:focus-visible` rings |
+| ✅ | — | Error feedback: toast on rejected files (type/size/duration/count) + `file:rejected` event |
+| ✅ | — | Side-by-side compare view (images) · hold-to-compare (video) · Reset-all |
+| ✅ | — | Done commits edits into the image (`commitMode: "bake"`), pristine original kept for Reset / `restoreOriginal()` |
+| ✅ | — | EXIF orientation (handled by the browser's default `image-orientation: from-image`) |
+| ✅ | — | Filter intensity slider (0–100% preset blend) |
+| ✅ | — | 14 adjustments: brightness, contrast, saturation, exposure, temperature, tint, hue, vibrance, sharpen, blur, grain, vignette, clarity, dehaze |
+| ✅ | — | Rotate 90° + flip H/V buttons (crop-tracking transforms) |
+| ✅ | — | Curves editor with live histogram · per-color HSL mixer · white-balance eyedropper |
+| ✅ | — | Design system: semantic tokens, neutral darkroom editor, unified icon set, motion + reduced-motion, filled slider tracks |
+| ⬜ | P1 | Zoom & pan canvas (wheel/pinch, fit/100%) |
+| ⬜ | P1 | Mobile: responsive editor (rail + dock → bottom sheet), touch-size hit targets |
+| ⬜ | P3 | Highlights/shadows recovery · custom LUT import · auto-enhance |
+| ⬜ | P3 | Straighten-with-grid overlay · loading skeletons · pixel-size readout on crop |
 
 ## B. Editor tools
 
 | Status | P | Feature |
 |--------|---|---------|
-| ✅ | — | Crop (aspect presets, straighten, rotate 90°/flip) · Adjust (12 controls in Light/Color/Effects) · Filters (12 presets with intensity, live thumbnails) |
-| ⬜ | P2 | Draw tool (PencilBrush: size/color/opacity, eraser) |
-| ⬜ | P2 | Text tool (Textbox: font/size/color/align, drag/scale/rotate) |
+| ✅ | — | Crop (aspect presets, rule-of-thirds grid, commit-style apply) |
+| ✅ | — | Transform (rotate/flip, straighten with auto-crop, keystone, lens distortion + devignette, content-aware width) |
+| ✅ | — | Liquify (brush push warp, image + video) |
+| ✅ | — | Adjust (14 controls) · Curves · Color mix (8-band HSL) · Masks (linear/radial) · Stylize (tilt-shift, duotone, posterize, pixelate, halftone) · Filters (11 presets + Original) |
+| ✅ | — | Trim (video: filmstrip, in/out handles, loop-in-range, speed 0.25–4×) |
+| ⬜ | P2 | Draw tool (brush: size/color/opacity, eraser) |
+| ⬜ | P2 | Text tool (font/size/color/align, drag/scale/rotate) |
 | ⬜ | P2 | Sticker/shapes tool (built-in set + custom images) |
 | ⬜ | P2 | Object layer for the above: select/move/delete/z-order, serialization into edits, export compositing |
 
@@ -36,51 +46,67 @@ Status: ✅ shipped · 🚧 in progress · ⬜ planned.
 
 | Status | P | Feature |
 |--------|---|---------|
-| ✅ | — | View modes (cols-2/3/4, width-fit, height-fit, list) + size controls |
+| ✅ | — | View modes (cols-2/3/4, width-fit, height-fit, list) · add-more drop target · Done button when `onDone` is set |
+| ✅ | — | Revert to original (`restoreOriginal()`, editor Reset) · size/duration in list view |
 | ⬜ | P2 | Multi-select + batch delete/export |
 | ⬜ | P2 | Copy/paste edits between items · "apply to all" |
-| ⬜ | P3 | Drag to reorder · inline rename · metadata display · sort/filter by edited · revert-to-original |
+| ⬜ | P3 | Drag to reorder · inline rename · full metadata · sort/filter by edited |
 
 ## D. API / integration / theming
 
 | Status | P | Feature |
 |--------|---|---------|
-| 🚧 | P1 | Enforce `maxFileSize` (ships with video Stage A1) |
-| 🚧 | P1 | Export progress/error/cancel events (ships with video Stage B) |
-| ✅ | P2 | `tools` option — feature-group tabs are registry-driven |
-| ✅ | P2 | Export options: format png/jpeg/webp, quality, max dimension (`export` option) |
+| ✅ | — | `maxFileSize` / `maxFiles` / `maxVideoDuration` enforcement with `file:rejected` reasons |
+| ✅ | — | Export lifecycle events (`export:start/progress/complete/error`) + `cancelExport()` + progress overlay |
+| ✅ | — | `tools` option — feature-group tabs are registry-driven |
+| ✅ | — | Export options: format png/jpeg/webp, quality, max dimension (`export` option) |
+| ✅ | — | Documented CSS-var theming (README "Theming": semantic tokens, light on `.rt-root`, dark on the overlay roots) |
+| ✅ | — | README truth pass (docs match the real API) · CHANGELOG · CI (typecheck/lint/test/build/smoke) · release script for both packages |
 | ⬜ | P2 | Paste-from-clipboard + URL import |
 | ⬜ | P2 | `getEdits()/setEdits()` JSON round-trip for host persistence |
-| ⬜ | P2 | README truth pass (docs match the real API) |
-| ✅ | P3 | Documented CSS-var theming (README "Theming": semantic tokens, light on `.rt-root`, dark on the overlay roots) |
 | ⬜ | P3 | i18n strings option · React wrapper · Vue/Svelte wrappers |
 
 ## E. Video editing
 
 | Status | P | Feature |
 |--------|---|---------|
-| 🚧 | P1 | A1: accept video files · poster cards with duration badge · media model |
-| 🚧 | P1 | A2: editor playback transport · crop/adjust/filters live on video |
-| 🚧 | P1 | A3: trim tool with filmstrip, in/out handles, loop-in-range |
-| 🚧 | P1 | A4: frame capture → image entry |
-| 🚧 | P1 | B1: re-encoded MP4 export (mediabunny/WebCodecs), audio + mute, progress + cancel |
-| 🚧 | P1 | B2: MediaRecorder fallback · export progress overlay · video on by default |
+| ✅ | — | Accept video files · poster cards with duration badge · media model (`ImageEntry \| VideoEntry`) |
+| ✅ | — | Editor playback transport · crop/adjust/filters live on video |
+| ✅ | — | Trim tool with filmstrip, in/out handles, loop-in-range |
+| ✅ | — | Frame capture → image entry (carries the video's visual edits) |
+| ✅ | — | Re-encoded MP4/WebM export (mediabunny/WebCodecs), audio + mute, progress + cancel; packet copy when nothing changed |
+| ✅ | — | MediaRecorder fallback · export progress overlay · video on by default |
 | ✅ | — | Playback speed 0.25–4× (preview + retimed export; audio dropped at non-1×) |
-| ⬜ | P3 | Audio gain/fade · pitch-preserving speed audio · GIF-of-range export · poster pick |
+| ✅ | — | GIF-of-range export (forward/reverse/boomerang) · deflicker · poster pick |
+| ⬜ | P3 | Audio gain/fade · pitch-preserving speed audio · full mp4 reverse |
 | ⬜ | P3 | Researched (CapCut baseline, need multi-clip/object layers): transitions · text & auto-captions · keyframe animation · speed curves · stabilization · chroma key |
 
-## G. AI
+## F. AI
 
 | Status | P | Feature |
 |--------|---|---------|
-| 🚧 | P1 | AI command bar: natural-language edits via VLM (token-gated, Anthropic by default, `complete` hook for proxies) |
+| ✅ | — | AI panel (⌘K): natural-language edits via VLM over the full edit surface (token-gated, Anthropic by default, `baseUrl`/`complete` for proxies, `allowUserKey`) |
 | ⬜ | P3 | AI auto-enhance suggestions · smart-crop refinements · alt-text generation on export |
 
-## F. Ambitious / later
+## G. On-device ML (`@9tensor/retouch-ml`)
 
 | Status | P | Feature |
 |--------|---|---------|
-| ⬜ | P3 | Background removal (separate plugin package, WebGPU/onnx) |
-| ⬜ | P3 | Collage canvas · batch watermark |
-| ✅ | — | Plugin API v1: `Retouch.registerTool` feature groups over the shared edit model (demo: "Looks") |
+| ✅ | — | M1 Cutout — MODNet background removal (any BiRefNet export via `modelUrl`) |
+| ✅ | — | M2 Upscale — tiled Real-ESRGAN 4× |
+| ✅ | — | M3 Erase — LaMa heal brush, in place |
+| ✅ | — | M4 Detect — UltraFace faces + YOLOX-nano objects → masks, privacy pixelate, crop-to-boxes |
+| ✅ | — | M5 Select — SlimSAM click-to-segment → cut out / erase object |
+| ✅ | — | M6 Depth — Depth Anything V2 Small bokeh, click-to-focus + aperture |
+| ✅ | — | M7 Denoise — SCUNet real-noise removal |
+| ✅ | — | Runtime: WebGPU → WASM fallback, worker inference, Cache API weights, revision-pinned default URLs |
+| ⬜ | P1 | M8 Face restoration — GFPGAN (Apache-2.0), UltraFace crop + paste-back |
+| ⬜ | P3 | Colorize (DDColor — parked on export licensing) · video matting (MODNet per frame) · face-aware retouch (Face Mesh) · open-vocab detection (OWL-ViT) |
+
+## H. Ambitious / later
+
+| Status | P | Feature |
+|--------|---|---------|
+| ✅ | — | Plugin API v1: `Retouch.registerTool` feature groups over the shared edit model (demo: "Looks"; `@9tensor/retouch-ml` is built on it) |
 | ⬜ | P3 | Plugin API v2: custom render passes + `registerFilter` (needed for Draw/Text/Sticker as plugins) |
+| ⬜ | P3 | Collage canvas · batch watermark |

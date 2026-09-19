@@ -1,9 +1,23 @@
 # @9tensor/retouch-ml
 
+<p>
+  <a href="https://www.npmjs.com/package/@9tensor/retouch-ml"><img src="https://img.shields.io/npm/v/@9tensor/retouch-ml?color=D4572A&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/9TensorSoftware/retouch/blob/main/packages/ml/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch-ml?color=1A1815" alt="license" /></a>
+</p>
+
 On-device ML tools for [Rétouch](https://github.com/9TensorSoftware/retouch) — no
 server, no API keys. Models run in the browser through ONNX Runtime Web
-(WebGPU when available, WASM otherwise); weights download on first use and are
-cached via the Cache API.
+(WebGPU when available, WASM otherwise, inference in a worker so the UI never
+freezes); weights download on first use and are cached via the Cache API.
+
+## Install
+
+```bash
+npm install @9tensor/retouch @9tensor/retouch-ml
+```
+
+`@9tensor/retouch` is a peer dependency — the tools register into its editor
+through the plugin API and ride its edit model.
 
 ## Features
 
@@ -54,15 +68,52 @@ const retouch = new Retouch({ target: "#editor" });
 installMlTools(retouch);
 ```
 
-Or run background removal headlessly:
+Every tool is also a plain function you can call without the editor. Each
+takes an `HTMLImageElement | HTMLCanvasElement` plus options, and accepts
+`onDownloadProgress` for the first-run weight download:
 
 ```ts
-import { removeBackground } from "@9tensor/retouch-ml";
+import {
+  denoiseImage, detectFaces, detectObjects, estimateDepth,
+  inpaintStrokes, removeBackground, upscaleImage,
+} from "@9tensor/retouch-ml";
 
-const canvas = await removeBackground(imageElement, {
+const cutout = await removeBackground(image, {
   onDownloadProgress: ({ loaded, total }) => console.log(loaded / total),
+});                                                  // HTMLCanvasElement (RGBA)
+const big = await upscaleImage(image, { onTileProgress: (done, total) => … });
+const clean = await denoiseImage(image);
+const faces = await detectFaces(image);              // [{ x, y, w, h, score }], normalized 0–1
+const things = await detectObjects(image);           // …plus `label` (COCO class)
+const healed = await inpaintStrokes(image, [{ x, y, r }, …]);
+const depth = await estimateDepth(image);            // { width, height, data: Float32Array } (0–1, higher = closer)
+```
+
+`inpaintMask(image, maskCanvas)` takes a painted mask instead of strokes; the
+SAM pieces are exposed as `encodeSamImage` / `decodeSamClicks` / `pickBestMask`.
+
+## Options
+
+```ts
+installMlTools(retouch, {
+  cutout:  { refSize: 512 },                          // or false to skip the tool
+  upscale: { tileSize: 64, tileOverlap: 8, maxInputDim: 2048 },
+  denoise: { tileSize: 192, tileOverlap: 16, maxInputDim: 2048 },
+  erase:   { modelUrl },                              // LaMa inpainting (also backs Select → Erase object)
+  detect:  { scoreThreshold: 0.7, iouThreshold: 0.35, // faces (UltraFace)
+             objects: { scoreThreshold: 0.35, iouThreshold: 0.45 } }, // YOLOX
+  select:  { encoderUrl, decoderUrl },
+  depth:   { modelUrl },
+  openResults: true,
 });
 ```
+
+Any of the seven keys can be `false` to leave that tab out. Every option
+group also accepts the runtime options below (`wasmPaths`,
+`executionProviders`, `externalDataUrl`, `onDownloadProgress`).
+`openResults` (default `true`) opens results that land in the gallery — Cutout,
+Upscale, and Select's **Cut out** — in the editor as soon as they finish; pass
+`false` to leave them in the gallery quietly.
 
 ## Self-hosting
 
@@ -73,6 +124,11 @@ By default, model weights load from the Hugging Face CDN and the ONNX Runtime
 installMlTools(retouch, {
   cutout: { modelUrl: "https://your.cdn/models/modnet.onnx", wasmPaths: "https://your.cdn/ort/" },
   upscale: { modelUrl: "https://your.cdn/models/realesrgan-x4plus.onnx" },
+  erase: { modelUrl: "https://your.cdn/models/lama_fp32.onnx" },
+  detect: {
+    modelUrl: "https://your.cdn/models/ultraface-rfb-320.onnx",
+    objects: { modelUrl: "https://your.cdn/models/yolox_nano.onnx" },
+  },
   select: { encoderUrl: "https://your.cdn/models/sam-encoder.onnx", decoderUrl: "https://your.cdn/models/sam-decoder.onnx" },
   depth: { modelUrl: "https://your.cdn/models/depth-anything-v2-small.onnx" },
   denoise: {
@@ -82,13 +138,14 @@ installMlTools(retouch, {
 });
 ```
 
-Pass `cutout: false` or `upscale: false` to skip registering a tool. Cutout
-and Upscale open their result in the editor when done; pass
-`openResults: false` to leave it in the gallery quietly.
-`wasmPaths` is page-global — setting it in either tool's options applies to
-both.
+Default model URLs are pinned to a specific upstream revision, so an upstream
+repository change can never alter what your users download; the
+`DEFAULT_*_MODEL_URL` constants expose them. `wasmPaths` is page-global —
+setting it in any tool's options applies to every session. `executionProviders`
+(default `["webgpu", "wasm"]`) sets the preference order; a run that fails on
+WebGPU retries on WASM automatically.
 
-`clearModelCache()` drops the cached weights.
+`await clearModelCache()` drops the cached weights.
 
 The denoise default is a split export: a graph stub plus a `.onnx.data`
 weights sidecar. When self-hosting it, keep the sidecar's filename identical

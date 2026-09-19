@@ -147,7 +147,7 @@ export interface RetouchOptions {
   tools?: EditorTool[];
   /** Image export format/quality/sizing. Videos always export as MP4/WebM. */
   export?: ImageExportOptions;
-  /** Called when the user clicks Done in the gallery with all exported blobs. */
+  /** Called with every entry exported — from the gallery's Done button or a host `done()` call. */
   onDone?: (blobs: Blob[]) => void;
 }
 

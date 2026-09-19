@@ -14,7 +14,7 @@
 
 <p align="center">
   Drop files, browse, click to edit — three states, one component.<br/>
-  Powered by fabric.js. Canvas-native. Framework-agnostic.
+  Powered by fabric.js. Canvas-native. Framework-agnostic. Video and on-device ML included.
 </p>
 
 <p align="center">
@@ -28,8 +28,8 @@
   <a href="#install">Install</a> &nbsp;·&nbsp;
   <a href="#quick-start">Quick Start</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How It Works</a> &nbsp;·&nbsp;
-  <a href="#api">API</a> &nbsp;·&nbsp;
   <a href="#tools">Tools</a> &nbsp;·&nbsp;
+  <a href="#api">API</a> &nbsp;·&nbsp;
   <a href="#development">Development</a>
 </p>
 
@@ -45,7 +45,8 @@ Most image editors bolt onto your app like an afterthought. Rétouch was designe
 - **Three-state UX** — drop zone, gallery, editor — all handled for you
 - **Canvas-native** — all processing happens on an HTML Canvas, no server round-trips
 - **Video too** — trim, crop, adjust and filter videos, re-encoded in the browser via WebCodecs ([mediabunny](https://mediabunny.dev/) loads lazily, only when a video is exported)
-- **Framework-agnostic** — vanilla JS core with a React wrapper available
+- **On-device ML** — background removal, upscaling, object erase, click-to-select, depth bokeh, denoise via the optional [`@9tensor/retouch-ml`](packages/ml) package; no server, no keys
+- **Framework-agnostic** — a vanilla TypeScript class you mount into any element (framework wrappers are on the roadmap)
 
 <br />
 
@@ -63,45 +64,30 @@ pnpm add @9tensor/retouch
 yarn add @9tensor/retouch
 ```
 
+Requirements: a browser with `<canvas>`; ESM-first with a CommonJS build (the CJS bundle still loads
+mediabunny/gifenc through `import()`). Importing is side-effect free — styles inject when the first
+`Retouch` is constructed — so the package is safe to import under SSR; construct it once a DOM exists
+(`useEffect`, `onMount`, …).
+
 <br />
 
 ## Quick Start
 
-### Vanilla JS
-
 ```ts
 import { Retouch } from "@9tensor/retouch";
 
-const editor = new Retouch({
+const retouch = new Retouch({
   target: "#editor",
-  width: 800,
-  height: 600,
+  onDone: (blobs) => upload(blobs), // edited files, one Blob per entry
 });
 
-// When done:
-editor.destroy();
+// When you're finished with it:
+retouch.destroy();
 ```
 
-### React
-
-```tsx
-import { RetouchEditor } from "@9tensor/retouch/react";
-
-function App() {
-  return (
-    <RetouchEditor
-      multiple
-      maxFiles={10}
-      accept="image/*"
-      tools={["crop", "adjust", "filters", "draw"]}
-      gallery="grid"
-      onDone={(files) => {
-        console.log("Edited files:", files);
-      }}
-    />
-  );
-}
-```
+Users drop files, edit, and press **Done** in the gallery; `onDone` receives every entry exported
+with its edits applied (images as PNG by default, videos as MP4/WebM). Hosts can drive the same flow
+programmatically — `addFiles()`, `openEditor()`, `done()` — see [API](#api).
 
 <br />
 
@@ -113,20 +99,25 @@ Rétouch lives in **three states**. No complex routing, no page transitions — 
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐      ┌──────┐
 │  Drop Zone  │ ───→ │   Gallery   │ ───→ │   Editor    │ ───→ │ Done │
 │             │      │             │      │             │      │      │
-│ Drag & drop │      │ Grid / List │      │ Crop, draw, │      │ Blob │
-│ or browse   │      │ view, manage│      │ adjust, etc │      │ File │
+│ Drag & drop │      │ 6 view modes│      │ Crop, adjust│      │ Blob │
+│ or browse   │      │ add, manage │      │ filter, trim│      │ each │
 └─────────────┘      └─────────────┘      └─────────────┘      └──────┘
 ```
 
 ### 1. Drop Zone
 
-The initial state. Accepts drag & drop, file browse, paste, and URLs. Minimal and inviting — transitions to the gallery the moment files land.
+The initial state. Accepts drag & drop and file browse. Minimal and inviting — transitions to the gallery the moment files land.
 
-> PNG, JPG, WebP — up to 20 MB each
+> PNG, JPG, WebP by default, plus MP4, WebM and MOV when video is enabled (it is unless you pass
+> `acceptedVideoTypes: []`). Files are unlimited in size and count unless you set `maxFileSize` /
+> `maxFiles`; rejections surface as a toast and a `file:rejected` event.
 
 ### 2. Gallery
 
-Once images are loaded they appear in a responsive grid (or list). Each thumbnail reveals an edit button on hover. A green dot marks images that have already been edited. Add more files anytime.
+Once files are loaded they appear in one of six view modes — 2/3/4 columns, width-fit, height-fit,
+or a list. Each thumbnail reveals edit, download and remove actions on hover; a green dot marks
+entries that have already been edited. Drop or browse to add more anytime, and press **Done** (shown
+when `onDone` is configured) to export everything.
 
 ### 3. Editor
 
@@ -146,8 +137,8 @@ Opens as a modal overlay: a true-neutral dark stage that keeps focus — and col
 | **Color mix** | Lightroom-style **HSL mixer**: eight hue bands (red → magenta), each with hue/saturation/luminance shifts and smooth falloff to neighboring bands. Grays stay untouched. The AI understands it too — "make the sky bluer" targets just the blue band. |
 | **Masks** | Selective adjustments: add **linear or radial gradient masks**, drag their handles on the canvas, and dial local exposure/brightness/contrast/saturation/temperature/tint that apply only inside the feathered gradient. Invertible, stackable, fully non-destructive. |
 | **Stylize** | Parametric effects: **tilt-shift** (miniature look with a movable focus band), **duotone** (pick shadow/highlight colors), **posterize**, **pixelate**, **halftone** — each with a strength slider, applied identically at export. |
-| **Filters** | 12 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — with an intensity slider and live thumbnails. |
-| **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging, and 0.25–4× playback speed. |
+| **Filters** | 11 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — plus Original, with an intensity slider and live thumbnails. |
+| **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging (0.1 s, Shift for 1 s), and playback speed in nine steps from 0.25× to 4×. |
 | **Draw** | _Planned._ Freehand drawing and annotation directly on the canvas. |
 | **Text** | _Planned._ Add and position text overlays with font and color controls. |
 | **Sticker** | _Planned._ Place image overlays and shapes onto the canvas. |
@@ -158,7 +149,7 @@ Drop an MP4, WebM, or MOV alongside your images. Videos get poster cards with a
 duration badge in the gallery and open in the same editor with a playback
 transport. Everything is non-destructive until export:
 
-- **Trim** — sample-accurate in/out points; untouched clips trim losslessly without re-encoding
+- **Trim** — sample-accurate in/out points; an export with no trim, no visual edits and 1× speed copies packets without re-encoding; anything else re-encodes
 - **Crop / rotate / adjust / filter** — applied per frame at export, matching the live preview exactly
 - **Frame capture** — grab any frame as a new image entry, carrying the video's edits
 - **Audio** — preserved through export; one-tap mute discards the track
@@ -305,9 +296,11 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd/Ctrl+Z` · `Cmd/Ctrl+Shift+Z` | Undo · redo (also toolbar buttons) |
-| `Esc` | Cancel · `Cmd/Ctrl+Enter` | Done |
-| `1`–`4` | Switch tool · `Space` | Play/pause (video) |
+| `Cmd/Ctrl+Z` · `Cmd/Ctrl+Shift+Z` / `Cmd/Ctrl+Y` | Undo · redo (also toolbar buttons) |
+| `Esc` · `Cmd/Ctrl+Enter` | Cancel · Done |
+| `Cmd/Ctrl+K` | Open the AI panel |
+| `1`–`9` | Switch tool, in tab order |
+| `Enter` (Crop tab) · `Space` (video) | Apply crop · play/pause |
 
 Plus a **side-by-side compare view** — the labeled Compare button splits the
 canvas into bordered "Original" and "Edited" panels (the original comes from
@@ -342,61 +335,127 @@ new Retouch({
 
 ## API
 
-### `RetouchEditor` Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `target` | `string \| HTMLElement` | — | CSS selector or DOM element to mount into |
-| `width` | `number` | `800` | Canvas width in pixels |
-| `height` | `number` | `600` | Canvas height in pixels |
-| `multiple` | `boolean` | `false` | Allow multiple image uploads |
-| `maxFiles` | `number` | `10` | Maximum number of files when `multiple` is enabled |
-| `accept` | `string` | `"image/*"` | Accepted file types |
-| `aspectRatio` | `string` | `"free"` | Default crop aspect ratio |
-| `tools` | `string[]` | All tools | Which editor tools to enable |
-| `gallery` | `"grid" \| "list"` | `"grid"` | Default gallery view mode |
-| `onDone` | `(files: Blob[]) => void` | — | Callback when editing is complete |
-
-### Instance Methods
+### Options
 
 ```ts
-const editor = new Retouch({ target: "#editor" });
-
-editor.state;          // "idle" | "mounted" | "destroyed"
-editor.canvasElement;  // The underlying HTMLCanvasElement
-editor.render();       // Force a re-render
-editor.destroy();      // Tear down and clean up (idempotent)
+new Retouch(options: RetouchOptions)
 ```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `target` | `string \| HTMLElement` | — | CSS selector or element to mount into (throws if the selector matches nothing) |
+| `maxFiles` | `number` | `Infinity` | Cap on the number of entries; extra files are rejected with reason `"count"` |
+| `acceptedTypes` | `string[]` | `["image/jpeg", "image/png", "image/webp"]` | Accepted image MIME types |
+| `acceptedVideoTypes` | `string[]` | `["video/mp4", "video/webm", "video/quicktime"]` | Accepted video MIME types; `[]` disables video |
+| `maxFileSize` | `number` | `Infinity` | Per-file size cap in bytes (reason `"size"`) |
+| `maxVideoDuration` | `number` | `Infinity` | Video length cap in seconds (reason `"duration"`) |
+| `commitMode` | `"bake" \| "keep-edits"` | `"bake"` | What Done does to an image's edits — see [Editing UX](#editing-ux) |
+| `tools` | `EditorTool[]` | all | Feature groups to mount, in tab order (built-ins and registered plugins) |
+| `export` | `ImageExportOptions` | `{ format: "png", quality: 0.92 }` | Image output format/quality/`maxDimension`; videos always export MP4/WebM |
+| `ai` | `AiOptions` | off | Enables the AI panel — see [AI edits](#ai-edits) |
+| `onDone` | `(blobs: Blob[]) => void` | — | Receives every entry exported with its edits; also shows the gallery's Done button |
+
+### Instance
+
+```ts
+const retouch = new Retouch({ target: "#editor" });
+
+retouch.state;                       // "dropzone" | "gallery" | "editor" | "destroyed"
+retouch.on("images:add", (e) => …);  // subscribe; returns an unsubscribe function
+
+await retouch.addFiles(files);       // validate + ingest File objects (drop zone / gallery do this for you)
+retouch.getMedia();                  // every entry, in insertion order (ImageEntry | VideoEntry)
+retouch.getEditingEntry();           // the entry open in the editor, or null
+retouch.removeImage(id);
+
+retouch.openEditor(id);
+retouch.closeEditor(commit);         // true = Done, false = Cancel
+await retouch.restoreOriginal(id);   // bring back the pristine pixels after a bake / destructive tool
+await retouch.replaceImageSource(id, file); // swap an image's pixels in place (ML tools use this)
+
+await retouch.exportAll();           // Blob[] with edits applied — what Done hands to onDone
+await retouch.done();                // exportAll() + "done" event + onDone
+retouch.cancelExport();              // abort an in-flight exportAll()/done()
+await retouch.downloadImage(id);     // export one entry and trigger a browser download
+await retouch.exportGif(id, { fps, maxWidth, loop }); // video: animated GIF of the trimmed range
+
+retouch.destroy();                   // tear down (idempotent)
+```
+
+`Retouch.registerTool(plugin)` (static) adds a feature group — see [Plugin feature groups](#plugin-feature-groups).
+`getImages()` is deprecated in favor of `getMedia()` (it omits videos).
+
+### Events
+
+```ts
+const off = retouch.on("export:progress", ({ id, progress }) => …);
+```
+
+| Event | Payload | When |
+|-------|---------|------|
+| `state:change` | `{ from, to }` | The component moves between drop zone, gallery, editor |
+| `images:add` | `{ entries }` | Files were accepted (images and videos) |
+| `images:remove` | `{ id }` | An entry was removed |
+| `file:rejected` | `{ file, reason }` | A file failed validation — `"type" \| "size" \| "duration" \| "count" \| "load-error"` |
+| `editor:open` | `{ id }` | The editor opened an entry |
+| `editor:done` | `{ id, edits }` | Done was pressed in the editor |
+| `editor:cancel` | `{ id }` | The editor was dismissed without applying |
+| `image:commit` | `{ id }` | Edits were baked into the image's pixels (`commitMode: "bake"`) |
+| `image:restore` | `{ id }` | The pristine original was restored |
+| `frame:capture` | `{ sourceId, entry }` | A video frame became a new image entry |
+| `ai:start` / `ai:applied` / `ai:error` | `{ id, prompt }` / `{ id, ops, explanation }` / `{ id, error }` | AI panel lifecycle |
+| `export:start` / `export:progress` / `export:complete` / `export:error` | `{ id, kind }` / `{ id, progress }` / `{ id, blob }` / `{ id, error }` | Per-entry export lifecycle (`cancelExport()` ends the run without an event) |
+| `done` | `{ blobs }` | `done()` finished — fired just before `onDone` |
+
+### Exports
+
+Values: `Retouch`, `refreshRangeFill`, `isImageEntry`, `isVideoEntry`, `ACCEPTED_TYPES`,
+`ACCEPTED_VIDEO_TYPES`, `VERSION`.
+Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `MediaEntry`, `ImageEntry`, `VideoEntry`,
+`MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `TrimRange`, `EditMask`,
+`FilterPreset`, `AspectRatioPreset`, `Orientation`, `GalleryViewMode`, `EditorTool`,
+`BuiltinEditorTool`, `ImageExportOptions`, `FileRejectionReason`, `AiOptions`, `AiRequest`,
+`AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolPaneHandle`.
 
 <br />
 
 ## Development
 
 ```bash
-pnpm install          # Install dependencies
-pnpm dev              # Start dev server with live demo
-pnpm test             # Run tests
-pnpm test:watch       # Run tests in watch mode
-pnpm build            # Build for production
-pnpm check            # Lint and format check
-pnpm typecheck        # Type check
+pnpm install          # Install dependencies (workspace: core + packages/ml)
+pnpm dev              # Dev server with the live demo at http://localhost:5173/retouch.js/
+pnpm test             # Run the test suite (core + ml)
+pnpm test:watch       # …in watch mode
+pnpm test:coverage    # …with coverage
+pnpm typecheck        # Type-check both packages
+pnpm check            # Biome lint + format check (pnpm format to fix)
+pnpm build            # Build @9tensor/retouch → dist/
+pnpm build:all        # Build core, then @9tensor/retouch-ml
+pnpm smoke            # Import both built packages from Node and inspect their tarballs
+pnpm build:demo       # Static demo build → demo-dist/ (what GitHub Pages serves)
 ```
+
+CI runs typecheck → lint → tests → builds → smoke on every push; the demo deploys only from a green
+`main`. `publish.sh` releases both packages in dependency order.
 
 ### Project Structure
 
 ```
 src/
-├── index.ts           # Public API exports
-├── retouch.ts         # Core Retouch class
-├── types.ts           # TypeScript interfaces
-├── constants.ts       # Defaults and version
-└── utils/
-    └── canvas.ts      # Canvas helper functions
-tests/
-└── retouch.test.ts    # Test suite
-demo/
-├── index.html         # Dev playground
-└── main.ts            # Demo entry point
+├── index.ts               # Public API exports
+├── retouch.ts             # The Retouch class: state, media, export, events
+├── types.ts               # Options, entries, edit model, event map
+├── constants.ts           # Defaults, accepted types, version
+├── styles.ts              # Design tokens + all CSS (injected once)
+├── ai/interpreter.ts      # Natural-language → validated edit ops
+├── export/                # Image/video/GIF export pipelines (mediabunny, MediaRecorder fallback)
+├── ui/                    # Drop zone, gallery, toasts, export overlay, icons
+│   └── editor/            # Editor shell, tool registry, per-tool panes and overlays
+└── utils/                 # Pure processing: filters, curves, HSL, masks, seam carving, liquify, …
+packages/ml/               # @9tensor/retouch-ml — ONNX Runtime Web tools (cutout, upscale, erase, …)
+tests/                     # Vitest + jsdom (core); packages/ml/tests for the ML package
+demo/                      # Vite playground and the GitHub Pages site
+docs/                      # ROADMAP.md, ADVANCED-FEATURES.md (research + license audit)
 ```
 
 <br />

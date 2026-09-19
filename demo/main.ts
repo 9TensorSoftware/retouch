@@ -1,6 +1,6 @@
 import { installMlTools } from "../packages/ml/src/index";
 import type { Adjustments, FilterPreset, ToolContext } from "../src/index";
-import { Retouch } from "../src/index";
+import { Retouch, VERSION } from "../src/index";
 
 // ── Demo of the plugin API: a custom "Looks" feature group ──────────────
 // One-tap moods that write through the same non-destructive edit model the
@@ -67,5 +67,9 @@ const editor = new Retouch({
 
 // ML tools (on-device, lazy model download on first use)
 installMlTools(editor);
+
+// The nav badge follows the library, so there is no version string to keep in sync.
+const versionBadge = document.querySelector<HTMLAnchorElement>(".nav-version");
+if (versionBadge) versionBadge.textContent = `v${VERSION}`;
 
 Object.assign(window, { editor });
