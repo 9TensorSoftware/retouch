@@ -9,7 +9,7 @@ import { ort, type RuntimeOptions, runResilient } from "./runtime";
  */
 
 export const DEFAULT_CUTOUT_MODEL_URL =
-  "https://huggingface.co/Xenova/modnet/resolve/main/onnx/model.onnx";
+  "https://huggingface.co/Xenova/modnet/resolve/fa2fa546052fba4c08921230a26cc69a333fca12/onnx/model.onnx";
 
 export interface CutoutOptions extends RuntimeOptions {
   modelUrl?: string;

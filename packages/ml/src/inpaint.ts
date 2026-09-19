@@ -11,7 +11,7 @@ import { ort, type RuntimeOptions, runResilient } from "./runtime";
  */
 
 export const DEFAULT_INPAINT_MODEL_URL =
-  "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx";
+  "https://huggingface.co/Carve/LaMa-ONNX/resolve/c3c0c9e468934d62e79c329e35d82dd09ff8c444/lama_fp32.onnx";
 
 /** The export's fixed spatial size. */
 const MODEL_SIZE = 512;

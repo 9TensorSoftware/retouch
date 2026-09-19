@@ -3,7 +3,10 @@
 Constraint: everything runs **fully client-side in TypeScript** (canvas/WebGL or
 ONNX Runtime Web / transformers.js). Licenses verified 2026-07 against an
 MIT-licensed library used commercially. Weights are fetched at runtime (HF CDN
-or self-hosted), never bundled — but defaults must still be permissive.
+or self-hosted), never bundled — but defaults must still be permissive. Since
+0.1.0 every default URL is pinned to a specific upstream revision (a commit
+SHA in the `resolve/…` path), so an upstream push can never change what users
+download; bumping a pin is a deliberate, reviewed change.
 
 ## License verdicts (checked at source)
 

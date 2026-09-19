@@ -13,7 +13,7 @@ import { ort, type RuntimeOptions, runResilient } from "./runtime";
  */
 
 export const DEFAULT_DEPTH_MODEL_URL =
-  "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model_quantized.onnx";
+  "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/4472b7362082ad9968fee890ca0f1e5aca36b93d/onnx/model_quantized.onnx";
 
 const DEPTH_TARGET = 518;
 const DEPTH_MULTIPLE = 14;

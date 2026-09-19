@@ -16,10 +16,10 @@ import { ort, type RuntimeOptions, runResilient } from "./runtime";
  */
 
 export const DEFAULT_FACE_MODEL_URL =
-  "https://media.githubusercontent.com/media/onnx/models/main/validated/vision/body_analysis/ultraface/models/version-RFB-320.onnx";
+  "https://media.githubusercontent.com/media/onnx/models/4f43949841cb55a0b98dc8fcd045431ccafd9f96/validated/vision/body_analysis/ultraface/models/version-RFB-320.onnx";
 
 export const DEFAULT_OBJECT_MODEL_URL =
-  "https://huggingface.co/hr16/yolox-onnx/resolve/main/yolox_nano.onnx";
+  "https://huggingface.co/hr16/yolox-onnx/resolve/a124b32c3b7c5cebda1c7cd96178f0f9d2050125/yolox_nano.onnx";
 
 const INPUT_W = 320;
 const INPUT_H = 240;

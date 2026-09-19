@@ -16,9 +16,9 @@ import { loadSession, ort, type RuntimeOptions, runResilient } from "./runtime";
  */
 
 export const DEFAULT_SAM_ENCODER_URL =
-  "https://huggingface.co/Xenova/slimsam-77-uniform/resolve/main/onnx/vision_encoder.onnx";
+  "https://huggingface.co/Xenova/slimsam-77-uniform/resolve/5850ab45f587c112167512ffef949107115e26a0/onnx/vision_encoder.onnx";
 export const DEFAULT_SAM_DECODER_URL =
-  "https://huggingface.co/Xenova/slimsam-77-uniform/resolve/main/onnx/prompt_encoder_mask_decoder.onnx";
+  "https://huggingface.co/Xenova/slimsam-77-uniform/resolve/5850ab45f587c112167512ffef949107115e26a0/onnx/prompt_encoder_mask_decoder.onnx";
 
 /** The network's fixed spatial size. */
 export const SAM_SIZE = 1024;

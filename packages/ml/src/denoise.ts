@@ -14,10 +14,10 @@ import { chw01ToRgba, rgbaToChw01 } from "./upscale";
  */
 
 export const DEFAULT_DENOISE_MODEL_URL =
-  "https://huggingface.co/Heliosoph/scunet-onnx/resolve/main/scunet_color_real_psnr.onnx";
+  "https://huggingface.co/Heliosoph/scunet-onnx/resolve/6d11417ee2fbcc73783c502a238ac115097754fe/scunet_color_real_psnr.onnx";
 
 export const DEFAULT_DENOISE_DATA_URL =
-  "https://huggingface.co/Heliosoph/scunet-onnx/resolve/main/scunet_color_real_psnr.onnx.data";
+  "https://huggingface.co/Heliosoph/scunet-onnx/resolve/6d11417ee2fbcc73783c502a238ac115097754fe/scunet_color_real_psnr.onnx.data";
 
 /** Every SCUNet input dimension must divide by this (Swin window math). */
 export const DENOISE_DIM_MULTIPLE = 64;

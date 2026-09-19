@@ -1,9 +1,31 @@
 {
   "name": "@9tensor/retouch-ml",
-  "version": "0.0.1",
-  "description": "Rétouch ML tools — on-device background removal and more, via ONNX Runtime Web",
-  "author": "",
+  "version": "0.1.0",
+  "description": "Rétouch ML tools — on-device cutout, 4× upscale, erase, click-to-select, depth bokeh, denoise and face/object detection via ONNX Runtime Web",
+  "author": "9Tensor",
   "license": "MIT",
+  "homepage": "https://github.com/9TensorSoftware/retouch/tree/main/packages/ml#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/9TensorSoftware/retouch.git",
+    "directory": "packages/ml"
+  },
+  "bugs": {
+    "url": "https://github.com/9TensorSoftware/retouch/issues"
+  },
+  "keywords": [
+    "retouch",
+    "image-editor",
+    "onnx",
+    "onnxruntime-web",
+    "webgpu",
+    "background-removal",
+    "super-resolution",
+    "inpainting",
+    "segment-anything",
+    "depth-estimation",
+    "denoise"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -31,6 +53,12 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm run build"
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "onnxruntime-web": "^1.22.0"
   },
@@ -41,11 +69,5 @@
     "@9tensor/retouch": "workspace:*",
     "tsup": "^8.5.0",
     "typescript": "^5.7.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }

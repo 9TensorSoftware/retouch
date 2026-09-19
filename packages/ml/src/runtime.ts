@@ -52,6 +52,7 @@ function configure(options: RuntimeOptions): void {
   }
   if (defaultApplied) return;
   defaultApplied = true;
+  // The literal fallback tracks the onnxruntime-web range in package.json.
   const version = (ort.env.versions as { web?: string } | undefined)?.web ?? "1.22.0";
   ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${version}/dist/`;
 }

@@ -414,7 +414,7 @@ Values: `Retouch`, `refreshRangeFill`, `isImageEntry`, `isVideoEntry`, `ACCEPTED
 Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `MediaEntry`, `ImageEntry`, `VideoEntry`,
 `MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `TrimRange`, `EditMask`,
 `FilterPreset`, `AspectRatioPreset`, `Orientation`, `GalleryViewMode`, `EditorTool`,
-`BuiltinEditorTool`, `ImageExportOptions`, `FileRejectionReason`, `AiOptions`, `AiRequest`,
+`BuiltinEditorTool`, `ImageExportOptions`, `GifExportOptions`, `GifLoopMode`, `FileRejectionReason`, `AiOptions`, `AiRequest`,
 `AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolPaneHandle`.
 
 <br />

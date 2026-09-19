@@ -1,4 +1,5 @@
 export { ACCEPTED_TYPES, ACCEPTED_VIDEO_TYPES, VERSION } from "./constants";
+export type { GifExportOptions, GifLoopMode } from "./export/gif-export";
 export { Retouch } from "./retouch";
 export type {
   Adjustments,

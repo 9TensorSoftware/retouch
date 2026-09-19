@@ -36,6 +36,7 @@ export {
   buildYoloxGrid,
   COCO_CLASSES,
   DEFAULT_FACE_MODEL_URL,
+  DEFAULT_OBJECT_MODEL_URL,
   type DetectFacesOptions,
   type Detection,
   type DetectObjectsOptions,

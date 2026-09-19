@@ -10,7 +10,7 @@ import { computeTileGrid } from "./tiles";
  */
 
 export const DEFAULT_UPSCALE_MODEL_URL =
-  "https://huggingface.co/fernandotonon/QtMeshEditor-realesrgan-onnx/resolve/main/RealESRGAN_x4plus.onnx";
+  "https://huggingface.co/fernandotonon/QtMeshEditor-realesrgan-onnx/resolve/766bac4b35aaeefe85a065ece8ee2f827b1314d8/RealESRGAN_x4plus.onnx";
 
 export interface UpscaleOptions extends RuntimeOptions {
   modelUrl?: string;
