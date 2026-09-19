@@ -574,6 +574,7 @@ export class Retouch {
       onRemove: (id) => this.removeImage(id),
       onAddMore: (files) => this.addFiles(files),
       onDownload: (id) => this.downloadImage(id),
+      onDone: this.options.onDone ? () => this.done() : undefined,
     });
     this.root.appendChild(view.root);
     this.currentView = view;

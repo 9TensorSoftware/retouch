@@ -383,6 +383,32 @@ const CSS = /* css */ `
   color: var(--rt-accent-text);
 }
 
+/* Done — the host's exit, so it wears the primary treatment */
+.rt-gallery__done {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch; /* same height as the add zone beside it */
+  margin-left: 12px;
+  padding: 0 20px;
+  border: 1.5px solid transparent;
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-accent);
+  color: var(--rt-on-accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), opacity var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-gallery__done:hover {
+  background: var(--rt-accent-hover);
+}
+
+.rt-gallery__done[disabled] {
+  opacity: 0.5;
+  cursor: progress;
+}
+
 .rt-gallery__content--dropping {
   outline: 2px dashed var(--rt-accent);
   outline-offset: 6px;

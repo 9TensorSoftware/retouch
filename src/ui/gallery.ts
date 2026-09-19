@@ -24,6 +24,8 @@ export interface GalleryOptions {
   onRemove: (id: string) => void;
   onAddMore: (files: File[]) => void;
   onDownload: (id: string) => void;
+  /** Finish the session — export everything. Omit to hide the Done button. */
+  onDone?: () => Promise<void> | void;
 }
 
 const VIEW_ICONS: { mode: GalleryViewMode; svg: string; title: string }[] = [
@@ -143,6 +145,28 @@ export function createGallery(options: GalleryOptions): ViewHandle {
     h("div", { style: "flex:1" }), // spacer
     addZone,
   );
+
+  // Done is the host's exit: it only exists when there is somewhere to go.
+  if (options.onDone) {
+    const onDone = options.onDone;
+    const doneBtn = h("button", { type: "button", class: "rt-gallery__done" }, "Done");
+    doneBtn.addEventListener(
+      "click",
+      async () => {
+        // One export run at a time — the button waits it out.
+        doneBtn.disabled = true;
+        try {
+          await onDone();
+        } catch (error) {
+          console.error("[Retouch] Done failed", error);
+        } finally {
+          doneBtn.disabled = false;
+        }
+      },
+      { signal: rootSignal },
+    );
+    toolbar.appendChild(doneBtn);
+  }
 
   const content = h("div", { class: "rt-gallery__content" });
 
