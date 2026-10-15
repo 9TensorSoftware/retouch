@@ -11,6 +11,8 @@ editor with an on-device ML companion package. `@9tensor/retouch-ml` is publishe
 
 ### Breaking changes since 0.0.2
 
+- **New package names.** Rétouch now publishes under the 9Tensor npm scope as `@9tensor/retouch`,
+  and the ML tools ship as `@9tensor/retouch-ml`. Update the dependency and your imports.
 - **Video is accepted by default.** `acceptedTypes` now covers images only; MP4/WebM/MOV arrive
   through the new `acceptedVideoTypes` (default `["video/mp4", "video/webm", "video/quicktime"]`).
   Pass `acceptedVideoTypes: []` to keep the 0.0.2 behavior.
@@ -110,8 +112,8 @@ Apache-2.0 or BSD-3 licensed — see `docs/ADVANCED-FEATURES.md` for the audit.
 
 ## [0.0.2] — 2026-02-19
 
-Initial public release: drop zone → gallery → editor with crop, rotation and brightness/contrast/
-saturation adjustments; `onDone` export to Blobs.
+Initial public release: drop zone → gallery → editor with crop,
+rotation and brightness/contrast/saturation adjustments; `onDone` export to Blobs.
 
-[0.1.0]: https://github.com/9TensorSoftware/retouch/compare/v0.0.2...v0.1.0
-[0.0.2]: https://github.com/9TensorSoftware/retouch/releases/tag/v0.0.2
+[0.1.0]: https://github.com/9tensor/retouch.js/compare/v0.0.2...v0.1.0
+[0.0.2]: https://github.com/9tensor/retouch.js/releases/tag/v0.0.2

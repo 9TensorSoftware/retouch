@@ -19,12 +19,12 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@9tensor/retouch"><img src="https://img.shields.io/npm/v/@9tensor/retouch?color=D4572A&label=npm" alt="npm version" /></a>
-  <a href="https://github.com/9TensorSoftware/retouch/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch?color=1A1815" alt="license" /></a>
+  <a href="https://github.com/9tensor/retouch.js/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch?color=1A1815" alt="license" /></a>
   <a href="https://www.npmjs.com/package/@9tensor/retouch"><img src="https://img.shields.io/npm/dm/@9tensor/retouch?color=6B6560" alt="downloads" /></a>
 </p>
 
 <p align="center">
-  <a href="https://9TensorSoftware.github.io/retouch.js/">Live Demo</a> &nbsp;·&nbsp;
+  <a href="https://9tensor.github.io/retouch.js/">Live Demo</a> &nbsp;·&nbsp;
   <a href="#install">Install</a> &nbsp;·&nbsp;
   <a href="#quick-start">Quick Start</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How It Works</a> &nbsp;·&nbsp;
@@ -430,7 +430,7 @@ pnpm test:coverage    # …with coverage
 pnpm typecheck        # Type-check both packages
 pnpm check            # Biome lint + format check (pnpm format to fix)
 pnpm build            # Build @9tensor/retouch → dist/
-pnpm build:all        # Build core, then @9tensor/retouch-ml
+pnpm build:all        # Build @9tensor/retouch, then @9tensor/retouch-ml
 pnpm smoke            # Import both built packages from Node and inspect their tarballs
 pnpm build:demo       # Static demo build → demo-dist/ (what GitHub Pages serves)
 ```
@@ -462,4 +462,4 @@ docs/                      # ROADMAP.md, ADVANCED-FEATURES.md (research + licens
 
 ## License
 
-[MIT](LICENSE) — use it however you want.
+[MIT](LICENSE) © [9Tensor LLC](https://9tensor.com) — use it however you want.
