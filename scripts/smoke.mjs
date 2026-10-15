@@ -1,6 +1,6 @@
 // Consumer-side smoke test for the built packages.
 //
-// The demo aliases `@retouchjs/core` straight to `src/`, so nothing else in
+// The demo aliases `@9tensor/retouch` straight to `src/`, so nothing else in
 // the repo ever exercises `dist/` or the package `exports` map. This script
 // does, from plain Node: it imports both entry points of both packages, then
 // packs each one and inspects the tarball the registry would receive.
@@ -37,7 +37,7 @@ const corePkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const mlDir = join(root, "packages/ml");
 const mlPkg = JSON.parse(readFileSync(join(mlDir, "package.json"), "utf8"));
 
-console.log(`\n@retouchjs/core ${corePkg.version}`);
+console.log(`\n@9tensor/retouch ${corePkg.version}`);
 {
   const { esm, cjs } = await loadBoth(root);
   for (const [label, mod] of [
@@ -53,7 +53,7 @@ console.log(`\n@retouchjs/core ${corePkg.version}`);
   }
 }
 
-console.log(`\n@retouchjs/ml ${mlPkg.version}`);
+console.log(`\n@9tensor/retouch-ml ${mlPkg.version}`);
 {
   const { esm, cjs } = await loadBoth(mlDir);
   for (const [label, mod] of [
@@ -97,12 +97,12 @@ function packAndInspect(dir, name) {
 }
 
 try {
-  packAndInspect(root, "@retouchjs/core");
-  const ml = packAndInspect(mlDir, "@retouchjs/ml");
-  const peer = ml.peerDependencies?.["@retouchjs/core"];
+  packAndInspect(root, "@9tensor/retouch");
+  const ml = packAndInspect(mlDir, "@9tensor/retouch-ml");
+  const peer = ml.peerDependencies?.["@9tensor/retouch"];
   check(
     peer === `^${corePkg.version}`,
-    `peer @retouchjs/core is ${JSON.stringify(peer)} (expected ^${corePkg.version})`,
+    `peer @9tensor/retouch is ${JSON.stringify(peer)} (expected ^${corePkg.version})`,
   );
 } finally {
   rmSync(packDir, { recursive: true, force: true });

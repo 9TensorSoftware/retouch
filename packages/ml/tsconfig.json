@@ -8,7 +8,7 @@
     "sourceMap": false,
     "baseUrl": ".",
     "paths": {
-      "@retouchjs/core": ["../../src/index.ts"]
+      "@9tensor/retouch": ["../../src/index.ts"]
     }
   },
   "include": ["src", "tests", "../../src/gifenc.d.ts"],

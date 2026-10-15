@@ -5,9 +5,9 @@
 # `main`, and versions already bumped (package.json ×2 + src/constants.ts —
 # tests/version.test.ts keeps constants.ts honest).
 #
-# `pnpm publish` (not `npm publish`) is essential for @retouchjs/ml: it
-# rewrites the `workspace:^` peer range to the real core version. Core goes
-# first because that range points at it.
+# `pnpm publish` (not `npm publish`) is essential for @9tensor/retouch-ml: it
+# rewrites the `workspace:^` peer range to the real @9tensor/retouch version.
+# @9tensor/retouch goes first because that range points at it.
 set -euo pipefail
 
 echo "── Typecheck ──"
@@ -25,12 +25,12 @@ pnpm run build:all
 echo "── Smoke (dist + tarballs) ──"
 pnpm run smoke
 
-echo "── Publish @retouchjs/core ──"
+echo "── Publish @9tensor/retouch ──"
 pnpm publish --access public
 
-echo "── Publish @retouchjs/ml ──"
-pnpm --filter @retouchjs/ml publish --access public
+echo "── Publish @9tensor/retouch-ml ──"
+pnpm --filter @9tensor/retouch-ml publish --access public
 
 core_version=$(node -p "require('./package.json').version")
 ml_version=$(node -p "require('./packages/ml/package.json').version")
-echo "✓ Published @retouchjs/core@${core_version} and @retouchjs/ml@${ml_version}"
+echo "✓ Published @9tensor/retouch@${core_version} and @9tensor/retouch-ml@${ml_version}"

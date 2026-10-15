@@ -17,5 +17,5 @@ export default defineConfig({
   splitting: false,
   minify: false,
   treeshake: true,
-  external: ["@retouchjs/core", "onnxruntime-web"],
+  external: ["@9tensor/retouch", "onnxruntime-web"],
 });

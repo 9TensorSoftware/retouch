@@ -6,7 +6,7 @@ export default defineConfig({
   base: "/retouch.js/",
   resolve: {
     alias: {
-      "@retouchjs/core": fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+      "@9tensor/retouch": fileURLToPath(new URL("../src/index.ts", import.meta.url)),
     },
   },
   build: {

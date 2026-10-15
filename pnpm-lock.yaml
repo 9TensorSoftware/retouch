@@ -42,7 +42,7 @@ importers:
         specifier: ^1.22.0
         version: 1.22.0
     devDependencies:
-      '@retouchjs/core':
+      '@9tensor/retouch':
         specifier: workspace:*
         version: link:../..
       tsup:

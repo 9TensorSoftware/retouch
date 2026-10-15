@@ -4,7 +4,7 @@ import {
   type Retouch,
   refreshRangeFill,
   type ToolContext,
-} from "@retouchjs/core";
+} from "@9tensor/retouch";
 import { KEEP_RGB, ON_KEEP, rgba } from "./colors";
 import { applyMatteAlpha, type CutoutOptions, removeBackground } from "./cutout";
 import { type DenoiseOptions, denoiseImage } from "./denoise";

@@ -1,16 +1,19 @@
 # Changelog
 
-All notable changes to `@retouchjs/core` and `@retouchjs/ml` are documented here.
+All notable changes to `@9tensor/retouch` and `@9tensor/retouch-ml` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); both packages use
 [Semantic Versioning](https://semver.org/) and share a version number.
 
 ## [0.1.0] — 2026-09-19
 
 The first release since 0.0.2 turns a crop/brightness prototype into a full image *and video*
-editor with an on-device ML companion package. `@retouchjs/ml` is published for the first time.
+editor with an on-device ML companion package. `@9tensor/retouch-ml` is published for the first time.
 
 ### Breaking changes since 0.0.2
 
+- **New package names.** Rétouch now publishes under the 9Tensor npm scope: `@retouchjs/core` is
+  now `@9tensor/retouch`, and the ML tools ship as `@9tensor/retouch-ml`. Update the dependency
+  and your imports; `@retouchjs/core` stays at 0.0.2 and is deprecated.
 - **Video is accepted by default.** `acceptedTypes` now covers images only; MP4/WebM/MOV arrive
   through the new `acceptedVideoTypes` (default `["video/mp4", "video/webm", "video/quicktime"]`).
   Pass `acceptedVideoTypes: []` to keep the 0.0.2 behavior.
@@ -77,7 +80,7 @@ editor with an on-device ML companion package. `@retouchjs/ml` is published for 
   keyframes and `prefers-reduced-motion`, focus rings, filled slider tracks, and a documented
   theming contract (override tokens on `.rt-root` or the overlay roots).
 
-### Added — `@retouchjs/ml` 0.1.0 (first release)
+### Added — `@9tensor/retouch-ml` 0.1.0 (first release)
 
 Seven editor tabs, each also available as a headless function, running through ONNX Runtime Web
 (WebGPU → WASM fallback, inference in a worker, weights cached via the Cache API):
@@ -110,8 +113,8 @@ Apache-2.0 or BSD-3 licensed — see `docs/ADVANCED-FEATURES.md` for the audit.
 
 ## [0.0.2] — 2026-02-19
 
-Initial public release: drop zone → gallery → editor with crop, rotation and brightness/contrast/
-saturation adjustments; `onDone` export to Blobs.
+Initial public release, published as `@retouchjs/core`: drop zone → gallery → editor with crop,
+rotation and brightness/contrast/saturation adjustments; `onDone` export to Blobs.
 
-[0.1.0]: https://github.com/onursavas/retouch.js/compare/v0.0.2...v0.1.0
-[0.0.2]: https://github.com/onursavas/retouch.js/releases/tag/v0.0.2
+[0.1.0]: https://github.com/9tensor/retouch.js/compare/v0.0.2...v0.1.0
+[0.0.2]: https://github.com/9tensor/retouch.js/releases/tag/v0.0.2

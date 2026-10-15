@@ -18,7 +18,7 @@
     "types": ["vitest/globals"],
     "baseUrl": ".",
     "paths": {
-      "@retouchjs/core": ["./src/index.ts"]
+      "@9tensor/retouch": ["./src/index.ts"]
     }
   },
   "include": ["src", "tests", "demo"],
