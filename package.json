@@ -4,7 +4,7 @@
   "description": "Rétouch — a drop-in, canvas-based image and video editor: crop, adjust, filters, curves, masks, trim, AI edits, plugin tools",
   "author": "9Tensor (https://9tensor.com)",
   "license": "MIT",
-  "homepage": "https://9tensor.github.io/retouch.js/",
+  "homepage": "https://retouch.9tensor.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/9tensor/retouch.js.git"
