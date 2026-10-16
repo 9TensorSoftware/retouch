@@ -31,6 +31,24 @@ describe("createToastHost", () => {
     vi.useRealTimers();
   });
 
+  it("gives each kind an icon, and only errors interrupt", () => {
+    const host = createToastHost();
+    host.show("Couldn't load", "error");
+    host.show("Heads up");
+    host.show("Saved", "success");
+    const [error, info, success] = document.querySelectorAll(".rt-toast");
+    expect(error.getAttribute("role")).toBe("alert");
+    expect(info.getAttribute("role")).toBe("status");
+    expect(info.classList.contains("rt-toast--info")).toBe(true);
+    expect(success.classList.contains("rt-toast--success")).toBe(true);
+    for (const toast of [error, info, success]) {
+      const icon = toast.querySelector(".rt-toast__icon");
+      expect(icon?.getAttribute("aria-hidden")).toBe("true");
+      expect(icon?.querySelector("svg")).not.toBeNull();
+    }
+    host.destroy();
+  });
+
   it("dismisses on click", () => {
     vi.useFakeTimers();
     const host = createToastHost();

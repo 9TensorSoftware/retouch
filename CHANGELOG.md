@@ -42,7 +42,8 @@ editor with an on-device ML companion package. `@retouchjs/ml` is published for 
   ⌘/Ctrl+K, 1–9, Enter, Space) with a focus trap and dialog ARIA.
 - Side-by-side compare view (images), hold-to-compare (video), Reset, and `restoreOriginal(id)` /
   `replaceImageSource(id, file)` with `image:commit` / `image:restore` events.
-- Toast notifications for rejected files and export errors; `file:rejected` reasons
+- Toast notifications for rejected files and export errors, with a severity icon (errors are
+  announced as alerts) and placed clear of the controls; `file:rejected` reasons
   `type | size | duration | count | load-error`; `maxFileSize` and `maxVideoDuration` options.
 
 ### Added — video
@@ -96,6 +97,9 @@ Apache-2.0 or BSD-3 licensed — see `docs/ADVANCED-FEATURES.md` for the audit.
 
 ### Fixed
 
+- A dragged crop is kept when you press Done or switch tools; it no longer needs Apply crop first.
+- The editor fits phone screens: Done stays visible at any width, the top bar and control strip
+  scroll instead of clipping their first items, and the tool rail collapses to icons.
 - Sample-accurate trim: packet copy is reserved for untouched full-range exports.
 - History no longer records no-op checkpoints ("phantom Edit steps").
 - The compare button no longer inherits the host page's colors; the compare view is discoverable.
