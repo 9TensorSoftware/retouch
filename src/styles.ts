@@ -32,7 +32,7 @@ const DARK_TOKENS = /* css */ `
     --rt-danger-text: #F08E7D;
     --rt-focus: var(--rt-accent);
     --rt-track: rgba(255, 255, 255, 0.14);
-    --rt-track-fill: rgba(255, 255, 255, 0.5);
+    --rt-track-fill: var(--rt-accent);
     --rt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
     --rt-shadow-md: 0 8px 28px rgba(0, 0, 0, 0.45);
     --rt-shadow-lg: 0 16px 56px rgba(0, 0, 0, 0.55);
@@ -196,7 +196,8 @@ const CSS = /* css */ `
 /* Pressed feedback — a uniform, quick sink on every push control. */
 .rt-dock__chip:active:not([disabled]),
 .rt-dock__icon-btn:active,
-.rt-dock__filter-btn:active,
+.rt-tile:active,
+.rt-swatch:active,
 .rt-toolbar__btn:active,
 .rt-editor__btn-done:active,
 .rt-editor__btn-cancel:active,
@@ -1657,8 +1658,41 @@ const CSS = /* css */ `
 }
 
 .rt-inspector__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   flex-shrink: 0;
-  padding: 14px 16px 10px;
+  padding: 14px 12px 10px 16px;
+}
+
+.rt-inspector__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.rt-inspector__title:focus {
+  outline: none;
+}
+
+/* Resets the active tool; there only while that tool has changes. */
+.rt-inspector__reset {
+  flex-shrink: 0;
+  height: 26px;
+  margin-top: -2px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--rt-radius-sm);
+  background: var(--rt-control);
+  color: var(--rt-text-2);
+  font: 600 var(--rt-type-sm) var(--rt-font-ui);
+  cursor: pointer;
+  animation: rt-pane-in var(--rt-dur-2) var(--rt-ease-decel);
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-inspector__reset:hover {
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
 }
 
 .rt-inspector__title {
@@ -1722,9 +1756,7 @@ const CSS = /* css */ `
   gap: 8px;
 }
 
-.rt-editor__inspector .rt-dock__stack,
-.rt-editor__inspector .rt-adjust,
-.rt-editor__inspector .rt-filters {
+.rt-editor__inspector .rt-dock__stack {
   align-items: stretch;
   gap: 14px;
 }
@@ -1765,8 +1797,7 @@ const CSS = /* css */ `
   grid-row: 1;
 }
 
-/* Outranks every pane's own fixed slider width (.rt-adjust, .rt-masks, …). */
-.rt-editor__inspector .rt-inspector__body .rt-dock__slider input[type="range"] {
+.rt-editor__inspector .rt-dock__slider input[type="range"] {
   grid-column: 1 / -1;
   grid-row: 2;
   width: 100%;
@@ -1783,31 +1814,355 @@ const CSS = /* css */ `
   text-wrap: pretty;
 }
 
-.rt-editor__inspector .rt-dock__filters {
+/* ── Crop pane: aspect tiles, the straighten ruler, turns and flips ── */
+
+.rt-dock__pane.rt-crop-pane {
+  gap: 18px;
+}
+
+.rt-aspects {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 8px;
-  max-width: none;
-  overflow: visible;
+  gap: 8px;
+}
+
+.rt-aspect {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  height: 66px;
   padding: 0;
+  border: 1px solid var(--rt-line);
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-wash);
+  color: var(--rt-text-2);
+  font: 500 var(--rt-type-sm) var(--rt-font-ui);
+  cursor: pointer;
+  transition: border-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease), background-color var(--rt-dur-1) var(--rt-ease);
 }
 
-.rt-editor__inspector .rt-dock__filter-btn {
-  width: auto;
+.rt-aspect:hover {
+  border-color: var(--rt-line-loud);
+  color: var(--rt-text-1);
 }
 
-.rt-editor__inspector .rt-dock__filter-thumb {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 1;
+.rt-aspect[aria-pressed="true"] {
+  border-color: var(--rt-accent);
+  background: var(--rt-accent-soft);
+  color: var(--rt-text-1);
 }
 
-.rt-editor__inspector .rt-dock__filter-label {
+.rt-aspect__glyph {
+  display: block;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+
+.rt-aspect--free .rt-aspect__glyph {
+  border-style: dashed;
+}
+
+.rt-ruler-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rt-ruler__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--rt-text-2);
+  font-size: var(--rt-type-md);
+}
+
+.rt-ruler__value {
+  color: var(--rt-text-3);
+  font: 500 var(--rt-type-sm) / 1 var(--rt-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.rt-ruler-field--changed .rt-ruler__value {
+  color: var(--rt-text-1);
+}
+
+.rt-ruler {
+  position: relative;
+  height: 52px;
+  overflow: hidden;
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-wash);
+  box-shadow: inset 0 0 0 1px var(--rt-line);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+/* The tape fades out toward the ends, so the center mark reads as "here". */
+.rt-ruler::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(90deg, var(--rt-surface-raised), transparent 24%, transparent 76%, var(--rt-surface-raised));
+  pointer-events: none;
+}
+
+.rt-ruler::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 50%;
+  z-index: 2;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--rt-accent);
+  box-shadow: 0 0 10px var(--rt-accent-glow);
+}
+
+.rt-ruler:focus-visible {
+  outline: 2px solid var(--rt-focus);
+  outline-offset: 2px;
+}
+
+.rt-ruler__ticks {
+  position: absolute;
+  top: 8px;
+  bottom: 20px;
+  left: 50%;
+  /* Majors every 5 units, minors every unit (half height). */
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.55) 0 1px, transparent 1px calc(var(--rt-ruler-unit) * 5)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0 1px, transparent 1px var(--rt-ruler-unit)) 0 50% / 100% 50% no-repeat;
+}
+
+.rt-ruler__mark {
+  position: absolute;
+  bottom: -16px;
+  color: var(--rt-text-3);
+  font: 10px / 1 var(--rt-font-mono);
+  transform: translateX(-50%);
+}
+
+.rt-transform-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.rt-transform-btns .rt-dock__icon-btn {
+  flex: 1;
+  height: 34px;
+  border-radius: var(--rt-radius-md);
+}
+
+.rt-crop-pane__note {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.rt-dock__pane.rt-transform-pane {
+  gap: 0;
+}
+
+/* ── Inspector controls: sections, tiles, segmented buttons ── */
+
+.rt-section + .rt-section {
+  border-top: 1px solid var(--rt-line);
+}
+
+.rt-section__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px 8px;
+  list-style: none;
+}
+
+.rt-section__head::-webkit-details-marker {
+  display: none;
+}
+
+.rt-section--collapsible > .rt-section__head {
+  cursor: pointer;
+  border-radius: var(--rt-radius-sm);
+}
+
+.rt-section--collapsible > .rt-section__head:hover .rt-section__title {
+  color: var(--rt-text-1);
+}
+
+.rt-section--collapsible > .rt-section__head:focus-visible {
+  outline: 2px solid var(--rt-focus);
+  outline-offset: 2px;
+}
+
+.rt-editor__inspector .rt-section__title,
+.rt-section__title {
+  flex-basis: auto;
+  margin: 0;
+  color: var(--rt-text-2);
   font-size: var(--rt-type-xs);
+  transition: color var(--rt-dur-1) var(--rt-ease);
 }
 
-.rt-editor__inspector .rt-curves__canvas {
-  align-self: center;
+.rt-section__count {
+  min-width: 18px;
+  padding: 3px 5px;
+  border-radius: var(--rt-radius-full);
+  background: var(--rt-accent);
+  color: var(--rt-on-accent);
+  font: 600 10px / 1 var(--rt-font-mono);
+  text-align: center;
+}
+
+.rt-section__count[hidden] {
+  display: none;
+}
+
+.rt-section__chevron {
+  margin-left: auto;
+  color: var(--rt-text-3);
+  transition: transform var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-section__chevron svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.rt-section[open] > .rt-section__head .rt-section__chevron {
+  transform: rotate(180deg);
+}
+
+.rt-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 0 14px;
+}
+
+.rt-tiles {
+  display: grid;
+  grid-template-columns: repeat(var(--rt-tile-cols, 3), minmax(0, 1fr));
+  gap: 12px 8px;
+}
+
+.rt-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--rt-text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rt-tile__frame {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-wash);
+  box-shadow: 0 0 0 1px var(--rt-line);
+  transition: box-shadow var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-tile__img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  transition: transform var(--rt-dur-3) var(--rt-ease);
+}
+
+.rt-tile__img:not([src]) {
+  visibility: hidden;
+}
+
+.rt-tile:hover .rt-tile__frame {
+  box-shadow: 0 0 0 1px var(--rt-line-loud);
+}
+
+.rt-tile:hover .rt-tile__img {
+  transform: scale(1.04);
+}
+
+.rt-tile[aria-pressed="true"] .rt-tile__frame {
+  box-shadow: 0 0 0 2px var(--rt-accent), 0 0 0 5px var(--rt-accent-glow);
+}
+
+.rt-tile:focus-visible {
+  outline: none;
+}
+
+.rt-tile:focus-visible .rt-tile__frame {
+  box-shadow: 0 0 0 2px var(--rt-focus), 0 0 0 5px var(--rt-accent-glow);
+}
+
+.rt-tile__label {
+  overflow: hidden;
+  font-size: var(--rt-type-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rt-tile[aria-pressed="true"] .rt-tile__label {
+  color: var(--rt-text-1);
+}
+
+.rt-segmented {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--rt-line);
+}
+
+.rt-segmented__btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--rt-text-2);
+  font: 600 var(--rt-type-sm) / 1 var(--rt-font-mono);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-segmented__btn:hover {
+  color: var(--rt-text-1);
+}
+
+.rt-segmented__btn[aria-pressed="true"] {
+  background: var(--rt-surface-overlay);
+  color: var(--rt-text-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 0 0 1px var(--rt-line-strong);
+}
+
+.rt-segmented__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+/* hidden always wins inside the editor, whatever display a class sets. */
+.rt-editor-overlay [hidden] {
+  display: none !important;
 }
 
 .rt-dock__pane {
@@ -1949,68 +2304,155 @@ const CSS = /* css */ `
 }
 
 .rt-dock__slider-label {
-  font-size: 12px;
-  color: var(--rt-text-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--rt-type-md);
+  color: var(--rt-text-2);
   white-space: nowrap;
   flex-shrink: 0;
+  user-select: none;
+  transition: color var(--rt-dur-1) var(--rt-ease);
 }
 
 .rt-dock__slider-value {
-  font-size: 12px;
-  color: var(--rt-text-2);
+  font: 500 var(--rt-type-sm) / 1 var(--rt-font-mono);
+  color: var(--rt-text-3);
   min-width: 34px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+  transition: color var(--rt-dur-1) var(--rt-ease);
 }
 
+/* The value doubles as a field: type a number, ↑/↓ to step. */
+input.rt-dock__slider-value {
+  width: 58px;
+  height: 24px;
+  margin: 0 -6px 0 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--rt-radius-sm);
+  background: transparent;
+  cursor: text;
+}
+
+input.rt-dock__slider-value:hover:not([disabled]) {
+  background: var(--rt-control);
+}
+
+input.rt-dock__slider-value:focus {
+  border-color: var(--rt-line-strong);
+  background: var(--rt-surface-subtle);
+  color: var(--rt-text-1);
+  outline: none;
+}
+
+input.rt-dock__slider-value:focus-visible {
+  box-shadow: 0 0 0 2px var(--rt-focus);
+}
+
+/* The track: 4px, 6px under the pointer or keyboard. The fill runs from
+   the anchor (--rt-fill-a) to the thumb (--rt-fill-b), set by
+   refreshRangeFill; .rt-slider--track swaps in a semantic gradient. */
 .rt-dock__slider input[type="range"] {
-  width: 220px;
-  height: 4px;
-  -webkit-appearance: none;
-  appearance: none;
-  border-radius: 2px;
-  flex-shrink: 0;
-  /* Filled between the anchor (--rt-fill-a) and the thumb (--rt-fill-b);
-     set by refreshRangeFill. Unwired inputs degrade to an empty track. */
-  background: linear-gradient(to right,
+  --rt-range-h: 4px;
+  --rt-range-bg: linear-gradient(to right,
     var(--rt-track) min(var(--rt-fill-a, 0%), var(--rt-fill-b, 0%)),
     var(--rt-track-fill) min(var(--rt-fill-a, 0%), var(--rt-fill-b, 0%)) max(var(--rt-fill-a, 0%), var(--rt-fill-b, 0%)),
     var(--rt-track) max(var(--rt-fill-a, 0%), var(--rt-fill-b, 0%)));
+  width: 220px;
+  height: 18px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rt-dock__slider input[type="range"]:hover:not([disabled]),
+.rt-dock__slider input[type="range"]:focus-visible {
+  --rt-range-h: 6px;
+}
+
+.rt-slider--track input[type="range"] {
+  --rt-range-bg: var(--rt-slider-track);
+}
+
+.rt-dock__slider input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--rt-range-h);
+  border-radius: var(--rt-radius-full);
+  background: var(--rt-range-bg);
+  transition: height var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-dock__slider input[type="range"]::-moz-range-track {
+  height: var(--rt-range-h);
+  border-radius: var(--rt-radius-full);
+  background: var(--rt-range-bg);
 }
 
 .rt-dock__slider input[type="range"][disabled] {
   opacity: 0.4;
+  cursor: default;
 }
 
 .rt-dock__slider input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  background: var(--rt-on-media);
+  width: 16px;
+  height: 16px;
+  margin-top: calc((var(--rt-range-h) - 16px) / 2);
   border-radius: 50%;
-  box-shadow: var(--rt-shadow-sm);
+  background: var(--rt-on-media);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition: transform var(--rt-dur-1) var(--rt-ease);
+  transition: transform var(--rt-dur-2) var(--rt-ease-spring);
 }
 
-.rt-dock__slider input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
+.rt-dock__slider input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.18);
 }
 
 .rt-dock__slider input[type="range"]::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border: none;
-  background: var(--rt-on-media);
   border-radius: 50%;
-  box-shadow: var(--rt-shadow-sm);
+  background: var(--rt-on-media);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition: transform var(--rt-dur-1) var(--rt-ease);
+  transition: transform var(--rt-dur-2) var(--rt-ease-spring);
 }
 
-.rt-dock__slider input[type="range"]::-moz-range-thumb:hover {
-  transform: scale(1.15);
+.rt-dock__slider input[type="range"]:active::-moz-range-thumb {
+  transform: scale(1.18);
+}
+
+/* A dot beside the label while the slider is off neutral. */
+.rt-slider__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--rt-accent);
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity var(--rt-dur-1) var(--rt-ease), transform var(--rt-dur-2) var(--rt-ease-spring);
+}
+
+.rt-slider--changed .rt-slider__dot {
+  opacity: 1;
+  transform: none;
+}
+
+.rt-slider--changed .rt-dock__slider-label,
+.rt-slider--changed .rt-dock__slider-value {
+  color: var(--rt-text-1);
+}
+
+.rt-slider--disabled .rt-dock__slider-label,
+.rt-slider--disabled .rt-dock__slider-value {
+  color: var(--rt-text-disabled);
 }
 
 /* Stacked dock pane (Transform: turns/straighten row above, perspective below) */
@@ -2022,10 +2464,6 @@ const CSS = /* css */ `
   gap: 8px;
 }
 
-.rt-dock__stack .rt-dock__slider input[type="range"] {
-  width: 170px;
-}
-
 .rt-dock__row-title {
   color: var(--rt-text-3);
   text-transform: uppercase;
@@ -2034,39 +2472,48 @@ const CSS = /* css */ `
   letter-spacing: 0.08em;
 }
 
-/* Curves pane: channel chips · curve canvas over histogram · reset */
+/* Curves pane: channels · full-width curve over the histogram · readout */
 
 .rt-curves {
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .rt-curves__canvas {
-  width: 196px;
-  height: 104px;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
   border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-wash);
+  box-shadow: inset 0 0 0 1px var(--rt-line);
   cursor: crosshair;
   touch-action: none;
-  flex-shrink: 0;
 }
 
-.rt-curves__channels {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.rt-curves__canvas--grab {
+  cursor: grab;
 }
 
-.rt-curves__chip {
-  height: 22px;
-  padding: 0 10px;
-  font-size: 11px;
-  border-left: 3px solid var(--rt-curve-color, transparent);
-  border-radius: var(--rt-radius-sm);
+.rt-curves__canvas--grab:active {
+  cursor: grabbing;
 }
 
-.rt-curves__side {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.rt-curves__readout {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--rt-text-3);
+  font: var(--rt-type-xs) / 1.5 var(--rt-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A channel whose curve has been shaped */
+.rt-segmented__btn--touched::after {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--rt-accent);
 }
 
 /* White-balance eyedropper */
@@ -2112,8 +2559,247 @@ const CSS = /* css */ `
   fill: var(--rt-surface-overlay);
 }
 
-.rt-masks .rt-dock__slider input[type="range"] {
-  width: 200px;
+/* Compare: the before/after divider on the photo. Sized in --rt-px so the
+   line, grip and tags keep their size however far the stage zooms. */
+.rt-split {
+  --rt-split: 50%;
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.rt-split__line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--rt-split);
+  width: calc(24 * var(--rt-px, 1px));
+  margin-left: calc(-12 * var(--rt-px, 1px));
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.rt-split__line::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: calc(2 * var(--rt-px, 1px));
+  margin-left: calc(-1 * var(--rt-px, 1px));
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 var(--rt-px, 1px) rgba(0, 0, 0, 0.25);
+}
+
+.rt-split__grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: calc(36 * var(--rt-px, 1px));
+  height: calc(36 * var(--rt-px, 1px));
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(18, 18, 20, 0.55);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 calc(2 * var(--rt-px, 1px)) rgba(255, 255, 255, 0.92), 0 6px 18px rgba(0, 0, 0, 0.45);
+  color: var(--rt-on-media);
+  cursor: ew-resize;
+  transform: translate(-50%, -50%);
+  transition: transform var(--rt-dur-2) var(--rt-ease-spring);
+}
+
+.rt-split--dragging .rt-split__grip,
+.rt-split__grip:hover {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.rt-split__grip svg {
+  width: calc(18 * var(--rt-px, 1px));
+  height: calc(18 * var(--rt-px, 1px));
+}
+
+.rt-split__grip:focus-visible {
+  outline: calc(2 * var(--rt-px, 1px)) solid var(--rt-focus);
+  outline-offset: calc(3 * var(--rt-px, 1px));
+}
+
+.rt-split__tag {
+  position: absolute;
+  top: calc(12 * var(--rt-px, 1px));
+  padding: calc(5 * var(--rt-px, 1px)) calc(8 * var(--rt-px, 1px));
+  border-radius: calc(6 * var(--rt-px, 1px));
+  background: rgba(10, 10, 12, 0.55);
+  backdrop-filter: blur(6px);
+  color: var(--rt-on-media);
+  font: 600 calc(11 * var(--rt-px, 1px)) / 1 var(--rt-font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rt-split__tag--before {
+  left: calc(12 * var(--rt-px, 1px));
+}
+
+.rt-split__tag--after {
+  right: calc(12 * var(--rt-px, 1px));
+}
+
+/* Masks pane: add buttons, the list, the selected mask's sliders */
+
+.rt-masks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rt-masks__add {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rt-masks__add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px dashed var(--rt-line-strong);
+  border-radius: var(--rt-radius-md);
+  background: transparent;
+  color: var(--rt-text-2);
+  font: 500 var(--rt-type-md) var(--rt-font-ui);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease), border-color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-masks__add-btn:hover {
+  border-color: var(--rt-line-loud);
+  background: var(--rt-control);
+  color: var(--rt-text-1);
+}
+
+.rt-masks__add-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-masks__empty {
+  margin: 0;
+}
+
+.rt-masklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rt-masklist__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--rt-radius-md);
+  transition: background-color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-masklist__row:hover {
+  background: var(--rt-surface-wash);
+}
+
+.rt-masklist__row--selected,
+.rt-masklist__row--selected:hover {
+  background: var(--rt-control);
+  box-shadow: inset 0 0 0 1px var(--rt-line-strong);
+}
+
+.rt-masklist__select {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--rt-text-2);
+  font: 500 var(--rt-type-md) var(--rt-font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rt-masklist__select:hover,
+.rt-masklist__row--selected .rt-masklist__select {
+  color: var(--rt-text-1);
+}
+
+.rt-masklist__select svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--rt-text-3);
+}
+
+.rt-masklist__row--selected .rt-masklist__select svg {
+  color: var(--rt-accent);
+}
+
+.rt-masklist__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rt-masklist__dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--rt-accent);
+  opacity: 0;
+}
+
+.rt-masklist__dot--on {
+  opacity: 1;
+}
+
+.rt-masklist__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--rt-text-3);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-masklist__icon:hover {
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
+}
+
+.rt-masklist__icon[aria-pressed="true"] {
+  color: var(--rt-accent);
+}
+
+.rt-masklist__icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Liquify */
@@ -2131,52 +2817,177 @@ const CSS = /* css */ `
   touch-action: none;
 }
 
-.rt-liquify-overlay__cursor {
-  fill: var(--rt-glass);
-  stroke: var(--rt-on-media);
-  stroke-width: calc(1.5 * var(--rt-px, 1px));
+/* The brush ring (liquify): its size is the brush. A dark halo under a
+   light ring reads on any photo; widths divide out the stage zoom. */
+.rt-liquify-overlay {
+  cursor: none;
+}
+
+.rt-brush-ring {
   pointer-events: none;
 }
 
-.rt-liquify__hint {
-  white-space: nowrap;
-  opacity: 0.8;
+.rt-brush-ring circle {
+  fill: none;
 }
 
-/* Stylize pane */
+.rt-brush-ring__halo {
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: calc(3.5 * var(--rt-px, 1px));
+}
 
-.rt-stylize__color {
-  width: 34px;
-  height: 26px;
-  padding: 2px;
-  border: 1px solid var(--rt-line-strong);
-  border-radius: var(--rt-radius-sm);
-  background: var(--rt-control);
+.rt-brush-ring__ring {
+  stroke: var(--rt-on-media);
+  stroke-width: calc(1.5 * var(--rt-px, 1px));
+}
+
+.rt-brush-ring .rt-brush-ring__dot {
+  r: calc(2 * var(--rt-px, 1px));
+  fill: var(--rt-on-media);
+  stroke: rgba(0, 0, 0, 0.5);
+  stroke-width: var(--rt-px, 1px);
+}
+
+.rt-liquify {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Stylize pane: effect tiles, then the effect's parameters */
+
+.rt-stylize,
+.rt-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rt-stylize__params {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rt-stylize__colors {
+  display: flex;
+  gap: 16px;
+}
+
+.rt-stylize__swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--rt-text-2);
+  font-size: var(--rt-type-md);
   cursor: pointer;
 }
 
-/* HSL mixer pane */
-
-.rt-hsl__slider input[type="range"] {
-  width: 150px;
+.rt-stylize__color {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
 }
 
-.rt-hsl__chip {
-  border-left: 3px solid var(--rt-band-color, transparent);
-  border-radius: var(--rt-radius-sm);
+.rt-stylize__color::-webkit-color-swatch-wrapper {
+  padding: 0;
 }
 
-/* Adjust pane: slider row above, adjustment chips below */
+.rt-stylize__color::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.rt-stylize__color::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+/* Color mix pane: band swatches over three band-colored sliders */
+
+.rt-hsl,
+.rt-hsl__sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rt-swatches {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px 2px 6px;
+}
+
+.rt-swatch {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--rt-swatch);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform var(--rt-dur-2) var(--rt-ease-spring), box-shadow var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-swatch:hover {
+  transform: scale(1.08);
+}
+
+.rt-swatch[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--rt-surface-raised), 0 0 0 4px var(--rt-swatch);
+}
+
+.rt-swatch:focus-visible {
+  outline: 2px solid var(--rt-focus);
+  outline-offset: 4px;
+}
+
+/* A band with changes */
+.rt-swatch--touched::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--rt-text-2);
+}
+
+.rt-hsl__band {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  color: var(--rt-text-1);
+  font-size: var(--rt-type-md);
+  font-weight: 600;
+}
+
+.rt-hsl__name::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--rt-swatch);
+  vertical-align: 1px;
+}
+
+/* Adjust pane: four sections of sliders */
 
 .rt-adjust {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.rt-adjust .rt-dock__slider input[type="range"] {
-  width: min(380px, 42vw);
 }
 
 .rt-dock__chips {
@@ -2184,77 +2995,6 @@ const CSS = /* css */ `
   justify-content: safe center;
   gap: 6px;
   max-width: 100%;
-}
-
-/* Filters pane: intensity above, thumbnail filmstrip below */
-
-.rt-filters {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.rt-dock__filters {
-  display: flex;
-  gap: 10px;
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-  justify-content: center;
-  justify-content: safe center;
-  padding: 2px 4px;
-}
-
-.rt-dock__filters::-webkit-scrollbar {
-  display: none;
-}
-
-.rt-dock__filter-btn {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  width: 58px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  flex-shrink: 0;
-  transition: transform var(--rt-dur-1) var(--rt-ease);
-}
-
-.rt-dock__filter-thumb {
-  width: 58px;
-  height: 58px;
-  object-fit: cover;
-  display: block;
-  border-radius: var(--rt-radius-md);
-  border: 2px solid transparent;
-  transition: border-color var(--rt-dur-1) var(--rt-ease);
-}
-
-.rt-dock__filter-btn:hover .rt-dock__filter-thumb {
-  border-color: var(--rt-line-loud);
-}
-
-.rt-dock__filter-btn--active .rt-dock__filter-thumb {
-  border-color: var(--rt-accent);
-}
-
-.rt-dock__filter-label {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--rt-text-3);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: color var(--rt-dur-1) var(--rt-ease);
-}
-
-.rt-dock__filter-btn--active .rt-dock__filter-label {
-  color: var(--rt-accent-text);
 }
 
 /* Trim pane: inline stats */

@@ -50,6 +50,7 @@ import { createAdjustTool } from "./adjust-tool";
 import type { AiChatHandle } from "./ai-chat";
 import { createAiChat, getStoredAiKey } from "./ai-chat";
 import { CanvasRenderer } from "./canvas-renderer";
+import { createCompareSplit } from "./compare-split";
 import type { TransformOp } from "./context-dock";
 import { createContextDock } from "./context-dock";
 import { createCropTool } from "./crop-tool";
@@ -60,6 +61,7 @@ import { createLiquifyOverlay } from "./liquify-overlay";
 import { createLiquifyTool } from "./liquify-tool";
 import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
+import { createPreviewBase, renderLook } from "./preview";
 import { createStageView } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
@@ -151,6 +153,11 @@ export interface EditorOptions {
   onDone: () => void;
   /** True when the entry has a stashed pristine original (committed image). */
   hasOriginal?: () => boolean;
+  /**
+   * True when that original still lines up with the current pixels (what
+   * was baked in moved nothing), so Compare can show it across the divider.
+   */
+  originalAligned?: () => boolean;
   /** Restore the pristine original (Reset on a committed image). */
   onRestoreOriginal?: () => void;
   onCancel: () => void;
@@ -247,7 +254,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
     "aria-label": "Compare with original",
   });
   compareBtn.innerHTML = `${EYE_ICON}<span>Compare</span>`;
-  const resetBtn = h("button", { class: "rt-editor__text-btn", title: "Reset all edits" }, "Reset");
+  const resetBtn = h(
+    "button",
+    { class: "rt-editor__text-btn", title: "Reset all edits" },
+    "Reset all",
+  );
 
   const divider = () => h("div", { class: "rt-editor__divider" });
   const topbarRight = h(
@@ -330,23 +341,42 @@ export function createEditor(options: EditorOptions): ViewHandle {
     entry.kind === "video" ? entry.video : entry.image,
     entry.edits,
   );
+  const compareSplit = createCompareSplit({ container: canvasContainer, renderer, signal });
+  // Declared up here: the first tool selection (below) already reads it.
+  let compareMode: "off" | "split" | "side" = "off";
 
   // Inspector header: the active tool's name (and what it does, for tools
   // that say), over a live histogram for the tone and look tools.
   const inspectorTitle = h("h2", { class: "rt-inspector__title" });
   const inspectorDesc = h("p", { class: "rt-inspector__desc" });
+  // Resets the active tool's edits; shown while that tool has any.
+  const headReset = h("button", { type: "button", class: "rt-inspector__reset" }, "Reset");
+  headReset.hidden = true;
   const histCanvas = h("canvas", { class: "rt-inspector__hist", "aria-hidden": "true" });
   const histProbe = document.createElement("canvas");
   let histTimer = 0;
 
   function histogramShown(): boolean {
+    // Curves draws its own (input) histogram behind the curve.
+    if (entry.kind !== "image" || activeTool === "curves") return false;
     const group = resolveToolDef(activeTool).group;
-    return entry.kind === "image" && (group === "tone" || group === "looks");
+    return group === "tone" || group === "looks";
   }
 
-  /** Redraw the RGB histogram from the painted canvas, once paints pause. */
+  /**
+   * On every paint, copy the frame into a small probe right away (before the
+   * compare divider covers part of it), then redraw the RGB histogram once
+   * paints pause.
+   */
   function scheduleHistogram(): void {
     if (!histogramShown()) return;
+    const source = renderer.getCanvasElement();
+    if (!source.width || !source.height) return;
+    histProbe.width = 128;
+    histProbe.height = Math.max(1, Math.round((128 * source.height) / source.width));
+    histProbe
+      .getContext("2d", { willReadFrequently: true })
+      ?.drawImage(source, 0, 0, histProbe.width, histProbe.height);
     clearTimeout(histTimer);
     histTimer = window.setTimeout(drawHistogram, 60);
   }
@@ -354,16 +384,11 @@ export function createEditor(options: EditorOptions): ViewHandle {
   signal.addEventListener("abort", () => clearTimeout(histTimer));
 
   function drawHistogram(): void {
-    const source = renderer.getCanvasElement();
     const width = histCanvas.clientWidth;
     const height = histCanvas.clientHeight;
-    if (!source.width || !source.height || !width || !height) return;
-    histProbe.width = 128;
-    histProbe.height = Math.max(1, Math.round((128 * source.height) / source.width));
     const probe = histProbe.getContext("2d", { willReadFrequently: true });
     const ctx = histCanvas.getContext("2d");
-    if (!probe || !ctx) return;
-    probe.drawImage(source, 0, 0, histProbe.width, histProbe.height);
+    if (!probe || !ctx || !width || !height || !histProbe.width) return;
     const data = probe.getImageData(0, 0, histProbe.width, histProbe.height).data;
     const bins = 64;
     const channels = [new Uint32Array(bins), new Uint32Array(bins), new Uint32Array(bins)];
@@ -409,6 +434,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     // Drawn on the next paint (selectTool re-renders), never from a canvas
     // a resize has just cleared.
     histCanvas.hidden = !histogramShown();
+    syncHeadReset();
   }
 
   // Video transport (playback persists across all tools)
@@ -465,8 +491,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
   }
 
   function syncCropButtons(): void {
-    dock.setCropApplyEnabled(!cropTool.isSelectionFull());
-    dock.setCropResetEnabled(hasCommittedCrop());
+    syncHeadReset();
   }
 
   /** Compose the pending selection into the committed crop. */
@@ -480,19 +505,6 @@ export function createEditor(options: EditorOptions): ViewHandle {
       width: clamp(sel.width * c.width, 0.01, 1),
       height: clamp(sel.height * c.height, 0.01, 1),
     };
-    renderer.setCrop(entry.edits.crop);
-    renderer.render();
-    cropTool.resetSelection();
-    cropTool.refresh();
-    dock.setAspect("free");
-    syncCropButtons();
-    recordEdit();
-  }
-
-  /** Bring the discarded area back (the crop is non-destructive). */
-  function resetCrop(): void {
-    if (!hasCommittedCrop()) return;
-    entry.edits.crop = { x: 0, y: 0, width: 1, height: 1 };
     renderer.setCrop(entry.edits.crop);
     renderer.render();
     cropTool.resetSelection();
@@ -620,14 +632,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   // Liquify: dock pane holds the brush params, the overlay paints pushes.
   const liquifyTool = createLiquifyTool({
-    onReset: () => {
-      entry.edits.liquify = null;
-      renderer.setLiquify(null);
-      renderer.render();
-      liquifyTool.setResetEnabled(false);
-      recordEdit();
-    },
-    onBrushChange: () => {},
+    onBrushChange: () => liquifyOverlay.refreshCursor(),
   });
   const liquifyOverlay = createLiquifyOverlay({
     container: canvasContainer,
@@ -648,15 +653,18 @@ export function createEditor(options: EditorOptions): ViewHandle {
       renderer.setLiquify(entry.edits.liquify);
       renderer.render();
     },
-    onCommit: () => {
-      liquifyTool.setResetEnabled(!liquifyIsNeutral(entry.edits.liquify));
-      recordEdit();
-    },
+    onCommit: () => recordEdit(),
   });
   liquifyOverlay.setVisible(false);
 
+  // Preview tiles (filters, effects, plugin looks) draw from one small copy.
+  const previewBase = createPreviewBase(
+    entry.kind === "video" ? captureFrame(entry.video, 240) : entry.image,
+  );
+
   // Stylize effects
   const stylizeTool = createStylizeTool({
+    base: previewBase,
     stylize: entry.edits.stylize,
     onChange: (stylize) => {
       entry.edits.stylize = stylize;
@@ -680,7 +688,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   // Filters tool
   const filtersTool = createFiltersTool({
-    image: entry.kind === "video" ? captureFrame(entry.video, 240) : entry.image,
+    base: previewBase,
     filter: entry.edits.filter,
     strength: entry.edits.filterStrength,
     onChange: (filter) => {
@@ -799,6 +807,18 @@ export function createEditor(options: EditorOptions): ViewHandle {
     record: recordEdit,
     canvasArea,
     ui: createToolUi(signal),
+    preview: (patch = {}) => {
+      const e = entry.edits;
+      return renderLook(previewBase, {
+        adjustments: e.adjustments,
+        filter: e.filter,
+        filterStrength: e.filterStrength,
+        curves: e.curves,
+        hsl: e.hsl,
+        stylize: e.stylize,
+        ...patch,
+      });
+    },
   };
   const customHandles = new Map<EditorTool, ToolPaneHandle>();
   const customPanes: Array<{ id: EditorTool; root: HTMLElement }> = [];
@@ -829,8 +849,6 @@ export function createEditor(options: EditorOptions): ViewHandle {
       recordEdit();
     },
     onTransform: applyTransformOp,
-    onApplyCrop: applyCrop,
-    onResetCrop: resetCrop,
     // NaN marks the axis that didn't change (each slider reports only its own).
     onKeystoneChange: (vertical, horizontal) => {
       if (!Number.isNaN(vertical)) entry.edits.keystoneV = vertical;
@@ -878,6 +896,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       cropTool.refresh();
       syncCropButtons();
     }
+    syncSplitVisibility();
   }
 
   // Tool rail (left)
@@ -903,7 +922,6 @@ export function createEditor(options: EditorOptions): ViewHandle {
     renderer.setMasks(entry.edits.masks);
     renderer.setStylize(entry.edits.stylize);
     renderer.setLiquify(entry.edits.liquify);
-    liquifyTool.setResetEnabled(!liquifyIsNeutral(entry.edits.liquify));
     adjustTool.setAdjustments(entry.edits.adjustments);
     curvesTool.setCurves(entry.edits.curves);
     hslTool.setHsl(entry.edits.hsl);
@@ -964,46 +982,184 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
   });
 
-  /** Orange dot per feature group while its edits are away from neutral. */
-  function updateToolDots(): void {
+  /** Whether a feature group's edits are away from neutral (its rail dot). */
+  function toolTouched(tool: EditorTool): boolean {
     const e = entry.edits;
-    toolbar.setTouched("crop", hasCommittedCrop());
-    toolbar.setTouched(
-      "transform",
-      e.rotation !== 0 ||
-        e.keystoneV !== 0 ||
-        e.keystoneH !== 0 ||
-        e.lensDistortion !== 0 ||
-        e.lensDevignette !== 0 ||
-        e.seamWidth !== 100 ||
-        e.orientation !== 0 ||
-        e.flipH ||
-        e.flipV,
-    );
-    const adj = e.adjustments as unknown as Record<string, number>;
-    const defaults = DEFAULT_ADJUSTMENTS as unknown as Record<string, number>;
-    toolbar.setTouched(
-      "adjust",
-      Object.keys(adj).some((k) => adj[k] !== defaults[k]),
-    );
-    toolbar.setTouched("filters", e.filter !== "none");
-    toolbar.setTouched("curves", !curvesAreIdentity(e.curves));
-    toolbar.setTouched("hsl", !hslIsNeutral(e.hsl));
-    toolbar.setTouched("liquify", !liquifyIsNeutral(e.liquify));
-    toolbar.setTouched("masks", !masksAreNeutral(e.masks));
-    toolbar.setTouched("stylize", !stylizeIsNeutral(e.stylize));
-    if (entry.kind === "video") {
-      const v = entry.edits;
-      toolbar.setTouched(
-        "trim",
-        v.trim.start > 1e-4 ||
+    switch (tool) {
+      case "crop":
+        return hasCommittedCrop();
+      case "transform":
+        return (
+          e.rotation !== 0 ||
+          e.keystoneV !== 0 ||
+          e.keystoneH !== 0 ||
+          e.lensDistortion !== 0 ||
+          e.lensDevignette !== 0 ||
+          e.seamWidth !== 100 ||
+          e.orientation !== 0 ||
+          e.flipH ||
+          e.flipV
+        );
+      case "adjust": {
+        const adj = e.adjustments as unknown as Record<string, number>;
+        const defaults = DEFAULT_ADJUSTMENTS as unknown as Record<string, number>;
+        return Object.keys(adj).some((k) => adj[k] !== defaults[k]);
+      }
+      case "filters":
+        return e.filter !== "none";
+      case "curves":
+        return !curvesAreIdentity(e.curves);
+      case "hsl":
+        return !hslIsNeutral(e.hsl);
+      case "liquify":
+        return !liquifyIsNeutral(e.liquify);
+      case "masks":
+        return !masksAreNeutral(e.masks);
+      case "stylize":
+        return !stylizeIsNeutral(e.stylize);
+      case "trim": {
+        if (entry.kind !== "video") return false;
+        const v = entry.edits;
+        return (
+          v.trim.start > 1e-4 ||
           v.trim.end < entry.duration - 1e-4 ||
           v.mute ||
           v.speed !== 1 ||
-          v.deflicker,
-      );
+          v.deflicker
+        );
+      }
+      default:
+        return false;
     }
   }
+
+  /** Orange dot per feature group while its edits are away from neutral. */
+  function updateToolDots(): void {
+    for (const tool of tools) toolbar.setTouched(tool, toolTouched(tool));
+    syncHeadReset();
+  }
+
+  /** Undo the coarse turns and flips, remapping the crop back with them. */
+  function resetOrientation(): void {
+    const e = entry.edits;
+    for (let turns = 0; e.orientation !== 0 && turns < 4; turns++) transformStep("rotate-ccw");
+    if (e.flipH) transformStep("flip-h");
+    if (e.flipV) transformStep("flip-v");
+  }
+
+  /**
+   * What the inspector's Reset clears, per tool: the pane's own controls.
+   * A function, not a table, so the first tool selection (which runs before
+   * this point in setup) can already call it.
+   */
+  function toolReset(tool: EditorTool): { touched: () => boolean; reset: () => void } | null {
+    const e = entry.edits;
+    switch (tool) {
+      case "crop":
+        return {
+          touched: () =>
+            hasCommittedCrop() ||
+            !cropTool.isSelectionFull() ||
+            e.rotation !== 0 ||
+            e.orientation !== 0 ||
+            e.flipH ||
+            e.flipV,
+          reset: () => {
+            resetOrientation();
+            e.crop = { x: 0, y: 0, width: 1, height: 1 };
+            e.rotation = 0;
+          },
+        };
+      case "transform":
+        return {
+          touched: () => toolTouched("transform"),
+          reset: () => {
+            resetOrientation();
+            Object.assign(e, {
+              rotation: 0,
+              keystoneV: 0,
+              keystoneH: 0,
+              lensDistortion: 0,
+              lensDevignette: 0,
+              seamWidth: 100,
+            });
+          },
+        };
+      case "adjust":
+        return {
+          touched: () => toolTouched("adjust"),
+          reset: () => {
+            e.adjustments = { ...DEFAULT_ADJUSTMENTS };
+          },
+        };
+      case "curves":
+        return {
+          touched: () => toolTouched("curves"),
+          reset: () => {
+            e.curves = createDefaultCurves();
+          },
+        };
+      case "hsl":
+        return {
+          touched: () => toolTouched("hsl"),
+          reset: () => {
+            e.hsl = createDefaultHsl();
+          },
+        };
+      case "masks":
+        return {
+          touched: () => e.masks.length > 0,
+          reset: () => {
+            e.masks = [];
+          },
+        };
+      case "liquify":
+        return {
+          touched: () => toolTouched("liquify"),
+          reset: () => {
+            e.liquify = null;
+          },
+        };
+      case "stylize":
+        return {
+          touched: () => toolTouched("stylize"),
+          reset: () => {
+            e.stylize = createDefaultStylize();
+          },
+        };
+      case "filters":
+        return {
+          touched: () => toolTouched("filters") || e.filterStrength !== 100,
+          reset: () => {
+            e.filter = "none";
+            e.filterStrength = 100;
+          },
+        };
+      default:
+        return null;
+    }
+  }
+
+  function syncHeadReset(): void {
+    const def = toolReset(activeTool);
+    headReset.hidden = !def?.touched();
+    headReset.setAttribute("aria-label", `Reset ${resolveToolDef(activeTool).label}`);
+  }
+
+  headReset.addEventListener(
+    "click",
+    () => {
+      const def = toolReset(activeTool);
+      if (!def) return;
+      def.reset();
+      syncToolsFromEdits();
+      history?.record();
+      // Focus would otherwise fall to the body once the button hides.
+      inspectorTitle.setAttribute("tabindex", "-1");
+      inspectorTitle.focus();
+    },
+    { signal },
+  );
 
   function syncHistoryButtons(): void {
     undoBtn.toggleAttribute("disabled", !history?.canUndo());
@@ -1109,12 +1265,34 @@ export function createEditor(options: EditorOptions): ViewHandle {
     cropTool.setVisible(activeTool === "crop");
     if (activeTool === "crop") cropTool.refresh();
   }
-  // ── Side-by-side compare (images): the eye toggles a split view whose
-  // left pane shows the pristine original (the stashed buffer when the
-  // image has committed edits). Videos keep the momentary hold-compare. ──
+  // ── Compare (images): the eye toggles a before/after divider on the
+  // photo. When the before can't line up with the after (a committed image
+  // whose crop or turn was baked in), it shows the original side by side
+  // instead. Videos keep the momentary hold-compare. ──
 
-  let splitOn = false;
   let beforePane: HTMLElement | null = null;
+
+  /**
+   * What the divider's left side draws: the source itself (null), or a
+   * committed image's pristine original when it has the same shape.
+   */
+  function splitBefore(): { aligned: boolean; image: HTMLImageElement | null } {
+    if (entry.kind !== "image") return { aligned: false, image: null };
+    const original = options.hasOriginal?.() ? entry.original?.image : undefined;
+    if (!original) return { aligned: true, image: null };
+    const shape = (img: HTMLImageElement): number =>
+      img.naturalWidth / Math.max(1, img.naturalHeight);
+    const aligned =
+      (options.originalAligned?.() ?? false) &&
+      Math.abs(shape(original) - shape(entry.image)) < 0.005 &&
+      !carvedCanvas;
+    return { aligned, image: aligned ? original : null };
+  }
+
+  /** The crop tool shows the whole frame and its marquee; the divider waits. */
+  function syncSplitVisibility(): void {
+    compareSplit.setVisible(compareMode === "split" && activeTool !== "crop");
+  }
 
   function buildBeforePane(): HTMLElement {
     const content = h("div", { class: "rt-editor__pane-content" });
@@ -1135,11 +1313,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     );
   }
 
-  function setSplit(on: boolean): void {
-    if (entry.kind !== "image" || on === splitOn) return;
-    splitOn = on;
-    compareBtn.classList.toggle("rt-editor__compare-btn--active", on);
-    compareBtn.setAttribute("aria-pressed", String(on));
+  function setSideBySide(on: boolean): void {
     // Side by side always shows both at fit; zoom comes back with the single view.
     stageView.setEnabled(!on);
     if (on) {
@@ -1158,10 +1332,29 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (activeTool === "masks") masksOverlay.refresh();
   }
 
+  function setCompare(on: boolean): void {
+    if (entry.kind !== "image" || on === (compareMode !== "off")) return;
+    if (on) {
+      const before = splitBefore();
+      compareMode = before.aligned ? "split" : "side";
+      if (compareMode === "split") renderer.setBeforeSource(before.image);
+      else setSideBySide(true);
+    } else {
+      if (compareMode === "side") setSideBySide(false);
+      compareMode = "off";
+      renderer.setBeforeSource(null);
+    }
+    syncSplitVisibility();
+    compareBtn.classList.toggle("rt-editor__compare-btn--active", on);
+    compareBtn.setAttribute("aria-pressed", String(on));
+  }
+
   if (entry.kind === "image") {
-    compareBtn.title = "Compare with the original side by side";
+    compareBtn.title = "Compare before and after (\\)";
+    compareBtn.setAttribute("aria-label", "Compare before and after");
     compareBtn.setAttribute("aria-pressed", "false");
-    compareBtn.addEventListener("click", () => setSplit(!splitOn), { signal });
+    compareBtn.setAttribute("aria-keyshortcuts", "\\");
+    compareBtn.addEventListener("click", () => setCompare(compareMode === "off"), { signal });
   } else {
     compareBtn.addEventListener(
       "pointerdown",
@@ -1329,7 +1522,12 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const inspector = h(
     "aside",
     { class: "rt-editor__inspector", "aria-label": "Tool controls" },
-    h("div", { class: "rt-inspector__head" }, inspectorTitle, inspectorDesc),
+    h(
+      "div",
+      { class: "rt-inspector__head" },
+      h("div", { class: "rt-inspector__titles" }, inspectorTitle, inspectorDesc),
+      headReset,
+    ),
     histCanvas,
     h("div", { class: "rt-inspector__body" }, dock.root),
   );
@@ -1453,6 +1651,16 @@ export function createEditor(options: EditorOptions): ViewHandle {
       }
 
       if (e.altKey) return;
+      if (e.key === "\\" && entry.kind === "image") {
+        e.preventDefault();
+        setCompare(compareMode === "off");
+        return;
+      }
+      if (activeTool === "liquify" && (e.key === "[" || e.key === "]")) {
+        e.preventDefault();
+        liquifyTool.nudgeSize(e.key === "]" ? 1 : -1);
+        return;
+      }
       if (stageView.handleKey(e)) {
         e.preventDefault();
         return;

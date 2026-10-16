@@ -1,7 +1,8 @@
 import type { CurvePoint, Curves } from "../../types";
-import { buildCurveLut } from "../../utils/curves";
+import { buildCurveLut, curveIsIdentity } from "../../utils/curves";
 import { clamp } from "../../utils/math";
 import { h } from "../h";
+import { createSegmented } from "./controls";
 
 export interface CurvesToolOptions {
   curves: Curves;
@@ -22,22 +23,23 @@ export interface CurvesToolHandle {
 
 type Channel = "master" | "r" | "g" | "b";
 
-const CHANNELS: { id: Channel; label: string; color: string }[] = [
-  { id: "master", label: "RGB", color: "#EDEDED" },
-  { id: "r", label: "R", color: "#E06C5A" },
-  { id: "g", label: "G", color: "#6CC46C" },
-  { id: "b", label: "B", color: "#5A8FE0" },
+const CHANNELS: { id: Channel; label: string; title: string; color: string }[] = [
+  { id: "master", label: "RGB", title: "All channels", color: "#EDEDED" },
+  { id: "r", label: "R", title: "Red channel", color: "#FF6B6B" },
+  { id: "g", label: "G", title: "Green channel", color: "#5FDC8A" },
+  { id: "b", label: "B", title: "Blue channel", color: "#5C9DFF" },
 ];
 
-const WIDTH = 196;
-const HEIGHT = 104;
-const HIT_RADIUS = 10;
+/** Grab distance around a point, in CSS px. */
+const HIT_RADIUS = 12;
 const MAX_POINTS = 16;
 const MIN_GAP = 0.02;
+const HINT = "Click the curve to add a point · double-click a point to remove it";
 
 /**
- * Tone-curve editor: drag points, click the curve to add one, double-click a
- * point to remove it. One curve per channel with the input histogram behind.
+ * Tone-curve editor across the inspector's full width: drag points, click
+ * to add one, double-click to remove. One curve per channel, the input
+ * histogram behind it, and a readout of the point under the pointer.
  */
 export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
   const abort = new AbortController();
@@ -46,62 +48,103 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
   let channel: Channel = "master";
   let histogram: Uint32Array = new Uint32Array(256);
   let dragging: number | null = null;
+  let hover: number | null = null;
 
-  const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
   const canvas = h("canvas", {
     class: "rt-curves__canvas",
-    width: WIDTH * dpr,
-    height: HEIGHT * dpr,
-    "aria-label": "Tone curve editor",
+    role: "img",
+    "aria-label": "Tone curve. Drag points to shape it.",
   }) as HTMLCanvasElement;
   const ctx = canvas.getContext("2d");
+  const readout = h("p", { class: "rt-curves__readout", "aria-live": "polite" }, HINT);
+
+  /** Backing-store size follows the laid-out size. */
+  function sizeToLayout(): boolean {
+    const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
+    const w = Math.round(canvas.clientWidth * dpr);
+    const hgt = Math.round(canvas.clientHeight * dpr);
+    if (w === 0 || hgt === 0) return false;
+    if (canvas.width !== w || canvas.height !== hgt) {
+      canvas.width = w;
+      canvas.height = hgt;
+    }
+    return true;
+  }
 
   // ── Drawing ──
 
   function draw(): void {
-    if (!ctx) return;
-    const w = WIDTH * dpr;
-    const hgt = HEIGHT * dpr;
+    if (!ctx || !sizeToLayout()) return;
+    const w = canvas.width;
+    const hgt = canvas.height;
+    const dpr = w / Math.max(1, canvas.clientWidth);
     ctx.clearRect(0, 0, w, hgt);
 
-    // Panel + quarter grid. Canvas can't read CSS custom properties, so
-    // these literals mirror the darkroom tokens in styles.ts
-    // (--rt-surface-wash / --rt-line / histogram ≈ --rt-control-hover).
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    ctx.fillRect(0, 0, w, hgt);
+    // Quarter grid. Canvas can't read CSS custom properties, so these
+    // literals mirror the darkroom tokens in styles.ts.
     ctx.strokeStyle = "rgba(255,255,255,0.07)";
     ctx.lineWidth = dpr;
     for (let i = 1; i < 4; i++) {
       ctx.beginPath();
-      ctx.moveTo((w * i) / 4, 0);
-      ctx.lineTo((w * i) / 4, hgt);
-      ctx.moveTo(0, (hgt * i) / 4);
-      ctx.lineTo(w, (hgt * i) / 4);
+      ctx.moveTo(Math.round((w * i) / 4) + 0.5, 0);
+      ctx.lineTo(Math.round((w * i) / 4) + 0.5, hgt);
+      ctx.moveTo(0, Math.round((hgt * i) / 4) + 0.5);
+      ctx.lineTo(w, Math.round((hgt * i) / 4) + 0.5);
       ctx.stroke();
     }
 
-    // Histogram (sqrt scale reads better than linear)
+    // Histogram (sqrt scale reads better than linear), as one filled shape
     const peak = Math.sqrt(Math.max(1, ...histogram));
-    ctx.fillStyle = "rgba(255,255,255,0.13)";
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.beginPath();
+    ctx.moveTo(0, hgt);
     for (let i = 0; i < 256; i++) {
-      const barH = (Math.sqrt(histogram[i]) / peak) * hgt;
-      if (barH > 0) ctx.fillRect((i / 256) * w, hgt - barH, w / 256 + 1, barH);
+      ctx.lineTo((i / 255) * w, hgt - (Math.sqrt(histogram[i]) / peak) * hgt * 0.9);
     }
+    ctx.lineTo(w, hgt);
+    ctx.closePath();
+    ctx.fill();
 
     // Identity reference
     ctx.strokeStyle = "rgba(255,255,255,0.16)";
-    ctx.setLineDash([4 * dpr, 4 * dpr]);
+    ctx.setLineDash([4 * dpr, 5 * dpr]);
     ctx.beginPath();
     ctx.moveTo(0, hgt);
     ctx.lineTo(w, 0);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Curve for the active channel
+    // The other channels' curves, faint, so a per-channel edit stays visible
+    for (const def of CHANNELS) {
+      if (def.id === channel || curveIsIdentity(curves[def.id])) continue;
+      strokeCurve(curves[def.id], def.color, 0.35, 1.25 * dpr);
+    }
+
+    // The active curve
     const color = CHANNELS.find((c) => c.id === channel)?.color ?? "#fff";
-    const lut = buildCurveLut(curves[channel]);
+    strokeCurve(curves[channel], color, 1, 2 * dpr);
+
+    // Control points
+    curves[channel].forEach((p, i) => {
+      const active = i === dragging || i === hover;
+      ctx.fillStyle = active ? color : "#141416";
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.arc(p.x * w, hgt - p.y * hgt, (active ? 6 : 5) * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+  }
+
+  function strokeCurve(points: CurvePoint[], color: string, alpha: number, width: number): void {
+    if (!ctx) return;
+    const w = canvas.width;
+    const hgt = canvas.height;
+    const lut = buildCurveLut(points);
+    ctx.globalAlpha = alpha;
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2 * dpr;
+    ctx.lineWidth = width;
     ctx.beginPath();
     for (let i = 0; i < 256; i++) {
       const x = (i / 255) * w;
@@ -110,42 +153,48 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
-
-    // Control points
-    for (const p of curves[channel]) {
-      const x = p.x * w;
-      const y = hgt - p.y * hgt;
-      ctx.fillStyle = "#fff";
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2 * dpr;
-      ctx.beginPath();
-      ctx.arc(x, y, 4 * dpr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
+    ctx.globalAlpha = 1;
   }
 
   // ── Interaction ──
 
-  function toNorm(e: PointerEvent): CurvePoint {
+  function toNorm(e: { clientX: number; clientY: number }): CurvePoint {
     const rect = canvas.getBoundingClientRect();
     return {
-      x: clamp((e.clientX - rect.left) / rect.width, 0, 1),
-      y: clamp(1 - (e.clientY - rect.top) / rect.height, 0, 1),
+      x: clamp((e.clientX - rect.left) / Math.max(1, rect.width), 0, 1),
+      y: clamp(1 - (e.clientY - rect.top) / Math.max(1, rect.height), 0, 1),
     };
   }
 
-  function hitPoint(pos: CurvePoint): number | null {
+  function hitPoint(e: { clientX: number; clientY: number }): number | null {
+    const rect = canvas.getBoundingClientRect();
     const pts = curves[channel];
-    const rx = HIT_RADIUS / WIDTH;
-    const ry = HIT_RADIUS / HEIGHT;
+    let best: number | null = null;
+    let bestDist = HIT_RADIUS;
     for (let i = 0; i < pts.length; i++) {
-      if (Math.abs(pts[i].x - pos.x) < rx && Math.abs(pts[i].y - pos.y) < ry) return i;
+      const px = rect.left + pts[i].x * rect.width;
+      const py = rect.top + (1 - pts[i].y) * rect.height;
+      const dist = Math.hypot(e.clientX - px, e.clientY - py);
+      if (dist <= bestDist) {
+        best = i;
+        bestDist = dist;
+      }
     }
-    return null;
+    return best;
+  }
+
+  function showReadout(index: number | null): void {
+    if (index === null) {
+      readout.textContent = HINT;
+      return;
+    }
+    const p = curves[channel][index];
+    readout.textContent = `Input ${Math.round(p.x * 255)} → Output ${Math.round(p.y * 255)}`;
   }
 
   function emit(): void {
+    segmented.set(channel);
+    paintChannels();
     options.onChange(structuredClone(curves));
   }
 
@@ -153,14 +202,15 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
     "pointerdown",
     (e) => {
       e.preventDefault();
-      const pos = toNorm(e);
-      let index = hitPoint(pos);
+      let index = hitPoint(e);
       if (index === null) {
         const pts = curves[channel];
         if (pts.length >= MAX_POINTS) return;
+        const pos = toNorm(e);
         pts.push(pos);
         pts.sort((a, b) => a.x - b.x);
         index = pts.indexOf(pos);
+        emit();
       }
       dragging = index;
       try {
@@ -168,8 +218,8 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
       } catch {
         // synthetic pointers can't be captured
       }
+      showReadout(index);
       draw();
-      emit();
     },
     { signal },
   );
@@ -177,7 +227,16 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
   canvas.addEventListener(
     "pointermove",
     (e) => {
-      if (dragging === null) return;
+      if (dragging === null) {
+        const next = hitPoint(e);
+        canvas.classList.toggle("rt-curves__canvas--grab", next !== null);
+        if (next !== hover) {
+          hover = next;
+          showReadout(hover);
+          draw();
+        }
+        return;
+      }
       const pts = curves[channel];
       const pos = toNorm(e);
       const first = dragging === 0;
@@ -189,26 +248,39 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
         x: first ? 0 : last ? 1 : clamp(pos.x, minX, maxX),
         y: pos.y,
       };
+      showReadout(dragging);
       draw();
       emit();
     },
     { signal },
   );
 
-  const endDrag = () => {
+  const endDrag = (): void => {
     dragging = null;
+    draw();
   };
   canvas.addEventListener("pointerup", endDrag, { signal });
   canvas.addEventListener("pointercancel", endDrag, { signal });
+  canvas.addEventListener(
+    "pointerleave",
+    () => {
+      if (dragging !== null) return;
+      hover = null;
+      showReadout(null);
+      draw();
+    },
+    { signal },
+  );
 
   canvas.addEventListener(
     "dblclick",
     (e) => {
-      const pos = toNorm(e as unknown as PointerEvent);
-      const index = hitPoint(pos);
+      const index = hitPoint(e);
       const pts = curves[channel];
       if (index !== null && index > 0 && index < pts.length - 1) {
         pts.splice(index, 1);
+        hover = null;
+        showReadout(null);
         draw();
         emit();
       }
@@ -216,66 +288,51 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
     { signal },
   );
 
-  // ── Channel chips + reset ──
+  // ── Channels ──
 
-  const chipEls = new Map<Channel, HTMLElement>();
-  const chipColumn = h("div", { class: "rt-curves__channels" });
-  for (const def of CHANNELS) {
-    const chip = h(
-      "button",
-      {
-        class: `rt-dock__chip rt-curves__chip${def.id === channel ? " rt-dock__chip--active" : ""}`,
-        title: def.id === "master" ? "All channels" : `${def.label} channel`,
-      },
-      def.label,
-    );
-    chip.style.setProperty("--rt-curve-color", def.color);
-    chip.addEventListener(
-      "click",
-      () => {
-        chipEls.get(channel)?.classList.remove("rt-dock__chip--active");
-        channel = def.id;
-        chipEls.get(channel)?.classList.add("rt-dock__chip--active");
+  const segmented = createSegmented(
+    {
+      label: "Channel",
+      options: CHANNELS.map((c) => ({
+        value: c.id,
+        label: c.label,
+        title: c.title,
+        color: c.color,
+      })),
+      value: channel,
+      onChange: (next) => {
+        channel = next;
+        hover = null;
+        showReadout(null);
         draw();
       },
-      { signal },
-    );
-    chipEls.set(def.id, chip);
-    chipColumn.appendChild(chip);
-  }
-
-  const resetBtn = h(
-    "button",
-    { class: "rt-dock__chip rt-curves__chip", title: "Reset this channel's curve" },
-    "Reset",
-  );
-  resetBtn.addEventListener(
-    "click",
-    () => {
-      curves[channel] = [
-        { x: 0, y: 0 },
-        { x: 1, y: 1 },
-      ];
-      draw();
-      emit();
     },
-    { signal },
+    signal,
   );
 
-  const root = h(
-    "div",
-    { class: "rt-curves rt-dock__row" },
-    chipColumn,
-    canvas,
-    h("div", { class: "rt-curves__side" }, resetBtn),
-  );
+  /** Mark channels whose curve has been shaped. */
+  function paintChannels(): void {
+    const buttons = segmented.root.querySelectorAll<HTMLElement>(".rt-segmented__btn");
+    CHANNELS.forEach((def, i) => {
+      buttons[i]?.classList.toggle("rt-segmented__btn--touched", !curveIsIdentity(curves[def.id]));
+    });
+  }
+  paintChannels();
 
+  const root = h("div", { class: "rt-curves" }, segmented.root, canvas, readout);
+
+  if (typeof ResizeObserver !== "undefined") {
+    const observer = new ResizeObserver(() => draw());
+    observer.observe(canvas);
+    signal.addEventListener("abort", () => observer.disconnect());
+  }
   draw();
 
   return {
     root,
     setCurves(next) {
       curves = structuredClone(next);
+      paintChannels();
       draw();
     },
     refreshHistogram() {

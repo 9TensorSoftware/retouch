@@ -1,8 +1,13 @@
 import type { StylizeEffect, StylizeKind } from "../../types";
+import { createDefaultStylize } from "../../utils/stylize";
 import { h } from "../h";
-import { refreshRangeFill } from "../range-fill";
+import { createTiles } from "./controls";
+import { renderLook } from "./preview";
+import { createSlider } from "./slider";
 
 export interface StylizeToolOptions {
+  /** A small copy of the photo the preview tiles are drawn from. */
+  base: HTMLCanvasElement;
   stylize: StylizeEffect;
   onChange: (stylize: StylizeEffect) => void;
 }
@@ -14,179 +19,131 @@ export interface StylizeToolHandle {
   destroy(): void;
 }
 
-const KINDS: { id: StylizeKind; label: string }[] = [
-  { id: "none", label: "None" },
-  { id: "tiltshift", label: "Tilt-shift" },
-  { id: "duotone", label: "Duotone" },
-  { id: "posterize", label: "Posterize" },
-  { id: "pixelate", label: "Pixelate" },
-  { id: "halftone", label: "Halftone" },
+/** Each effect, with the amount its tile shows it at (pixel sizes are absolute, so tiles go easy). */
+const KINDS: { id: StylizeKind; label: string; previewAmount: number }[] = [
+  { id: "none", label: "None", previewAmount: 0 },
+  { id: "tiltshift", label: "Tilt-shift", previewAmount: 80 },
+  { id: "duotone", label: "Duotone", previewAmount: 100 },
+  { id: "posterize", label: "Posterize", previewAmount: 60 },
+  { id: "pixelate", label: "Pixelate", previewAmount: 18 },
+  { id: "halftone", label: "Halftone", previewAmount: 20 },
 ];
 
 /**
- * One parametric effect at a time: pick a chip, then tune its amount (plus
- * the band position for tilt-shift and the two duotone colors).
+ * One effect at a time, picked from preview tiles; then tune its amount
+ * (plus the sharp band for tilt-shift and the two duotone colors).
  */
 export function createStylizeTool(options: StylizeToolOptions): StylizeToolHandle {
   const effect: StylizeEffect = { ...options.stylize };
   const abort = new AbortController();
   const signal = abort.signal;
 
-  const chips = new Map<StylizeKind, HTMLElement>();
-
   function emit(): void {
     options.onChange({ ...effect });
   }
 
-  // ── Parameter row ──
-
-  const amountValue = h("span", { class: "rt-dock__slider-value" }, String(effect.amount));
-  const amountInput = h("input", {
-    type: "range",
-    min: 0,
-    max: 100,
-    step: 1,
-    value: effect.amount,
-    "aria-label": "Effect amount",
-  }) as HTMLInputElement;
-  refreshRangeFill(amountInput);
-  amountInput.addEventListener(
-    "input",
-    () => {
-      effect.amount = Number(amountInput.value);
-      amountValue.textContent = amountInput.value;
-      refreshRangeFill(amountInput);
-      emit();
+  const tiles = createTiles(
+    {
+      label: "Effect",
+      options: KINDS.map((kind) => ({
+        value: kind.id,
+        label: kind.label,
+        preview: renderLook(options.base, {
+          stylize: { ...createDefaultStylize(), kind: kind.id, amount: kind.previewAmount },
+        }),
+      })),
+      value: effect.kind,
+      onChange: (kind) => {
+        effect.kind = kind;
+        syncParams();
+        emit();
+      },
     },
-    { signal },
-  );
-  const amountGroup = h(
-    "div",
-    { class: "rt-dock__group rt-dock__slider" },
-    h("span", { class: "rt-dock__slider-label" }, "Amount"),
-    amountInput,
-    amountValue,
+    signal,
   );
 
-  const positionValue = h(
-    "span",
-    { class: "rt-dock__slider-value" },
-    String(Math.round(effect.position * 100)),
-  );
-  const positionInput = h("input", {
-    type: "range",
-    min: 0,
-    max: 100,
-    step: 1,
-    value: Math.round(effect.position * 100),
-    "aria-label": "Sharp band position",
-  }) as HTMLInputElement;
-  refreshRangeFill(positionInput);
-  positionInput.addEventListener(
-    "input",
-    () => {
-      effect.position = Number(positionInput.value) / 100;
-      positionValue.textContent = positionInput.value;
-      refreshRangeFill(positionInput);
-      emit();
+  const amount = createSlider(
+    {
+      label: "Amount",
+      min: 0,
+      max: 100,
+      value: effect.amount,
+      neutral: 50,
+      fillFrom: 0,
+      onInput: (v) => {
+        effect.amount = v;
+        emit();
+      },
     },
-    { signal },
-  );
-  const positionGroup = h(
-    "div",
-    { class: "rt-dock__group rt-dock__slider" },
-    h("span", { class: "rt-dock__slider-label" }, "Focus"),
-    positionInput,
-    positionValue,
+    signal,
   );
 
-  const shadowInput = h("input", {
-    type: "color",
-    class: "rt-stylize__color",
-    value: effect.shadow,
-    "aria-label": "Duotone shadow color",
-  }) as HTMLInputElement;
-  const highlightInput = h("input", {
-    type: "color",
-    class: "rt-stylize__color",
-    value: effect.highlight,
-    "aria-label": "Duotone highlight color",
-  }) as HTMLInputElement;
-  shadowInput.addEventListener(
-    "input",
-    () => {
-      effect.shadow = shadowInput.value;
-      emit();
+  const focus = createSlider(
+    {
+      label: "Focus",
+      ariaLabel: "Sharp band position",
+      min: 0,
+      max: 100,
+      value: Math.round(effect.position * 100),
+      neutral: 50,
+      format: (v) => `${v}%`,
+      onInput: (v) => {
+        effect.position = v / 100;
+        emit();
+      },
     },
-    { signal },
-  );
-  highlightInput.addEventListener(
-    "input",
-    () => {
-      effect.highlight = highlightInput.value;
-      emit();
-    },
-    { signal },
-  );
-  const colorGroup = h(
-    "div",
-    { class: "rt-dock__group" },
-    h("span", { class: "rt-dock__slider-label" }, "Shadows"),
-    shadowInput,
-    h("span", { class: "rt-dock__slider-label" }, "Highlights"),
-    highlightInput,
+    signal,
   );
 
-  const paramRow = h("div", { class: "rt-dock__row" }, amountGroup, positionGroup, colorGroup);
-
-  function syncParamVisibility(): void {
-    amountGroup.style.display = effect.kind === "none" ? "none" : "";
-    positionGroup.style.display = effect.kind === "tiltshift" ? "" : "none";
-    colorGroup.style.display = effect.kind === "duotone" ? "" : "none";
-  }
-
-  // ── Effect chips ──
-
-  const chipRow = h("div", { class: "rt-dock__row rt-dock__chips" });
-  for (const def of KINDS) {
-    const chip = h(
-      "button",
-      { class: `rt-dock__chip${def.id === effect.kind ? " rt-dock__chip--active" : ""}` },
-      def.label,
-    );
-    chip.addEventListener(
-      "click",
+  const colorInputs = new Map<"shadow" | "highlight", HTMLInputElement>();
+  function colorField(label: string, key: "shadow" | "highlight"): HTMLElement {
+    const input = h("input", {
+      type: "color",
+      class: "rt-stylize__color",
+      value: effect[key],
+      "aria-label": `Duotone ${label.toLowerCase()} color`,
+    }) as HTMLInputElement;
+    input.addEventListener(
+      "input",
       () => {
-        chips.get(effect.kind)?.classList.remove("rt-dock__chip--active");
-        effect.kind = def.id;
-        chips.get(effect.kind)?.classList.add("rt-dock__chip--active");
-        syncParamVisibility();
+        effect[key] = input.value;
         emit();
       },
       { signal },
     );
-    chips.set(def.id, chip);
-    chipRow.appendChild(chip);
+    colorInputs.set(key, input);
+    return h("label", { class: "rt-stylize__swatch" }, input, h("span", null, label));
   }
+  const colors = h(
+    "div",
+    { class: "rt-stylize__colors" },
+    colorField("Shadows", "shadow"),
+    colorField("Highlights", "highlight"),
+  );
 
-  const root = h("div", { class: "rt-adjust" }, paramRow, chipRow);
-  syncParamVisibility();
+  const params = h("div", { class: "rt-stylize__params" }, amount.root, focus.root, colors);
+
+  function syncParams(): void {
+    params.hidden = effect.kind === "none";
+    focus.root.hidden = effect.kind !== "tiltshift";
+    colors.hidden = effect.kind !== "duotone";
+  }
+  syncParams();
+
+  const root = h("div", { class: "rt-stylize" }, tiles.root, params);
 
   return {
     root,
     setStylize(next) {
-      chips.get(effect.kind)?.classList.remove("rt-dock__chip--active");
       Object.assign(effect, next);
-      chips.get(effect.kind)?.classList.add("rt-dock__chip--active");
-      amountInput.value = String(effect.amount);
-      amountValue.textContent = String(effect.amount);
-      refreshRangeFill(amountInput);
-      positionInput.value = String(Math.round(effect.position * 100));
-      positionValue.textContent = String(Math.round(effect.position * 100));
-      refreshRangeFill(positionInput);
-      shadowInput.value = effect.shadow;
-      highlightInput.value = effect.highlight;
-      syncParamVisibility();
+      tiles.set(effect.kind);
+      amount.set(effect.amount);
+      focus.set(Math.round(effect.position * 100));
+      const shadow = colorInputs.get("shadow");
+      const highlight = colorInputs.get("highlight");
+      if (shadow) shadow.value = effect.shadow;
+      if (highlight) highlight.value = effect.highlight;
+      syncParams();
     },
     destroy() {
       abort.abort();

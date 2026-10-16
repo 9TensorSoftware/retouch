@@ -1,10 +1,8 @@
 import { h } from "../h";
-import { refreshRangeFill } from "../range-fill";
+import { createSlider } from "./slider";
 
 export interface LiquifyToolOptions {
-  /** Restore the untouched frame (clears the whole field). */
-  onReset: () => void;
-  /** Brush geometry changed — the overlay resizes its cursor circle. */
+  /** Brush geometry changed — the overlay resizes its ring. */
   onBrushChange: (size: number, strength: number) => void;
 }
 
@@ -12,15 +10,18 @@ export interface LiquifyToolHandle {
   root: HTMLElement;
   /** Current brush: size as a fraction of frame height, strength 0–100. */
   getBrush(): { size: number; strength: number };
-  /** Enable/disable Reset (enabled while the field has strokes). */
-  setResetEnabled(enabled: boolean): void;
+  /** Step the brush size down (−1) or up (+1), as the [ and ] keys do. */
+  nudgeSize(direction: 1 | -1): void;
   destroy(): void;
 }
 
+const SIZE_MIN = 5;
+const SIZE_MAX = 45;
+const SIZE_STEP = 3;
+
 /**
- * Liquify controls: brush size/strength plus Reset. The actual pushing
- * happens on the canvas through the liquify overlay; this pane only holds
- * the brush parameters.
+ * Liquify controls: brush size and strength. The pushing happens on the
+ * photo through the liquify overlay; this pane only holds the brush.
  */
 export function createLiquifyTool(options: LiquifyToolOptions): LiquifyToolHandle {
   const abort = new AbortController();
@@ -29,73 +30,50 @@ export function createLiquifyTool(options: LiquifyToolOptions): LiquifyToolHandl
   let size = 20; // percent of frame height
   let strength = 50;
 
-  function slider(
-    label: string,
-    min: number,
-    max: number,
-    value: number,
-    onInput: (v: number) => void,
-  ): { group: HTMLElement } {
-    const valueEl = h("span", { class: "rt-dock__slider-value" }, String(value));
-    const input = h("input", {
-      type: "range",
-      min,
-      max,
-      step: 1,
-      value,
-      "aria-label": label,
-    }) as HTMLInputElement;
-    refreshRangeFill(input);
-    input.addEventListener(
-      "input",
-      () => {
-        valueEl.textContent = input.value;
-        refreshRangeFill(input);
-        onInput(Number(input.value));
+  const sizeSlider = createSlider(
+    {
+      label: "Size",
+      ariaLabel: "Brush size",
+      min: SIZE_MIN,
+      max: SIZE_MAX,
+      value: size,
+      neutral: 20,
+      fillFrom: SIZE_MIN,
+      format: (v) => `${v}%`,
+      onInput: (v) => {
+        size = v;
+        options.onBrushChange(size / 100, strength);
       },
-      { signal },
-    );
-    const group = h(
-      "div",
-      { class: "rt-dock__group rt-dock__slider" },
-      h("span", { class: "rt-dock__slider-label" }, label),
-      input,
-      valueEl,
-    );
-    return { group };
-  }
-
-  const sizeSlider = slider("Size", 5, 45, size, (v) => {
-    size = v;
-    options.onBrushChange(size / 100, strength);
-  });
-  const strengthSlider = slider("Strength", 10, 100, strength, (v) => {
-    strength = v;
-    options.onBrushChange(size / 100, strength);
-  });
-
-  const resetBtn = h(
-    "button",
-    { class: "rt-dock__chip", disabled: "" },
-    "Reset",
-  ) as HTMLButtonElement;
-  resetBtn.addEventListener("click", () => options.onReset(), { signal });
+    },
+    signal,
+  );
+  const strengthSlider = createSlider(
+    {
+      label: "Strength",
+      ariaLabel: "Brush strength",
+      min: 10,
+      max: 100,
+      value: strength,
+      neutral: 50,
+      fillFrom: 10,
+      onInput: (v) => {
+        strength = v;
+        options.onBrushChange(size / 100, strength);
+      },
+    },
+    signal,
+  );
 
   const root = h(
     "div",
-    { class: "rt-adjust" },
+    { class: "rt-liquify" },
     h(
-      "div",
-      { class: "rt-dock__row" },
-      h(
-        "span",
-        { class: "rt-dock__slider-label rt-liquify__hint" },
-        "Drag on the image to push pixels",
-      ),
-      sizeSlider.group,
-      strengthSlider.group,
-      resetBtn,
+      "p",
+      { class: "rt-dock__hint rt-liquify__hint" },
+      "Drag on the photo to push pixels. Press [ and ] to change the brush size.",
     ),
+    sizeSlider.root,
+    strengthSlider.root,
   );
 
   return {
@@ -103,8 +81,12 @@ export function createLiquifyTool(options: LiquifyToolOptions): LiquifyToolHandl
     getBrush() {
       return { size: size / 100, strength };
     },
-    setResetEnabled(enabled) {
-      resetBtn.disabled = !enabled;
+    nudgeSize(direction) {
+      const next = Math.min(SIZE_MAX, Math.max(SIZE_MIN, size + direction * SIZE_STEP));
+      if (next === size) return;
+      size = next;
+      sizeSlider.set(size);
+      options.onBrushChange(size / 100, strength);
     },
     destroy() {
       abort.abort();

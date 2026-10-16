@@ -8,8 +8,9 @@ function rangeOf(root: HTMLElement): HTMLInputElement {
   return root.querySelector("input") as HTMLInputElement;
 }
 
-function readout(root: HTMLElement): string | null | undefined {
-  return root.querySelector(".rt-dock__slider-value")?.textContent;
+/** The value field beside the label (typed values land here too). */
+function readout(root: HTMLElement): string | undefined {
+  return root.querySelector<HTMLInputElement>(".rt-dock__slider-value")?.value;
 }
 
 describe("createToolUi", () => {
@@ -124,8 +125,9 @@ describe("createToolUi", () => {
     const ui = createToolUi();
     const note = ui.note("Downloading…");
     const section = ui.section("Lens", note.root);
-    expect(section.classList.contains("rt-dock__row")).toBe(true);
+    expect(section.classList.contains("rt-section")).toBe(true);
     expect(section.querySelector(".rt-dock__row-title")?.textContent).toBe("Lens");
+    expect(section.querySelector(".rt-section__body")?.contains(note.root)).toBe(true);
     expect(note.root.getAttribute("aria-live")).toBe("polite");
     note.set("Ready");
     expect(note.root.textContent).toBe("Ready");

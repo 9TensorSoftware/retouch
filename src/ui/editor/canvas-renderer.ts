@@ -106,6 +106,14 @@ export class CanvasRenderer {
   private screenScale = 1;
   private renderListener: (() => void) | null = null;
   private paintListener: (() => void) | null = null;
+  /** Straighten's fill zoom from the last render (the "before" side matches it). */
+  private straightenFit = 1;
+  /** Before/after divider as a fraction of the width; null when not comparing. */
+  private split: number | null = null;
+  /** The "before" image, when it isn't the source (a committed image's original). */
+  private beforeSource: HTMLImageElement | null = null;
+  /** The frame without look edits or liquify: the left side of the divider. */
+  private beforeFrame: HTMLCanvasElement | null = null;
 
   constructor(container: HTMLElement, source: RenderSource, edits: ImageEdits) {
     this.container = container;
@@ -195,7 +203,9 @@ export class CanvasRenderer {
       if (this.adjustments.vignette > 0) {
         drawVignette(renderCtx, el.width, el.height, this.adjustments.vignette);
       }
+      // Listeners see the edited frame, before the compare split covers part of it.
       this.paintListener?.();
+      this.drawSplit(renderCtx, el.width, el.height);
     });
 
     if (this.video) {
@@ -405,6 +415,7 @@ export class CanvasRenderer {
     // Straighten fills the frame: zoom by the inverse of the largest
     // inscribed same-aspect rect so rotation never exposes the background.
     const fit = straightenFitScale(sourceW, sourceH, this.rotation);
+    this.straightenFit = fit;
     this.fabricImage.set({
       left: drawW / 2,
       top: drawH / 2,
@@ -429,6 +440,28 @@ export class CanvasRenderer {
   /** Called once fabric has actually painted the canvas (renders paint on the next frame). */
   onPaint(listener: (() => void) | null): void {
     this.paintListener = listener;
+  }
+
+  /**
+   * Compare before/after: left of `fraction` (0–1 of the width) shows the
+   * photo with its framing (crop, turns, straighten, perspective, lens) but
+   * none of the look edits or liquify. null turns it off.
+   */
+  setSplit(fraction: number | null): void {
+    const starting = fraction !== null && this.split === null;
+    this.split = fraction === null ? null : Math.min(1, Math.max(0, fraction));
+    if (starting) this.drawBeforeFrame();
+    if (this.split === null) this.beforeFrame = null;
+    this.fabricCanvas.requestRenderAll();
+  }
+
+  /** Draw the "before" side from this image instead of the source (same aspect ratio). */
+  setBeforeSource(image: HTMLImageElement | null): void {
+    this.beforeSource = image;
+    if (this.split !== null) {
+      this.drawBeforeFrame();
+      this.fabricCanvas.requestRenderAll();
+    }
   }
 
   /** Redraw the current frame (and re-filter it when filters are active). */
@@ -527,6 +560,33 @@ export class CanvasRenderer {
   }
 
   private drawFrame(): void {
+    this.drawFrameTo(this.frameCtx, this.carvedSource ?? this.source, true);
+    if (this.split !== null) this.drawBeforeFrame();
+  }
+
+  /** The compare split's left side: same framing, no liquify, no look edits. */
+  private drawBeforeFrame(): void {
+    if (!this.beforeFrame) this.beforeFrame = createCanvas(1, 1);
+    const frame = this.beforeFrame;
+    if (frame.width !== this.frameCanvas.width || frame.height !== this.frameCanvas.height) {
+      frame.width = this.frameCanvas.width;
+      frame.height = this.frameCanvas.height;
+    }
+    const ctx = frame.getContext("2d");
+    if (!ctx) return;
+    this.drawFrameTo(ctx, this.beforeSource ?? this.carvedSource ?? this.source, false);
+  }
+
+  /**
+   * Draw the oriented, cropped source through the geometric warps
+   * (keystone, lens, and optionally liquify) into `dest`, a frame-sized
+   * canvas context.
+   */
+  private drawFrameTo(
+    dest: CanvasRenderingContext2D,
+    source: CanvasImageSource,
+    withLiquify: boolean,
+  ): void {
     const oriented = this.orientedSize();
     const visible = this.visibleSize();
     const scale = this.frameCanvas.width / visible.width;
@@ -545,13 +605,13 @@ export class CanvasRenderer {
       );
     }
     const liquify = this.liquify;
-    if (liquify) {
+    if (liquify && withLiquify) {
       stages.push((src, dst) => applyLiquifyToCanvas(src, dst, liquify));
     }
 
     // With warp stages active, draw into a scratch canvas first, then run
-    // the chain into the frame canvas fabric reads from.
-    let target: CanvasRenderingContext2D | null = this.frameCtx;
+    // the chain into the destination.
+    let target: CanvasRenderingContext2D | null = dest;
     if (stages.length > 0) {
       target = this.frameSizedScratch("warpSrc").getContext("2d");
       if (!target) return;
@@ -572,16 +632,16 @@ export class CanvasRenderer {
       offsetX: cropOn ? this.crop.x * oriented.width * scale : 0,
       offsetY: cropOn ? this.crop.y * oriented.height * scale : 0,
     });
-    target.drawImage(this.carvedSource ?? this.source, -sw / 2, -sh / 2, sw, sh);
+    target.drawImage(source, -sw / 2, -sh / 2, sw, sh);
     target.restore();
 
     // Ping-pong between the two scratch canvases; the last stage lands in
-    // the frame canvas.
+    // the destination.
     let src = this.warpSrc;
     for (let i = 0; i < stages.length; i++) {
       if (!src) return;
       if (i === stages.length - 1) {
-        stages[i](src, this.frameCtx);
+        stages[i](src, dest);
       } else {
         const next = this.frameSizedScratch(src === this.warpSrc ? "lensSrc" : "warpSrc");
         const nextCtx = next.getContext("2d");
@@ -590,6 +650,25 @@ export class CanvasRenderer {
         src = next;
       }
     }
+  }
+
+  /** Paint the "before" frame left of the divider, placed exactly like the image. */
+  private drawSplit(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const frame = this.beforeFrame;
+    if (this.split === null || !frame || frame.width === 0) return;
+    const x = Math.round(this.split * width);
+    if (x <= 0) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath();
+    ctx.rect(0, 0, x, height);
+    ctx.clip();
+    ctx.clearRect(0, 0, x, height);
+    ctx.translate(width / 2, height / 2);
+    ctx.rotate((this.rotation * Math.PI) / 180);
+    ctx.scale(width / frame.width / this.straightenFit, height / frame.height / this.straightenFit);
+    ctx.drawImage(frame, -frame.width / 2, -frame.height / 2);
+    ctx.restore();
   }
 
   private startLoop(): void {

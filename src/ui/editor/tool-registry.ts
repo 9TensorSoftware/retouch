@@ -29,7 +29,18 @@ export interface ToolContext {
   canvasArea: HTMLElement;
   /** Builders for pane controls that match the built-in tools. */
   ui: ToolUi;
+  /**
+   * A small picture of the photo with `edits` applied over the current ones,
+   * as an image URL — for preview tiles (`ui.tiles`). It shows the tone,
+   * color and effect edits: adjustments, filter, curves, color mix, stylize.
+   */
+  preview(edits?: PreviewEdits): string;
 }
+
+/** The edits `ctx.preview()` can show. */
+export type PreviewEdits = Partial<
+  Pick<ImageEdits, "adjustments" | "filter" | "filterStrength" | "curves" | "hsl" | "stylize">
+>;
 
 /** The dock pane a custom tool mounts into the editor. */
 export interface ToolPaneHandle {
@@ -123,8 +134,11 @@ export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
   },
 };
 
-/** Keys the editor itself uses (AI menu, zoom, Space-pan); plugin shortcuts can't take them. */
-const RESERVED_KEYS = new Set(["i", " ", "+", "-", "_", "="]);
+/**
+ * Keys the editor itself uses (AI menu, zoom, Space-pan, compare, brush
+ * size); plugin shortcuts can't take them.
+ */
+const RESERVED_KEYS = new Set(["i", " ", "+", "-", "_", "=", "\\", "[", "]"]);
 
 const FALLBACK_ICON = ICON_TOOL_FALLBACK;
 

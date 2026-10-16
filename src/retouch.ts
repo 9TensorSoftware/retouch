@@ -24,7 +24,7 @@ import { createGallery } from "./ui/gallery";
 import { h } from "./ui/h";
 import type { ToastHost } from "./ui/toast";
 import { createToastHost, rejectionMessage } from "./ui/toast";
-import { imageEditsAreNeutral } from "./utils/edits";
+import { framingIsNeutral, imageEditsAreNeutral } from "./utils/edits";
 import {
   createThumbnailUrl,
   exportImage,
@@ -189,6 +189,13 @@ export class Retouch {
     }
   }
 
+  /**
+   * Committed images whose baked edits moved pixels (a crop, turn, warp…):
+   * their pristine original no longer lines up with what's on screen, so
+   * the editor compares them side by side rather than with the divider.
+   */
+  private readonly reframed = new WeakSet<ImageEntry>();
+
   /** Keep the pristine source around the first time pixels get replaced. */
   private stashOriginal(entry: ImageEntry): void {
     if (!entry.original) {
@@ -214,6 +221,7 @@ export class Retouch {
       const file = new File([blob], entry.file.name, { type: `image/${type}` });
       const image = await loadImage(file);
       this.stashOriginal(entry);
+      if (!framingIsNeutral(edits)) this.reframed.add(entry);
       entry.file = file;
       entry.image = image;
       entry.edits = structuredClone(DEFAULT_EDITS);
@@ -242,6 +250,7 @@ export class Retouch {
     entry.file = entry.original.file;
     entry.image = entry.original.image;
     entry.original = undefined;
+    this.reframed.delete(entry);
     entry.edits = structuredClone(DEFAULT_EDITS);
     entry.edited = false;
     revokeThumbnailUrl(entry.thumbnailUrl);
@@ -594,6 +603,8 @@ export class Retouch {
       onDone: () => this.closeEditor(true),
       onCancel: () => this.closeEditor(false),
       hasOriginal: () => entry.kind === "image" && !!entry.original,
+      originalAligned: () =>
+        entry.kind === "image" && !!entry.original && !this.reframed.has(entry),
       onRestoreOriginal: () => void this.restoreOriginal(entry.id),
       onCaptureFrame:
         entry.kind === "video"
