@@ -375,7 +375,12 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | `[` / `]` (Liquify) | Smaller / larger brush |
 | `Enter` (Crop tab) · `Space` (video) | Apply crop · play/pause |
 
-Hover a rail button for its name and key. Past the preview's own resolution
+Hover a rail button for its name and key, or switch the rail to show names
+(the toggle at its foot): it widens to list every tool with its key, and each
+AI tool with a line on what it does. AI tools have their own section on the
+rail; the first three sit there from the start, and the **✦ All AI tools**
+menu lists every one with a pin, so people keep the ones they use on the rail.
+Both choices are remembered in the browser. Past the preview's own resolution
 the stage magnifies (crop handles and mask gizmos keep their size), and the
 zoom controls at the foot of the stage show the scale, with **Fit** and
 **1:1** (one image pixel per CSS pixel).
@@ -438,6 +443,7 @@ new Retouch(options: RetouchOptions)
 | `maxVideoDuration` | `number` | `Infinity` | Video length cap in seconds (reason `"duration"`) |
 | `commitMode` | `"bake" \| "keep-edits"` | `"bake"` | What Done does to an image's edits — see [Editing UX](#editing-ux) |
 | `tools` | `EditorTool[]` | all | Feature groups to mount (built-ins and registered plugins); the rail orders them by group |
+| `rail` | `RailOptions` | — | The rail's starting layout: `pinned` (AI tools on the rail itself; defaults to the first three) and `expanded` (tool names shown). Users' own changes are remembered in their browser and win |
 | `export` | `ImageExportOptions` | `{ format: "png", quality: 0.92 }` | Image output format/quality/`maxDimension`; videos always export MP4/WebM |
 | `ai` | `AiOptions` | off | Enables the AI panel — see [AI edits](#ai-edits) |
 | `onDone` | `(blobs: Blob[]) => void` | — | Receives every entry exported with its edits; also shows the gallery's Done button |
@@ -499,7 +505,7 @@ const off = retouch.on("export:progress", ({ id, progress }) => …);
 
 Values: `Retouch`, `refreshRangeFill`, `isImageEntry`, `isVideoEntry`, `ACCEPTED_TYPES`,
 `ACCEPTED_VIDEO_TYPES`, `VERSION`.
-Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `ShellTheme`, `MediaEntry`, `ImageEntry`,
+Types: `RetouchOptions`, `RailOptions`, `RetouchEventMap`, `AppState`, `ShellTheme`, `MediaEntry`, `ImageEntry`,
 `VideoEntry`, `MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `TrimRange`,
 `EditMask`, `FilterPreset`, `AspectRatioPreset`, `Orientation`, `GalleryViewMode`, `EditorTool`,
 `BuiltinEditorTool`, `ImageExportOptions`, `GifExportOptions`, `GifLoopMode`, `FileRejectionReason`, `AiOptions`, `AiRequest`,

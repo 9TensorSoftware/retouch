@@ -1209,7 +1209,9 @@ const CSS = /* css */ `
   height: 20px;
 }
 
-.rt-toolbar__label {
+/* Names (and AI tools' one-liners) only show on the expanded rail; the
+   buttons' aria-labels already name them. */
+.rt-toolbar__text {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1224,6 +1226,234 @@ const CSS = /* css */ `
   margin: 6px 0;
   background: var(--rt-line-strong);
   flex-shrink: 0;
+}
+
+.rt-toolbar__groups,
+.rt-toolbar__group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.rt-toolbar__group-label,
+.rt-toolbar__key {
+  display: none;
+}
+
+/* AI tools get their own section, faintly lit by the prism, so they read
+   as a headline feature rather than an afterthought. */
+.rt-toolbar__group--ai {
+  padding: 5px 0;
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(165, 139, 255, 0.1), rgba(92, 200, 255, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(165, 139, 255, 0.16);
+}
+
+/* A spark of the prism marks each AI tool on the rail. */
+.rt-toolbar__spark {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rt-prism);
+}
+
+/* A rail taller than the screen scrolls; the end with more fades out. */
+.rt-toolbar--more-after {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+}
+
+.rt-toolbar--more-before {
+  mask-image: linear-gradient(to top, #000 calc(100% - 36px), transparent);
+}
+
+.rt-toolbar--more-before.rt-toolbar--more-after {
+  mask-image: linear-gradient(to bottom, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
+/* Short screens (a 768 px laptop): a denser rail keeps every tool in view.
+   Column rails only — phones keep their full-size touch targets. */
+@media (max-height: 820px) and (min-width: 761px) and (orientation: landscape),
+  (max-height: 820px) and (min-width: 1025px) {
+  .rt-toolbar__btn {
+    height: 40px;
+  }
+
+  .rt-toolbar__sep {
+    margin: 4px 0;
+  }
+
+  .rt-toolbar__group--ai {
+    padding: 3px 0;
+  }
+
+  .rt-toolbar__toggle {
+    height: 32px;
+  }
+
+  .rt-toolbar__btn--active::before {
+    top: 10px;
+    bottom: 10px;
+  }
+}
+
+/* Names toggle, at the foot of the rail */
+.rt-toolbar__toggle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 36px;
+  margin-top: auto;
+  padding: 0;
+  border: none;
+  border-radius: var(--rt-radius-md);
+  background: transparent;
+  color: var(--rt-text-3);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-toolbar__toggle:hover {
+  background: var(--rt-control);
+  color: var(--rt-text-1);
+}
+
+.rt-toolbar__toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Expanded: a wider rail with names, group titles and keys — only while
+   the rail is a column (the stacked phone and tablet layouts keep the
+   compact row). */
+@media (min-width: 761px) and (orientation: landscape), (min-width: 1025px) {
+  .rt-toolbar--expanded {
+    width: 212px;
+    align-items: stretch;
+    padding: 8px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__groups,
+  .rt-toolbar--expanded .rt-toolbar__group {
+    align-items: stretch;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__group-label {
+    display: block;
+    padding: 8px 10px 4px;
+    color: var(--rt-text-3);
+    font: 600 10px / 1.2 var(--rt-font-ui);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__group--ai {
+    padding: 2px 4px 4px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__group--ai .rt-toolbar__group-label {
+    background: linear-gradient(90deg, #ffc457, #8ce99a, #5cc8ff, #a58bff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__sep {
+    width: auto;
+    margin: 6px 4px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__btn,
+  .rt-toolbar--expanded .rt-toolbar__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 11px;
+    width: 100%;
+    height: 38px;
+    padding: 0 10px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__btn svg,
+  .rt-toolbar--expanded .rt-toolbar__toggle svg {
+    flex: none;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__text {
+    position: static;
+    display: grid;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    clip-path: none;
+    text-align: left;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__label,
+  .rt-toolbar--expanded .rt-toolbar__desc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__label {
+    font-size: var(--rt-type-md);
+    font-weight: 500;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__desc {
+    color: var(--rt-text-3);
+    font-size: var(--rt-type-xs);
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__btn--ai-tool {
+    height: auto;
+    min-height: 44px;
+    padding-block: 6px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__key {
+    display: inline-block;
+    margin-left: auto;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--rt-control);
+    color: var(--rt-text-3);
+    font: 500 var(--rt-type-xs) var(--rt-font-mono);
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__btn--active::before {
+    left: -8px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__btn--touched::after,
+  .rt-toolbar--expanded .rt-toolbar__spark {
+    top: 7px;
+    right: auto;
+    left: 24px;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 761px) and (orientation: landscape),
+  (max-height: 820px) and (min-width: 1025px) {
+  .rt-toolbar--expanded .rt-toolbar__btn,
+  .rt-toolbar--expanded .rt-toolbar__toggle {
+    height: 34px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__btn--ai-tool {
+    min-height: 40px;
+    padding-block: 4px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__group-label {
+    padding: 6px 10px 3px;
+  }
 }
 
 /* The AI launcher wears the prism: light split into its spectrum. */
@@ -1283,7 +1513,7 @@ const CSS = /* css */ `
   z-index: 40;
   display: grid;
   gap: 2px;
-  width: 316px;
+  width: 352px;
   max-width: calc(100vw - 16px);
   padding: 6px;
   border: 1px solid var(--rt-line-strong);
@@ -1297,11 +1527,83 @@ const CSS = /* css */ `
   display: none;
 }
 
+.rt-flyout__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 8px 8px;
+}
+
+.rt-flyout__title {
+  color: var(--rt-text-1);
+  font-size: var(--rt-type-md);
+  font-weight: 650;
+}
+
+.rt-flyout__subtitle,
+.rt-flyout__foot {
+  color: var(--rt-text-3);
+  font-size: var(--rt-type-sm);
+}
+
+.rt-flyout__foot {
+  margin: 4px 0 0;
+  padding: 8px 8px 4px;
+  border-top: 1px solid var(--rt-line);
+}
+
+.rt-flyout__list {
+  display: grid;
+  gap: 2px;
+}
+
+.rt-flyout__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Pin a tool onto the rail: outlined when it's in the menu, lit when pinned. */
+.rt-flyout__pin {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--rt-radius-sm);
+  background: transparent;
+  color: var(--rt-text-3);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-flyout__pin:hover {
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
+}
+
+.rt-flyout__pin[aria-pressed="true"] {
+  color: var(--rt-accent);
+}
+
+.rt-flyout__pin[aria-pressed="true"] svg path:first-child {
+  fill: currentColor;
+}
+
+.rt-flyout__pin svg {
+  width: 16px;
+  height: 16px;
+}
+
 .rt-flyout__item {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  flex: 1;
+  min-width: 0;
   width: 100%;
   padding: 8px;
   border: none;
@@ -4145,6 +4447,25 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
     width: 1px;
     height: 24px;
     margin: 0 6px;
+  }
+  .rt-toolbar__groups,
+  .rt-toolbar__group {
+    flex-direction: row;
+  }
+  .rt-toolbar__group--ai {
+    padding: 0 5px;
+  }
+  .rt-toolbar__toggle {
+    display: none;
+  }
+  .rt-toolbar--more-after {
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  }
+  .rt-toolbar--more-before {
+    mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+  }
+  .rt-toolbar--more-before.rt-toolbar--more-after {
+    mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
   }
   .rt-toolbar__btn--active::before {
     left: 12px;

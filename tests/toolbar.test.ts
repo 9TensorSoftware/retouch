@@ -1,4 +1,5 @@
 import { registerEditorTool, resolveToolDef } from "../src/ui/editor/tool-registry";
+import type { RailLayout } from "../src/ui/editor/toolbar";
 import { createToolbar } from "../src/ui/editor/toolbar";
 
 const pane = () => ({ root: document.createElement("div") });
@@ -27,11 +28,19 @@ registerEditorTool({
   mount: pane,
 });
 
-function mount(tools: string[], activeTool = tools[0]) {
+function mount(tools: string[], activeTool = tools[0], layout?: Partial<RailLayout>) {
   const onToolChange = vi.fn();
-  const tb = createToolbar({ tools, activeTool, onToolChange });
+  const onLayoutChange = vi.fn();
+  const tb = createToolbar({ tools, activeTool, onToolChange, layout, onLayoutChange });
   document.body.appendChild(tb.root);
-  return { tb, onToolChange };
+  return { tb, onToolChange, onLayoutChange };
+}
+
+/** The rail, top to bottom: tool names, "|" between groups. */
+function railOf(root: HTMLElement): string[] {
+  return [...root.querySelectorAll(".rt-toolbar__groups .rt-toolbar__btn, .rt-toolbar__sep")].map(
+    (el) => el.getAttribute("aria-label") ?? "|",
+  );
 }
 
 /** jsdom has no PointerEvent; the toolbar only reads `pointerType`. */
@@ -48,10 +57,11 @@ function press(el: Element, key: string): KeyboardEvent {
 describe("toolbar rail groups", () => {
   it("orders tools by group, separated, whatever order they were given in", () => {
     const { tb } = mount(["filters", "adjust", "crop", "curves", "transform"], "crop");
-    const rail = [...tb.root.children]
-      .filter((el) => el.matches(".rt-toolbar__btn, .rt-toolbar__sep"))
-      .map((el) => el.getAttribute("aria-label") ?? "|");
-    expect(rail).toEqual(["Crop", "Transform", "|", "Adjust", "Curves", "|", "Filters"]);
+    expect(railOf(tb.root)).toEqual(["Crop", "Transform", "|", "Adjust", "Curves", "|", "Filters"]);
+    const groups = [...tb.root.querySelectorAll(".rt-toolbar__group")].map((g) =>
+      g.getAttribute("aria-label"),
+    );
+    expect(groups).toEqual(["Frame", "Tone", "Looks"]);
     expect(tb.order).toEqual(["crop", "transform", "adjust", "curves", "filters"]);
     tb.destroy();
   });
@@ -64,10 +74,10 @@ describe("toolbar rail groups", () => {
 });
 
 describe("toolbar AI tools", () => {
-  it("gathers two or more behind one launcher, listed last in the key order", () => {
-    const { tb } = mount(["test-ai-b", "crop", "test-ai-a"], "crop");
+  it("lists every AI tool in a menu behind one launcher, pinned or not", () => {
+    const { tb } = mount(["test-ai-b", "crop", "test-ai-a"], "crop", { pinned: [] });
     const launcher = tb.root.querySelector(".rt-toolbar__btn--ai");
-    expect(launcher?.getAttribute("aria-haspopup")).toBe("menu");
+    expect(launcher?.getAttribute("aria-haspopup")).toBe("dialog");
     expect(launcher?.getAttribute("aria-expanded")).toBe("false");
     const menu = tb.root.querySelector<HTMLElement>(".rt-flyout");
     expect(menu?.hidden).toBe(true);
@@ -125,7 +135,7 @@ describe("toolbar AI tools", () => {
   });
 
   it("selecting an item closes the menu and marks the launcher active", () => {
-    const { tb, onToolChange } = mount(["crop", "test-ai-a", "test-ai-b"]);
+    const { tb, onToolChange } = mount(["crop", "test-ai-a", "test-ai-b"], "crop", { pinned: [] });
     const launcher = tb.root.querySelector(".rt-toolbar__btn--ai");
     const items = [...tb.root.querySelectorAll<HTMLElement>(".rt-flyout__item")];
     tb.openAiMenu();
@@ -143,6 +153,52 @@ describe("toolbar AI tools", () => {
     tb.setActiveTool("crop");
     expect(launcher?.classList.contains("rt-toolbar__btn--active")).toBe(false);
     expect(items[1].hasAttribute("aria-current")).toBe(false);
+    tb.destroy();
+  });
+
+  it("pins the first three AI tools by default, and pinning moves a tool onto the rail", () => {
+    const { tb, onLayoutChange } = mount(["crop", "test-ai-a", "test-ai-b"]);
+    expect(railOf(tb.root)).toEqual(["Crop", "|", "Cutout", "Upscale", "All AI tools"]);
+    expect(tb.layout.pinned).toEqual(["test-ai-a", "test-ai-b"]);
+
+    const pins = [...tb.root.querySelectorAll<HTMLButtonElement>(".rt-flyout__pin")];
+    expect(pins.map((p) => p.getAttribute("aria-pressed"))).toEqual(["true", "true"]);
+    pins[0].click(); // take Cutout off the rail
+    expect(railOf(tb.root)).toEqual(["Crop", "|", "Upscale", "All AI tools"]);
+    expect(pins[0].getAttribute("aria-pressed")).toBe("false");
+    expect(pins[0].getAttribute("aria-label")).toBe("Keep Cutout on the rail");
+    expect(onLayoutChange).toHaveBeenLastCalledWith({ pinned: ["test-ai-b"], expanded: false });
+    // Number keys: rail first, then what's only in the menu.
+    expect(tb.order).toEqual(["crop", "test-ai-b", "test-ai-a"]);
+
+    tb.setPinned("test-ai-a", true);
+    expect(railOf(tb.root)).toEqual(["Crop", "|", "Cutout", "Upscale", "All AI tools"]);
+    tb.destroy();
+  });
+
+  it("starts from a given layout, and an active pinned tool lights its own button", () => {
+    const { tb } = mount(["crop", "test-ai-a", "test-ai-b"], "test-ai-b", {
+      pinned: ["test-ai-b"],
+    });
+    expect(railOf(tb.root)).toEqual(["Crop", "|", "Upscale", "All AI tools"]);
+    const upscale = tb.root.querySelector('.rt-toolbar__btn[aria-label="Upscale"]');
+    expect(upscale?.classList.contains("rt-toolbar__btn--active")).toBe(true);
+    expect(upscale?.querySelector(".rt-toolbar__spark")).not.toBeNull();
+    const launcher = tb.root.querySelector(".rt-toolbar__btn--ai");
+    expect(launcher?.classList.contains("rt-toolbar__btn--active")).toBe(false);
+    tb.destroy();
+  });
+
+  it("moves between a menu row's tool and its pin with the arrow keys", () => {
+    const { tb } = mount(["crop", "test-ai-a", "test-ai-b"]);
+    tb.openAiMenu();
+    const [first] = [...tb.root.querySelectorAll<HTMLElement>(".rt-flyout__item")];
+    const [pin] = [...tb.root.querySelectorAll<HTMLElement>(".rt-flyout__pin")];
+    expect(document.activeElement).toBe(first);
+    press(first, "ArrowRight");
+    expect(document.activeElement).toBe(pin);
+    press(pin, "ArrowLeft");
+    expect(document.activeElement).toBe(first);
     tb.destroy();
   });
 
@@ -196,6 +252,32 @@ describe("toolbar tooltip", () => {
 
     crop?.dispatchEvent(pointer("pointerenter", "touch"));
     expect(tip?.hidden).toBe(true);
+    tb.destroy();
+  });
+});
+
+describe("toolbar names", () => {
+  it("toggles tool names from the foot of the rail, and remembers through onLayoutChange", () => {
+    const { tb, onLayoutChange } = mount(["crop", "adjust"]);
+    const toggle = tb.root.querySelector(".rt-toolbar__toggle") as HTMLButtonElement;
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(toggle.getAttribute("aria-label")).toBe("Show tool names");
+    toggle.click();
+    expect(tb.root.classList.contains("rt-toolbar--expanded")).toBe(true);
+    expect(toggle.getAttribute("aria-label")).toBe("Hide tool names");
+    expect(onLayoutChange).toHaveBeenLastCalledWith({ pinned: [], expanded: true });
+    // Expanded rows show their key; the label text is there for sighted users.
+    const crop = tb.root.querySelector('.rt-toolbar__btn[aria-label="Crop"]');
+    expect(crop?.querySelector(".rt-toolbar__key")?.textContent).toBe("C");
+    expect(crop?.querySelector(".rt-toolbar__label")?.textContent).toBe("Crop");
+    tb.destroy();
+  });
+
+  it("starts expanded when the layout says so, and AI rows carry their one-liner", () => {
+    const { tb } = mount(["crop", "test-ai-a", "test-ai-b"], "crop", { expanded: true });
+    expect(tb.root.classList.contains("rt-toolbar--expanded")).toBe(true);
+    const cutout = tb.root.querySelector('.rt-toolbar__btn[aria-label="Cutout"]');
+    expect(cutout?.querySelector(".rt-toolbar__desc")?.textContent).toBe("Remove the background");
     tb.destroy();
   });
 });

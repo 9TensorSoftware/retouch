@@ -21,6 +21,7 @@ export type {
   MediaEntry,
   MediaKind,
   Orientation,
+  RailOptions,
   RetouchEventMap,
   RetouchOptions,
   ShellTheme,

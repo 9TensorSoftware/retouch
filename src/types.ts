@@ -106,6 +106,17 @@ export interface AiEditOps {
   explanation: string;
 }
 
+/** The editor's tool rail layout (see `RetouchOptions.rail`). */
+export interface RailOptions {
+  /**
+   * AI tools on the rail itself, by id; the rest wait in the AI tools menu.
+   * Defaults to the first three registered.
+   */
+  pinned?: EditorTool[];
+  /** Show tool names beside the icons. Defaults to false. */
+  expanded?: boolean;
+}
+
 export type GalleryViewMode = "cols-2" | "cols-3" | "cols-4" | "width-fit" | "height-fit" | "list";
 
 export type AspectRatioPreset = "free" | "16:9" | "4:3" | "1:1" | "3:2" | "9:16";
@@ -156,6 +167,12 @@ export interface RetouchOptions {
    * tools and tools registered via `Retouch.registerTool`; omit for all.
    */
   tools?: EditorTool[];
+  /**
+   * The tool rail's starting layout. People can pin AI tools and show
+   * names themselves; their choices are remembered in this browser and
+   * win over these defaults.
+   */
+  rail?: RailOptions;
   /** Image export format/quality/sizing. Videos always export as MP4/WebM. */
   export?: ImageExportOptions;
   /** Called with every entry exported — from the gallery's Done button or a host `done()` call. */

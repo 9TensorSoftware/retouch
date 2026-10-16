@@ -14,6 +14,7 @@ import type {
   EditorTool,
   ImageEdits,
   MediaEntry,
+  RailOptions,
   VideoEdits,
   ViewHandle,
 } from "../../types";
@@ -64,6 +65,7 @@ import { createLiquifyTool } from "./liquify-tool";
 import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
 import { createPreviewBase, renderLook, renderLookToCanvas } from "./preview";
+import { loadRailLayout, saveRailLayout } from "./rail-layout";
 import { createStageView } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
@@ -170,6 +172,8 @@ export interface EditorOptions {
   onAiEvent?: (event: EditorAiEvent) => void;
   /** Feature groups to mount, in tab order (defaults to all applicable). */
   tools?: EditorTool[];
+  /** The rail's starting layout; the user's own choices (remembered) win. */
+  rail?: RailOptions;
   /** Video only: export the trimmed range as a GIF (downloads on resolve). */
   onExportGif?: (loop: "forward" | "reverse" | "boomerang") => Promise<void>;
   /** Video only: use the current frame as the gallery poster. */
@@ -949,8 +953,24 @@ export function createEditor(options: EditorOptions): ViewHandle {
     syncSplitVisibility();
   }
 
-  // Tool rail (left)
-  const toolbar = createToolbar({ tools, activeTool, onToolChange: selectTool });
+  // Tool rail (left). Pins and names are the user's, remembered per browser.
+  const saved = loadRailLayout();
+  const toolbar = createToolbar({
+    tools,
+    activeTool,
+    onToolChange: selectTool,
+    layout: {
+      pinned: saved.pinned ?? options.rail?.pinned,
+      expanded: saved.expanded ?? options.rail?.expanded,
+    },
+    // A rail without AI tools (video) has no say over the saved pins.
+    onLayoutChange: (layout) =>
+      saveRailLayout({
+        ...loadRailLayout(),
+        expanded: layout.expanded,
+        ...(tools.some((id) => resolveToolDef(id).group === "ai") ? { pinned: layout.pinned } : {}),
+      }),
+  });
 
   // Sync initial tool state (video opens on Trim, image on Crop).
   selectTool(activeTool);

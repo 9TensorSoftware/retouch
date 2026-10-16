@@ -66,6 +66,7 @@ export class Retouch {
     onDone?: RetouchOptions["onDone"];
     ai?: RetouchOptions["ai"];
     tools?: RetouchOptions["tools"];
+    rail?: RetouchOptions["rail"];
     export?: RetouchOptions["export"];
     commitMode?: RetouchOptions["commitMode"];
   };
@@ -97,6 +98,7 @@ export class Retouch {
       onDone: options.onDone,
       ai: options.ai,
       tools: options.tools,
+      rail: options.rail,
       export: options.export,
       commitMode: options.commitMode,
     };
@@ -617,6 +619,7 @@ export class Retouch {
       onSetPoster: entry.kind === "video" ? () => this.setPosterFrame(entry) : undefined,
       ai: this.options.ai,
       tools: this.options.tools,
+      rail: this.options.rail,
       onAiEvent: (event) => {
         if (event.type === "start") {
           this.emitter.emit("ai:start", { id: entry.id, prompt: event.prompt });
