@@ -1,11 +1,19 @@
 import { FabricImage, StaticCanvas } from "fabric";
 import { DEFAULT_ADJUSTMENTS } from "../../constants";
-import type { Adjustments, Curves, FilterPreset, HslMixer, StylizeEffect } from "../../types";
+import type {
+  Adjustments,
+  Curves,
+  EditMask,
+  FilterPreset,
+  HslMixer,
+  StylizeEffect,
+} from "../../types";
 import { createCanvas } from "../../utils/canvas";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../../utils/curves";
 import { applyDetailToContext, detailIsNeutral } from "../../utils/detail";
 import { buildFabricFilters, drawVignette } from "../../utils/filters";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "../../utils/hsl";
+import { applyMasksToContext, masksAreNeutral, prepareMasks } from "../../utils/masks";
 import { applyStylizeToContext, stylizeIsNeutral } from "../../utils/stylize";
 
 /** The tone, color and effect edits a preview tile can show (no geometry). */
@@ -16,6 +24,8 @@ export interface LookEdits {
   curves?: Curves;
   hsl?: HslMixer;
   stylize?: StylizeEffect;
+  /** Selective masks; only meaningful when `base` is the full, uncropped frame. */
+  masks?: EditMask[];
 }
 
 type Drawable = HTMLImageElement | HTMLCanvasElement | HTMLVideoElement;
@@ -51,9 +61,14 @@ export function createPreviewBase(source: Drawable, size = 160): HTMLCanvasEleme
  * same order, as the editor's preview — as a JPEG data URL for a tile.
  */
 export function renderLook(base: HTMLCanvasElement, edits: LookEdits): string {
+  if (base.width === 0 || base.height === 0) return "";
+  return renderLookToCanvas(base, edits).toDataURL("image/jpeg", 0.86);
+}
+
+/** As renderLook, into a canvas the size of `base` (transparency kept). */
+export function renderLookToCanvas(base: HTMLCanvasElement, edits: LookEdits): HTMLCanvasElement {
   const adjustments = edits.adjustments ?? DEFAULT_ADJUSTMENTS;
   const { width, height } = base;
-  if (width === 0 || height === 0) return "";
 
   const stage = new StaticCanvas(undefined, { width, height, enableRetinaScaling: false });
   const image = new FabricImage(base, { left: 0, top: 0, originX: "left", originY: "top" });
@@ -73,6 +88,9 @@ export function renderLook(base: HTMLCanvasElement, edits: LookEdits): string {
     if (!detailIsNeutral(adjustments.clarity, adjustments.dehaze)) {
       applyDetailToContext(ctx, out.width, out.height, adjustments.clarity, adjustments.dehaze);
     }
+    if (edits.masks && !masksAreNeutral(edits.masks)) {
+      applyMasksToContext(ctx, out.width, out.height, prepareMasks(edits.masks));
+    }
     if (edits.hsl && !hslIsNeutral(edits.hsl)) {
       applyHslToContext(ctx, out.width, out.height, buildHueTable(edits.hsl));
     }
@@ -86,5 +104,5 @@ export function renderLook(base: HTMLCanvasElement, edits: LookEdits): string {
       drawVignette(ctx, out.width, out.height, adjustments.vignette);
     }
   }
-  return out.toDataURL("image/jpeg", 0.86);
+  return out;
 }

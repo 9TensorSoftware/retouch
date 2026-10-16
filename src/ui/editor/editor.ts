@@ -19,6 +19,7 @@ import type {
 } from "../../types";
 import { createCanvas } from "../../utils/canvas";
 import { curvesAreIdentity } from "../../utils/curves";
+import { framingIsNeutral } from "../../utils/edits";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
 import { hslIsNeutral } from "../../utils/hsl";
@@ -50,6 +51,7 @@ import { createAdjustTool } from "./adjust-tool";
 import type { AiChatHandle } from "./ai-chat";
 import { createAiChat, getStoredAiKey } from "./ai-chat";
 import { CanvasRenderer } from "./canvas-renderer";
+import { listChanges } from "./changes";
 import { createCompareSplit } from "./compare-split";
 import type { TransformOp } from "./context-dock";
 import { createContextDock } from "./context-dock";
@@ -61,7 +63,7 @@ import { createLiquifyOverlay } from "./liquify-overlay";
 import { createLiquifyTool } from "./liquify-tool";
 import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
-import { createPreviewBase, renderLook } from "./preview";
+import { createPreviewBase, renderLook, renderLookToCanvas } from "./preview";
 import { createStageView } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
@@ -819,7 +821,55 @@ export function createEditor(options: EditorOptions): ViewHandle {
         ...patch,
       });
     },
+    reveal: (result) => revealResult(result),
   };
+
+  /**
+   * ctx.reveal: wipe `result` in over the stage, drawn with the photo's
+   * current look, so the editor that remounts with it shows the same
+   * picture the wipe ended on.
+   */
+  async function revealResult(result: HTMLCanvasElement | HTMLImageElement): Promise<() => void> {
+    const stage = renderer.getCanvasElement();
+    if (entry.kind !== "image" || !framingIsNeutral(entry.edits) || !stage.width) return () => {};
+    const base = createCanvas(stage.width, stage.height);
+    base.getContext("2d")?.drawImage(result, 0, 0, base.width, base.height);
+    const e = entry.edits;
+    const layer = renderLookToCanvas(base, {
+      adjustments: e.adjustments,
+      filter: e.filter,
+      filterStrength: e.filterStrength,
+      curves: e.curves,
+      hsl: e.hsl,
+      masks: e.masks,
+      stylize: e.stylize,
+    });
+    layer.classList.add("rt-reveal__layer");
+    const edge = h("div", { class: "rt-reveal__edge" });
+    const wrap = h("div", { class: "rt-reveal", "aria-hidden": "true" }, layer, edge);
+    canvasContainer.appendChild(wrap);
+    const remove = (): void => wrap.remove();
+    const still =
+      typeof layer.animate !== "function" ||
+      (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    if (still) {
+      edge.remove();
+      return remove;
+    }
+    const timing: KeyframeAnimationOptions = {
+      duration: 900,
+      easing: "cubic-bezier(0.65, 0, 0.35, 1)",
+      fill: "both",
+    };
+    const wipe = layer.animate(
+      [{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0 0 0)" }],
+      timing,
+    );
+    edge.animate([{ left: "0%" }, { left: "100%", opacity: 0 }], timing);
+    await wipe.finished.catch(() => {});
+    edge.remove();
+    return remove;
+  }
   const customHandles = new Map<EditorTool, ToolPaneHandle>();
   const customPanes: Array<{ id: EditorTool; root: HTMLElement }> = [];
   for (const plugin of customTools) {
@@ -1479,6 +1529,22 @@ export function createEditor(options: EditorOptions): ViewHandle {
   if (aiOptions && (aiOptions.apiKey || aiOptions.complete || aiOptions.allowUserKey)) {
     aiChat = createAiChat({
       ai: aiOptions,
+      suggestions:
+        entry.kind === "video"
+          ? [
+              "Brighter and warmer",
+              "Black and white",
+              "Trim the first second",
+              "Play at half speed",
+            ]
+          : [
+              "Warmer light",
+              "More contrast",
+              "Moody and cinematic",
+              "Black and white",
+              "Straighten the horizon",
+              "Crop to a square",
+            ],
       onSubmit: async (prompt) => {
         options.onAiEvent?.({ type: "start", prompt });
         try {
@@ -1496,9 +1562,26 @@ export function createEditor(options: EditorOptions): ViewHandle {
               (aiOptions.allowUserKey ? (getStoredAiKey() ?? undefined) : undefined),
           };
           const ops = await interpretCommand(resolved, prompt, context, contextFrameBase64());
+          const before = structuredClone(entry.edits);
+          const stepBefore = history?.cursor() ?? -1;
           applyAiOps(ops);
+          // One history step per command, so its card can take exactly it back.
+          history?.flush();
+          const step = history?.cursor() ?? -1;
           options.onAiEvent?.({ type: "applied", ops, explanation: ops.explanation });
-          return ops.explanation;
+          const changes = listChanges(before, entry.edits);
+          return {
+            explanation: ops.explanation,
+            changes,
+            undo:
+              changes.length > 0 && step !== stepBefore
+                ? () => {
+                    if (!history || history.cursor() !== step) return false;
+                    history.undo();
+                    return true;
+                  }
+                : undefined,
+          };
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err));
           options.onAiEvent?.({ type: "error", error });

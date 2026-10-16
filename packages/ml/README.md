@@ -68,6 +68,13 @@ const retouch = new Retouch({ target: "#editor" });
 installMlTools(retouch);
 ```
 
+In the editor, every tool opens on a card naming its model, its download size
+and where it runs, and its run button names the download ("Download 208 MB and
+erase") until the model is saved on the device. Runs show their steps —
+download with a progress bar, run, then add to the gallery or replace the photo
+— and results wipe in over the photo. With a self-hosted `modelUrl` the size
+is unknown, so the button says "Download and …" instead.
+
 Every tool is also a plain function you can call without the editor. Each
 takes an `HTMLImageElement | HTMLCanvasElement` plus options, and accepts
 `onDownloadProgress` for the first-run weight download:
@@ -147,7 +154,9 @@ setting it in any tool's options applies to every session. `executionProviders`
 (default `["webgpu", "wasm"]`) sets the preference order; a run that fails on
 WebGPU retries on WASM automatically.
 
-`await clearModelCache()` drops the cached weights.
+`await isModelCached(urls)` tells you whether a run would download anything
+(all of `urls` saved in the cache), and `await clearModelCache()` drops the
+cached weights.
 
 The denoise default is a split export: a graph stub plus a `.onnx.data`
 weights sidecar. When self-hosting it, keep the sidecar's filename identical

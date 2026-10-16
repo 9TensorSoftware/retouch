@@ -1,5 +1,13 @@
 import { h } from "../h";
-import { ICON_CHEVRON_DOWN } from "../icons";
+import { ICON_CHECK, ICON_CHEVRON_DOWN, ICON_CLOSE } from "../icons";
+import type {
+  UiCard,
+  UiCardOptions,
+  UiStep,
+  UiStepState,
+  UiSteps,
+  UiStepsOptions,
+} from "./tool-ui";
 
 type Content = Node | string;
 
@@ -216,6 +224,102 @@ export function createSegmented<T extends string>(
     set(value) {
       current = value;
       paint();
+    },
+  };
+}
+
+// ── Card ──────────────────────────────────────────────────────────────────
+
+/**
+ * An AI tool's card: what it does and where the result goes, the facts
+ * (model, download, device), then its controls. The prism edge marks
+ * on-device AI.
+ */
+export function createCard(options: UiCardOptions): UiCard {
+  const facts = h("dl", { class: "rt-card__facts" });
+  const values = new Map<string, HTMLElement>();
+  const setFact = (label: string, value: string): void => {
+    const existing = values.get(label);
+    if (existing) {
+      existing.textContent = value;
+      return;
+    }
+    const dd = h("dd", null, value);
+    values.set(label, dd);
+    facts.append(h("dt", null, label), dd);
+  };
+  for (const [label, value] of options.facts ?? []) setFact(label, value);
+
+  const body = h("div", { class: "rt-card__body" });
+  const root = h(
+    "section",
+    { class: "rt-card" },
+    ...(options.description ? [h("p", { class: "rt-card__desc" }, options.description)] : []),
+    facts,
+    body,
+  );
+  return { root, body, setFact };
+}
+
+// ── Steps ─────────────────────────────────────────────────────────────────
+
+/** A run's steps: each waiting, active (with an optional bar), done or failed. */
+export function createSteps(options: UiStepsOptions): UiSteps {
+  const announcer = h("span", { class: "rt-visually-hidden", "aria-live": "polite" });
+  const rows = options.steps.map((step: UiStep) => {
+    const mark = h("span", { class: "rt-step__mark", "aria-hidden": "true" });
+    const detail = h("span", { class: "rt-step__detail" }, step.detail ?? "");
+    const fill = h("i");
+    const bar = h("span", { class: "rt-step__bar", "aria-hidden": "true" }, fill);
+    bar.hidden = true;
+    const li = h(
+      "li",
+      { class: "rt-step", "data-state": "waiting" },
+      mark,
+      h("span", { class: "rt-step__label" }, step.label),
+      detail,
+      bar,
+    );
+    return { step, li, mark, detail, bar, fill };
+  });
+  const list = h(
+    "ol",
+    { class: "rt-steps", "aria-label": options.label },
+    ...rows.map((r) => r.li),
+  );
+  const root = h("div", { class: "rt-steps-wrap" }, list, announcer);
+
+  const set = (
+    index: number,
+    state: UiStepState,
+    update: { detail?: string; progress?: number } = {},
+  ): void => {
+    const row = rows[index];
+    if (!row) return;
+    const changed = row.li.dataset.state !== state;
+    row.li.dataset.state = state;
+    row.mark.innerHTML = state === "done" ? ICON_CHECK : state === "failed" ? ICON_CLOSE : "";
+    if (update.detail !== undefined) row.detail.textContent = update.detail;
+    const showBar = state === "active" && update.progress !== undefined;
+    row.bar.hidden = !showBar;
+    if (showBar) {
+      const pct = Math.round(Math.min(1, Math.max(0, update.progress ?? 0)) * 100);
+      row.fill.style.width = `${pct}%`;
+    }
+    if (changed && state !== "waiting") {
+      const words = { active: "started", done: "done", failed: "failed" } as const;
+      announcer.textContent = `${row.step.label}: ${words[state]}`;
+    }
+  };
+
+  return {
+    root,
+    set,
+    reset() {
+      rows.forEach((row, i) => {
+        set(i, "waiting", { detail: row.step.detail ?? "" });
+      });
+      announcer.textContent = "";
     },
   };
 }
