@@ -70,7 +70,8 @@ export function createLiquifyTool(options: LiquifyToolOptions): LiquifyToolHandl
     h(
       "p",
       { class: "rt-dock__hint rt-liquify__hint" },
-      "Drag on the photo to push pixels. Press [ and ] to change the brush size.",
+      "Drag on the photo to push pixels.",
+      h("span", { class: "rt-keys" }, " Press [ and ] to change the brush size."),
     ),
     sizeSlider.root,
     strengthSlider.root,

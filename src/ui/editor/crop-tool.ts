@@ -125,7 +125,9 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
 
   // ── Drag interaction ──
 
+  // One pointer drives a drag: other fingers (a pinch, a stray touch) are ignored.
   let dragging: {
+    id: number;
     type: "move" | HandlePosition;
     startX: number;
     startY: number;
@@ -138,7 +140,13 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
       if ((e.target as HTMLElement).dataset.handle) return;
       e.preventDefault();
       updateLayout(); // re-anchor in case the canvas moved since the last layout
-      dragging = { type: "move", startX: e.clientX, startY: e.clientY, startSel: { ...sel } };
+      dragging = {
+        id: e.pointerId,
+        type: "move",
+        startX: e.clientX,
+        startY: e.clientY,
+        startSel: { ...sel },
+      };
     },
     { signal },
   );
@@ -151,6 +159,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
         e.stopPropagation();
         updateLayout();
         dragging = {
+          id: e.pointerId,
           type: pos as HandlePosition,
           startX: e.clientX,
           startY: e.clientY,
@@ -164,7 +173,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
   document.addEventListener(
     "pointermove",
     (e) => {
-      if (!dragging) return;
+      if (!dragging || e.pointerId !== dragging.id) return;
       e.preventDefault();
 
       const imgRect = renderer.getImageRect();
@@ -189,13 +198,11 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     { signal },
   );
 
-  document.addEventListener(
-    "pointerup",
-    () => {
-      dragging = null;
-    },
-    { signal },
-  );
+  const endDrag = (e: PointerEvent): void => {
+    if (dragging && e.pointerId === dragging.id) dragging = null;
+  };
+  document.addEventListener("pointerup", endDrag, { signal });
+  document.addEventListener("pointercancel", endDrag, { signal });
 
   function handleResize(pos: HandlePosition, ss: CropRect, dx: number, dy: number): void {
     const ratio = ASPECT_RATIOS[aspectRatio];

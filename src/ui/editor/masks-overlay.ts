@@ -106,7 +106,14 @@ export function createMasksOverlay(options: MasksOverlayOptions): MasksOverlayHa
 
   // ── Handle dragging ──
 
-  let drag: { role: HandleRole; startX: number; startY: number; snapshot: EditMask } | null = null;
+  // One pointer drives a drag: other fingers (a pinch, a stray touch) are ignored.
+  let drag: {
+    id: number;
+    role: HandleRole;
+    startX: number;
+    startY: number;
+    snapshot: EditMask;
+  } | null = null;
 
   function handle(x: number, y: number, role: HandleRole, title: string): SVGElement {
     const dot = el("circle", {
@@ -124,6 +131,7 @@ export function createMasksOverlay(options: MasksOverlayOptions): MasksOverlayHa
         e.preventDefault();
         e.stopPropagation();
         drag = {
+          id: (e as PointerEvent).pointerId,
           role,
           startX: (e as PointerEvent).clientX,
           startY: (e as PointerEvent).clientY,
@@ -138,7 +146,7 @@ export function createMasksOverlay(options: MasksOverlayOptions): MasksOverlayHa
   document.addEventListener(
     "pointermove",
     (e) => {
-      if (!drag) return;
+      if (!drag || e.pointerId !== drag.id) return;
       const mask = selected();
       if (!mask) return;
       const r = rect();
@@ -165,13 +173,11 @@ export function createMasksOverlay(options: MasksOverlayOptions): MasksOverlayHa
     },
     { signal },
   );
-  document.addEventListener(
-    "pointerup",
-    () => {
-      drag = null;
-    },
-    { signal },
-  );
+  const endDrag = (e: PointerEvent): void => {
+    if (drag && e.pointerId === drag.id) drag = null;
+  };
+  document.addEventListener("pointerup", endDrag, { signal });
+  document.addEventListener("pointercancel", endDrag, { signal });
 
   return {
     root: root as unknown as HTMLElement,

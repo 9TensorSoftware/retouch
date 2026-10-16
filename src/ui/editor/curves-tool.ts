@@ -30,8 +30,9 @@ const CHANNELS: { id: Channel; label: string; title: string; color: string }[] =
   { id: "b", label: "B", title: "Blue channel", color: "#5C9DFF" },
 ];
 
-/** Grab distance around a point, in CSS px. */
+/** Grab distance around a point, in CSS px; a fingertip gets more. */
 const HIT_RADIUS = 12;
+const TOUCH_HIT_RADIUS = 22;
 const MAX_POINTS = 16;
 const MIN_GAP = 0.02;
 const HINT = "Click the curve to add a point · double-click a point to remove it";
@@ -166,11 +167,11 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
     };
   }
 
-  function hitPoint(e: { clientX: number; clientY: number }): number | null {
+  function hitPoint(e: { clientX: number; clientY: number; pointerType?: string }): number | null {
     const rect = canvas.getBoundingClientRect();
     const pts = curves[channel];
     let best: number | null = null;
-    let bestDist = HIT_RADIUS;
+    let bestDist = e.pointerType === "touch" ? TOUCH_HIT_RADIUS : HIT_RADIUS;
     for (let i = 0; i < pts.length; i++) {
       const px = rect.left + pts[i].x * rect.width;
       const py = rect.top + (1 - pts[i].y) * rect.height;

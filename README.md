@@ -132,7 +132,7 @@ a ring filling as it exports, and the time left.
 
 ### 3. Editor
 
-Opens as a modal overlay: a neutral graphite stage that keeps focus — and color judgment — on the image, with floating panels around it. The tool rail down the left edge groups tools by job (frame, tone, looks, then plugins), with the AI tools gathered behind one ✦ launcher; the inspector on the right holds the active tool's controls — sliders whose tracks show what they do, preview tiles drawn from your photo — and a live RGB histogram. Zoom up to 800%, pan around the stage, and drag a before/after divider across the photo to compare. On narrow windows and upright tablets the panels stack: stage on top, inspector beneath, rail along the bottom edge. Tools are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
+Opens as a modal overlay: a neutral graphite stage that keeps focus — and color judgment — on the image, with floating panels around it. The tool rail down the left edge groups tools by job (frame, tone, looks, then plugins), with the AI tools gathered behind one ✦ launcher; the inspector on the right holds the active tool's controls — sliders whose tracks show what they do, preview tiles drawn from your photo — and a live RGB histogram. Zoom up to 800%, pan around the stage, and drag a before/after divider across the photo to compare. On phones, narrow windows and upright tablets the panels stack: the stage on top, the controls in a bottom sheet you drag between its header, half and most of the screen (or fold away by tapping the active tool again), and the tools in a row along the bottom edge to swipe through — every tool works one-handed at 375 × 667. Pinch to zoom, pan with two fingers (or one, once zoomed), and double-tap to zoom in or back to fit. Touch targets are 44 px, and the editor keeps clear of notches and the home indicator when the host page uses `viewport-fit=cover`. A phone on its side keeps the three columns. Tools are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
 
 <br />
 
@@ -381,6 +381,7 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | `I` | Open the AI tools menu (arrow keys to move, `Esc` to close) |
 | `1`–`9` | Switch tool, in rail order |
 | `+` / `-` · `0` | Zoom in / out · fit to screen |
+| Pinch · two-finger drag · double-tap (touch) | Zoom · pan · zoom in, or back to fit |
 | `Cmd/Ctrl` + scroll or pinch · scroll · `Space`+drag (images) or middle-drag | Zoom at the pointer · pan when zoomed · pan |
 | `\` | Compare before and after (images) |
 | `[` / `]` (Liquify) | Smaller / larger brush |

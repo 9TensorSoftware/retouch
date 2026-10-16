@@ -54,6 +54,37 @@ function press(el: Element, key: string): KeyboardEvent {
   return e;
 }
 
+describe("toolbar on phones", () => {
+  it("hears the active tool picked again, without changing tools", () => {
+    const onToolChange = vi.fn();
+    const onToolReselect = vi.fn();
+    const tb = createToolbar({
+      tools: ["crop", "adjust"],
+      activeTool: "crop",
+      onToolChange,
+      onToolReselect,
+    });
+    document.body.appendChild(tb.root);
+    const crop = tb.root.querySelector<HTMLButtonElement>('[aria-label="Crop"]');
+    crop?.click();
+    expect(onToolReselect).toHaveBeenCalledWith("crop");
+    expect(onToolChange).not.toHaveBeenCalled();
+    tb.root.querySelector<HTMLButtonElement>('[aria-label="Adjust"]')?.click();
+    expect(onToolChange).toHaveBeenCalledWith("adjust");
+    tb.destroy();
+  });
+
+  it("keeps the AI menu and the tooltip out of the scroller, whose fade would clip them", () => {
+    const { tb } = mount(["crop", "test-ai-a", "test-ai-b"]);
+    const scroller = tb.root.querySelector(".rt-toolbar__scroll");
+    expect(scroller?.querySelector(".rt-toolbar__groups")).not.toBeNull();
+    expect(scroller?.querySelector(".rt-flyout, .rt-tooltip")).toBeNull();
+    expect(tb.root.querySelector(":scope > .rt-flyout")).not.toBeNull();
+    expect(tb.root.querySelector(":scope > .rt-tooltip")).not.toBeNull();
+    tb.destroy();
+  });
+});
+
 describe("toolbar rail groups", () => {
   it("orders tools by group, separated, whatever order they were given in", () => {
     const { tb } = mount(["filters", "adjust", "crop", "curves", "transform"], "crop");

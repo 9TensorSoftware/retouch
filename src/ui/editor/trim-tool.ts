@@ -147,7 +147,8 @@ export function createTrimTool(options: TrimToolOptions): TrimToolHandle {
       h(
         "span",
         { class: "rt-dock__hint" },
-        "Drag the handles on the filmstrip · arrows nudge 0.1s, Shift 1s",
+        "Drag the handles on the filmstrip",
+        h("span", { class: "rt-keys" }, " · arrows nudge 0.1s, Shift 1s"),
       ),
     ),
     gifRow,

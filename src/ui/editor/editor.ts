@@ -46,6 +46,8 @@ import {
   ICON_HISTORY,
   ICON_POSTER,
   ICON_REDO,
+  ICON_RESET,
+  ICON_SPARKLE,
   ICON_UNDO,
 } from "../icons";
 import { createAdjustTool } from "./adjust-tool";
@@ -66,6 +68,8 @@ import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
 import { createPreviewBase, renderLook, renderLookToCanvas } from "./preview";
 import { loadRailLayout, saveRailLayout } from "./rail-layout";
+import type { SheetHandle } from "./sheet";
+import { createSheet } from "./sheet";
 import { createStageView } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
@@ -260,11 +264,13 @@ export function createEditor(options: EditorOptions): ViewHandle {
     "aria-label": "Compare with original",
   });
   compareBtn.innerHTML = `${EYE_ICON}<span>Compare</span>`;
-  const resetBtn = h(
-    "button",
-    { class: "rt-editor__text-btn", title: "Reset all edits" },
-    "Reset all",
-  );
+  // On phones the label folds away and the icon stays.
+  const resetBtn = h("button", {
+    class: "rt-editor__text-btn",
+    title: "Reset all edits",
+    "aria-label": "Reset all",
+  });
+  resetBtn.innerHTML = `${ICON_RESET}<span>Reset all</span>`;
 
   const divider = () => h("div", { class: "rt-editor__divider" });
   const topbarRight = h(
@@ -350,6 +356,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const compareSplit = createCompareSplit({ container: canvasContainer, renderer, signal });
   // Declared up here: the first tool selection (below) already reads it.
   let compareMode: "off" | "split" | "side" = "off";
+  // The inspector as a bottom sheet on phones; made once the panel exists.
+  let sheet: SheetHandle | null = null;
 
   // Inspector header: the active tool's name (and what it does, for tools
   // that say), over a live histogram for the tone and look tools.
@@ -934,6 +942,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     if (activeTool === "crop" && tool !== "crop") applyCrop();
     if (tool !== activeTool) customHandles.get(activeTool)?.onDeactivate?.();
     activeTool = tool;
+    // Picking a tool shows its controls, even from a folded sheet.
+    sheet?.open();
     transport?.setTrimEditable(tool === "trim");
     dock.setActiveTool(tool);
     updateInspector(tool);
@@ -959,6 +969,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     tools,
     activeTool,
     onToolChange: selectTool,
+    // On a phone, the active tool again folds its sheet away, or brings it back.
+    onToolReselect: () => sheet?.toggle(),
     layout: {
       pinned: saved.pinned ?? options.rail?.pinned,
       expanded: saved.expanded ?? options.rail?.expanded,
@@ -1622,18 +1634,47 @@ export function createEditor(options: EditorOptions): ViewHandle {
     canvasArea,
     ...(transport ? [transport.root] : []),
   );
+  // On phones the inspector is a bottom sheet: a grab bar over the header
+  // drags it between its heights (see sheet.ts).
+  const grab = h("button", { type: "button", class: "rt-sheet__grab" });
+  const inspectorHead = h(
+    "div",
+    { class: "rt-inspector__head" },
+    h("div", { class: "rt-inspector__titles" }, inspectorTitle, inspectorDesc),
+    headReset,
+  );
   const inspector = h(
     "aside",
     { class: "rt-editor__inspector", "aria-label": "Tool controls" },
-    h(
-      "div",
-      { class: "rt-inspector__head" },
-      h("div", { class: "rt-inspector__titles" }, inspectorTitle, inspectorDesc),
-      headReset,
-    ),
+    grab,
+    inspectorHead,
     histCanvas,
     h("div", { class: "rt-inspector__body" }, dock.root),
   );
+  // Phones ask AI from the sheet's header, in thumb reach: on a phone the
+  // stage's corner, where the button sits on larger screens, is where the
+  // crop's handles land.
+  if (aiChat) {
+    const chat = aiChat;
+    const ask = h("button", {
+      type: "button",
+      class: "rt-inspector__ask",
+      title: "Ask AI",
+      "aria-label": "Ask AI to edit",
+    });
+    ask.innerHTML = ICON_SPARKLE;
+    ask.addEventListener("click", () => chat.open(), { signal });
+    inspectorHead.appendChild(ask);
+  }
+  sheet = createSheet({
+    panel: inspector,
+    grab,
+    head: inspectorHead,
+    stage: center,
+    reserve: () => (transport ? transport.root.offsetHeight + 6 : 0),
+    onSettle: refit,
+    signal,
+  });
   const body = h("div", { class: "rt-editor__body" }, toolbar.root, center, inspector);
   const rootChildren: HTMLElement[] = [topbar, body];
 
@@ -1794,6 +1835,14 @@ export function createEditor(options: EditorOptions): ViewHandle {
     { signal },
   );
 
+  /** Fit the canvas (and the overlays drawn on it) to the stage's size. */
+  function refit(): void {
+    if (signal.aborted) return;
+    renderer.render();
+    if (activeTool === "crop") cropTool.refresh();
+    if (activeTool === "masks") masksOverlay.refresh();
+  }
+
   // Refit the canvas when the stage resizes (window resize, panel changes) —
   // otherwise the fit scale is stale and the image renders at the wrong size.
   let resizeObserver: ResizeObserver | null = null;
@@ -1806,10 +1855,9 @@ export function createEditor(options: EditorOptions): ViewHandle {
       pending = true;
       queueMicrotask(() => {
         pending = false;
-        if (signal.aborted) return;
-        renderer.render();
-        if (activeTool === "crop") cropTool.refresh();
-        if (activeTool === "masks") masksOverlay.refresh();
+        // A moving sheet resizes the stage every frame; it refits once at rest.
+        if (sheet?.moving) return;
+        refit();
       });
     });
     resizeObserver.observe(canvasArea);

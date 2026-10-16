@@ -71,6 +71,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   away for runs with video and after 400 ms for images, so quick runs don't flash it.
 - Toasts take a detail line and one action, pause while pointed at or focused, and stack three at
   most.
+- Phones and upright tablets get a bottom sheet for the controls: drag its bar or header between
+  just the header, about half, and most of the screen (a fling carries on), tap the bar to step
+  it up, or tap the active tool again to fold it away; the stage refits once the sheet rests.
+- Touch on the stage: pinch to zoom, two fingers to pan, one finger on the photo to pan once zoomed
+  in, and double-tap to zoom in or back to fit. While two fingers are down, tools don't hear them.
+- The tools row along the bottom of a phone settles on whole buttons and keeps the active tool in
+  view. On phones, Ask AI moves to the sheet's header, and its chat pins under the top bar at full
+  width.
 
 ### Changed
 
@@ -105,6 +113,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - In the gallery and drop zone, every control is 44 px on touch screens.
 - `downloadImage()` falls back to the original file when an image fails to export, as `exportAll()`
   does, instead of rejecting.
+- On touch screens, the editor's controls are 44 px (sliders get a bigger thumb, handles on the
+  photo a wider grab area), fields are 16 px so iOS doesn't zoom into them, and hints drop their
+  keyboard shortcuts. The zoom controls appear once the photo is zoomed.
+- Video on phones puts the trim filmstrip on a row of its own, the full width.
+- A phone on its side keeps the three-column editor, compacted, instead of stacking it into a
+  sliver; the names toggle and the dense rail are for laptop-sized screens only.
+- The editor uses the visible screen height (`100dvh`) and keeps clear of notches and the home
+  indicator (`env(safe-area-inset-*)`).
 
 ### Fixed
 
@@ -116,6 +132,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - Side-by-side compare showed the original larger than the edited image; both now fit the same.
 - The gallery kept neither its layout nor its scroll position when it re-rendered after an edit
   or an added file; it keeps both now, and the selection too.
+- On phones, the AI tools menu opened behind the controls (the rail's edge fade clipped it), and
+  the Ask AI panel opened with its header, and its close button, off the top of the screen.
+- A second finger could drag the crop frame or a mask handle along with the first.
 
 ## [0.1.0] — 2026-09-19
 

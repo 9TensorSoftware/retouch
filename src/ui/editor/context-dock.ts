@@ -170,7 +170,9 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     h(
       "p",
       { class: "rt-dock__hint rt-crop-pane__note" },
-      "Drag the frame's edges and corners on the photo. The crop applies when you switch tools, press Enter or Done.",
+      "Drag the frame's edges and corners on the photo. The crop applies when you switch tools",
+      h("span", { class: "rt-keys" }, ", press Enter or Done."),
+      h("span", { class: "rt-touch" }, " or tap Done."),
     ),
   );
 

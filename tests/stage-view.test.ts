@@ -1,5 +1,5 @@
 import type { CanvasRenderer } from "../src/ui/editor/canvas-renderer";
-import { clampPan, createStageView, zoomAround } from "../src/ui/editor/stage-view";
+import { clampPan, createStageView, pinchView, zoomAround } from "../src/ui/editor/stage-view";
 
 describe("zoomAround", () => {
   it("keeps the point under the cursor still", () => {
@@ -13,6 +13,25 @@ describe("zoomAround", () => {
 
   it("is a no-op when the zoom doesn't change", () => {
     expect(zoomAround({ x: 5, y: 6 }, { x: 100, y: 50 }, 1.5, 1.5)).toEqual({ x: 5, y: 6 });
+  });
+});
+
+describe("pinchView", () => {
+  it("zooms with the fingers' spread, keeping the photo under their midpoint", () => {
+    const start = { zoom: 1, pan: { x: 0, y: 0 }, mid: { x: 100, y: 0 }, distance: 100 };
+    const view = pinchView(start, { x: 100, y: 0 }, 200, 8);
+    expect(view.zoom).toBe(2);
+    expect((100 - view.pan.x) / 2).toBeCloseTo((100 - 0) / 1);
+  });
+
+  it("follows the midpoint as the fingers travel, between fit and the most zoom", () => {
+    const start = { zoom: 2, pan: { x: 10, y: 0 }, mid: { x: 0, y: 0 }, distance: 100 };
+    expect(pinchView(start, { x: 30, y: -20 }, 100, 8)).toEqual({
+      zoom: 2,
+      pan: { x: 40, y: -20 },
+    });
+    expect(pinchView(start, { x: 0, y: 0 }, 10, 8).zoom).toBe(1);
+    expect(pinchView(start, { x: 0, y: 0 }, 1000, 8).zoom).toBe(8);
   });
 });
 
@@ -197,6 +216,88 @@ describe("stage view", () => {
     expect(label()).toBe("50%");
     view.setEnabled(true);
     expect(view.root.hidden).toBe(false);
+    cleanup();
+  });
+
+  /** jsdom has no PointerEvent: a MouseEvent carrying a touch pointer's fields. */
+  function touch(el: Element, type: string, id: number, x: number, y: number): Event {
+    const e = Object.assign(
+      new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+      { pointerId: id, pointerType: "touch" },
+    );
+    el.dispatchEvent(e);
+    return e;
+  }
+
+  it("pinches to zoom, and the tools hear neither finger until both lift", () => {
+    const { target, label, cleanup } = setup(0.5);
+    target.className = "rt-editor__canvas-container";
+    const heard = vi.fn();
+    document.addEventListener("pointermove", heard);
+    const tool = vi.fn();
+    target.addEventListener("pointerdown", tool);
+
+    touch(target, "pointerdown", 1, 100, 100);
+    expect(tool).toHaveBeenCalledTimes(1); // one finger is the tool's
+    const second = touch(target, "pointerdown", 2, 200, 100);
+    expect(tool).toHaveBeenCalledTimes(1); // the second never reaches it
+    expect(second.defaultPrevented).toBe(true);
+
+    touch(target, "pointermove", 2, 300, 100); // spread 100 → 200
+    expect(label()).toBe("100%");
+    touch(target, "pointerup", 2, 300, 100);
+    touch(target, "pointermove", 1, 120, 130); // still part of the pinch
+    expect(heard).not.toHaveBeenCalled();
+    touch(target, "pointerup", 1, 120, 130);
+    touch(target, "pointerdown", 3, 100, 100);
+    touch(target, "pointermove", 3, 102, 101);
+    expect(heard).toHaveBeenCalledTimes(1); // a fresh touch is the tools' again
+    document.removeEventListener("pointermove", heard);
+    cleanup();
+  });
+
+  it("pans with one finger on the photo once zoomed, and double-tap zooms in or fits", () => {
+    const { target, view, label, cleanup } = setup(0.5);
+    target.className = "rt-editor__canvas-container";
+    const tap = (id: number) => {
+      touch(target, "pointerdown", id, 400, 300);
+      touch(target, "pointerup", id, 400, 300);
+    };
+
+    touch(target, "pointerdown", 1, 100, 100);
+    touch(target, "pointermove", 1, 160, 130);
+    touch(target, "pointerup", 1, 160, 130);
+    expect(target.style.transform).toBe(""); // at fit, one finger doesn't pan
+
+    view.zoomBy(2);
+    vi.advanceTimersByTime(160);
+    touch(target, "pointerdown", 2, 100, 100);
+    touch(target, "pointermove", 2, 140, 120);
+    touch(target, "pointerup", 2, 140, 120);
+    expect(target.style.transform).toBe("translate(40px, 20px) scale(1)");
+
+    tap(3);
+    tap(4);
+    expect(label()).toBe("50%");
+    tap(5);
+    tap(6);
+    expect(label()).toBe("125%");
+    cleanup();
+  });
+
+  it("leaves touches on the tools' own handles alone", () => {
+    const { target, label, cleanup } = setup(0.5);
+    target.className = "rt-editor__canvas-container";
+    const handle = document.createElement("div");
+    handle.className = "rt-crop__handle";
+    target.appendChild(handle);
+    const tap = () => {
+      touch(handle, "pointerdown", 7, 400, 300);
+      touch(handle, "pointerup", 7, 400, 300);
+    };
+    tap();
+    tap();
+    expect(label()).toBe("50%");
     cleanup();
   });
 });
