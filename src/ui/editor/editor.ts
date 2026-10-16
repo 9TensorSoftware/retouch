@@ -293,14 +293,15 @@ export function createEditor(options: EditorOptions): ViewHandle {
     );
     topbarRight.appendChild(posterBtn);
   }
-  topbarRight.append(divider(), doneBtn);
-
+  // Done sits outside the action group so a crowded bar (narrow screens,
+  // video's extra buttons) squeezes the actions, never the exit.
   const topbar = h(
     "div",
     { class: "rt-editor__topbar" },
     h("div", { class: "rt-editor__topbar-left" }, cancelBtn),
     h("div", { class: "rt-editor__topbar-title" }, filenameEl, dimsEl),
     topbarRight,
+    h("div", { class: "rt-editor__topbar-end" }, divider(), doneBtn),
   );
 
   // Canvas — the container sits in a pane so a compare pane can flex in
@@ -357,7 +358,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
   }
 
   // Crop tool (DOM overlay, sits inside canvasContainer). Commit-style: the
-  // marquee is a pending selection; nothing changes until Apply.
+  // marquee is a pending selection, committed by Apply, Enter, Done, or
+  // switching to another tool. Only Cancel throws it away.
   const cropTool = createCropTool({
     container: canvasContainer,
     renderer,
@@ -763,6 +765,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   /** Apply a tool's side effects (crop overlay visibility, dock pane). */
   function selectTool(tool: EditorTool): void {
+    // A marquee left behind is still the user's crop, not a draft to discard.
+    if (activeTool === "crop" && tool !== "crop") applyCrop();
     if (tool !== activeTool) customHandles.get(activeTool)?.onDeactivate?.();
     activeTool = tool;
     transport?.setTrimEditable(tool === "trim");
@@ -1243,8 +1247,13 @@ export function createEditor(options: EditorOptions): ViewHandle {
     Object.assign(entry.edits, editSnapshot);
     onCancel();
   }
+  /** Done keeps what's on screen, including a crop marquee nobody applied. */
+  function finish(): void {
+    applyCrop();
+    onDone();
+  }
   cancelBtn.addEventListener("click", cancel, { signal });
-  doneBtn.addEventListener("click", () => onDone(), { signal });
+  doneBtn.addEventListener("click", finish, { signal });
 
   // ── Keyboard shortcuts + focus trap ──
   function focusables(): HTMLElement[] {
@@ -1269,7 +1278,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       }
       if (mod && e.key === "Enter") {
         e.preventDefault();
-        onDone();
+        finish();
         return;
       }
       if (mod && (e.key === "k" || e.key === "K")) {

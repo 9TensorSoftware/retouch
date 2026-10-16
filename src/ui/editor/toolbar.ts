@@ -29,6 +29,8 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     const btn = h("button", {
       class: `rt-toolbar__btn${id === active ? " rt-toolbar__btn--active" : ""}`,
       title: tool.label,
+      // Narrow screens hide the visible label; the name has to survive that.
+      "aria-label": tool.label,
     });
     btn.innerHTML = `${tool.icon}<span>${tool.label}</span>`;
 

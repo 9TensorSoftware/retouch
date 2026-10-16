@@ -100,6 +100,10 @@ export const ICON_SPARKLE = icon(
 );
 export const ICON_SEND = icon('<path d="M12 19V5"/><path d="M5.5 11.5L12 5l6.5 6.5"/>');
 export const ICON_CLOSE = icon('<path d="M6 6l12 12M18 6L6 18"/>');
+export const ICON_ALERT = icon(
+  '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>',
+);
+export const ICON_INFO = icon('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5v.01"/>');
 
 // ── Gallery ──────────────────────────────────────────────────────────────
 

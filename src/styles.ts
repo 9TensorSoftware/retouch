@@ -904,6 +904,7 @@ const CSS = /* css */ `
   background: var(--rt-control);
   border-radius: var(--rt-radius-sm);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .rt-editor__topbar-right {
@@ -912,6 +913,15 @@ const CSS = /* css */ `
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+}
+
+/* Done lives here, outside the action group, and never shrinks. */
+.rt-editor__topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  flex-shrink: 0;
 }
 
 .rt-editor__btn-cancel {
@@ -1326,9 +1336,15 @@ const CSS = /* css */ `
 .rt-dock__row {
   display: flex;
   align-items: center;
+  /* safe: an overflowing row scrolls from its first item instead of
+     pushing it out of reach (plain center is the fallback). */
   justify-content: center;
+  justify-content: safe center;
   gap: 10px;
   min-width: 0;
+  /* Panes center their rows in a column; a row wider than the pane must
+     scroll inside it rather than spill past both edges. */
+  max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
   padding: 2px 0;
@@ -2132,35 +2148,54 @@ const CSS = /* css */ `
 
 /* ── Toasts ────────────────────────────────── */
 
+/* Bottom center over the drop zone and gallery; just under the top bar while
+   the editor is open. Either way they float over content, never a control. */
 .rt-toasts {
   position: fixed;
-  top: 16px;
   left: 50%;
+  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
   transform: translateX(-50%);
   z-index: 10001;
   display: flex;
   flex-direction: column;
   gap: 8px;
   align-items: center;
+  /* left: 50% would otherwise cap the stack at half the viewport */
+  width: max-content;
+  max-width: calc(100vw - 32px);
   pointer-events: none;
+}
+
+body:has(> .rt-editor-overlay) .rt-toasts {
+  top: 64px;
+  bottom: auto;
 }
 
 .rt-toast {
   pointer-events: auto;
-  max-width: min(440px, 90vw);
-  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(460px, calc(100vw - 32px));
+  padding: 8px 14px 8px 8px;
   border-radius: var(--rt-radius-md);
   background: var(--rt-surface-overlay);
   border: 1px solid var(--rt-line-strong);
   color: var(--rt-text-1);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.4;
-  box-shadow: var(--rt-shadow-md);
+  box-shadow: var(--rt-shadow-lg);
   cursor: pointer;
   opacity: 0;
-  transform: translateY(-10px) scale(0.98);
+  transform: translateY(10px) scale(0.98);
   transition: opacity var(--rt-dur-2) var(--rt-ease-decel), transform var(--rt-dur-2) var(--rt-ease-decel);
+}
+
+/* Under the top bar they drop in from above instead of rising. */
+body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
+  transform: translateY(-10px) scale(0.98);
 }
 
 .rt-toast--visible {
@@ -2168,12 +2203,33 @@ const CSS = /* css */ `
   transform: translateY(0) scale(1);
 }
 
-.rt-toast--error {
-  border-left: 3px solid var(--rt-danger);
+.rt-toast__icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
 }
 
-.rt-toast--info {
-  border-left: 3px solid var(--rt-accent);
+.rt-toast__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-toast--error .rt-toast__icon {
+  background: var(--rt-danger-soft);
+  color: var(--rt-danger-text);
+}
+
+.rt-toast--info .rt-toast__icon {
+  background: var(--rt-accent-soft);
+  color: var(--rt-accent-text);
+}
+
+.rt-toast--success .rt-toast__icon {
+  background: color-mix(in srgb, var(--rt-success) 16%, transparent);
+  color: var(--rt-success);
 }
 
 /* ── AI chat (anchored to the stage corner) ── */
@@ -2504,6 +2560,66 @@ const CSS = /* css */ `
   cursor: pointer;
   transition: background-color var(--rt-dur-1) var(--rt-ease), transform var(--rt-dur-1) var(--rt-ease);
   font-family: inherit;
+}
+
+/* ── Narrow screens ────────────────────────── */
+
+/* Phones get the same editor, compacted: the title gives way, button labels
+   collapse to icons, the action group scrolls instead of pushing Done off
+   screen, and the rail drops its text (each button keeps an aria-label). */
+@media (max-width: 560px) {
+  .rt-editor__topbar {
+    padding: 0 8px;
+  }
+  .rt-editor__topbar-title {
+    display: none;
+  }
+  .rt-editor__topbar-left {
+    flex: 0 0 auto;
+  }
+  .rt-editor__topbar-right {
+    min-width: 0;
+    justify-content: safe flex-end;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .rt-editor__topbar-right::-webkit-scrollbar {
+    display: none;
+  }
+  /* The history menu would be clipped by the scrolling group; undo and redo stay. */
+  .rt-editor__history .rt-history {
+    display: none;
+  }
+  .rt-editor__btn-cancel {
+    padding: 0 10px;
+  }
+  .rt-editor__compare-btn,
+  .rt-editor__btn-capture {
+    padding: 0 9px;
+  }
+  .rt-editor__compare-btn span,
+  .rt-editor__btn-capture span {
+    display: none;
+  }
+  .rt-editor__btn-done {
+    padding: 0 16px;
+  }
+  .rt-editor__topbar-end .rt-editor__divider {
+    display: none;
+  }
+  .rt-toolbar {
+    padding: 8px 6px;
+  }
+  .rt-toolbar__btn {
+    width: 52px;
+    padding: 10px 0;
+  }
+  .rt-toolbar__btn span {
+    display: none;
+  }
+  .rt-editor__canvas-area {
+    padding: 12px;
+  }
 }
 
 /* ── Motion ────────────────────────────────── */
