@@ -6,12 +6,12 @@ const TOKENS_ID = "rt-tokens";
    under `theme: "auto"` when the OS asks for dark. Written once, applied in
    both places below. */
 const DARK_TOKENS = /* css */ `
-    --rt-surface: #141414;
-    --rt-surface-raised: #1D1D1D;
-    --rt-surface-overlay: #262626;
-    --rt-surface-subtle: #101010;
+    --rt-surface: #0B0B0C;
+    --rt-surface-raised: #161618;
+    --rt-surface-overlay: #222225;
+    --rt-surface-subtle: #101012;
     --rt-surface-wash: rgba(255, 255, 255, 0.04);
-    --rt-surface-glass: rgba(22, 22, 22, 0.9);
+    --rt-surface-glass: rgba(24, 24, 27, 0.86);
     --rt-control: rgba(255, 255, 255, 0.07);
     --rt-control-hover: rgba(255, 255, 255, 0.13);
     --rt-text-1: rgba(255, 255, 255, 0.93);
@@ -21,7 +21,7 @@ const DARK_TOKENS = /* css */ `
     --rt-line: rgba(255, 255, 255, 0.07);
     --rt-line-strong: rgba(255, 255, 255, 0.16);
     --rt-line-loud: rgba(255, 255, 255, 0.32);
-    --rt-accent: #E8703C;
+    --rt-accent: #F5753F;
     --rt-accent-hover: color-mix(in oklab, var(--rt-accent) 88.5%, white);
     --rt-accent-soft: color-mix(in srgb, var(--rt-accent) 12%, transparent);
     --rt-accent-glow: color-mix(in srgb, var(--rt-accent) 18%, transparent);
@@ -818,6 +818,8 @@ const CSS = /* css */ `
 
 /* ── Editor ────────────────────────────────── */
 
+/* The darkroom: floating panels (top bar, tool rail, stage, inspector) on a
+   graphite ground, so the photo is the brightest thing on screen. */
 .rt-editor-overlay {
   position: fixed;
   inset: 0;
@@ -825,7 +827,19 @@ const CSS = /* css */ `
   background: var(--rt-surface);
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  padding: 8px;
   animation: rt-overlay-in var(--rt-dur-3) var(--rt-ease-decel);
+}
+
+.rt-editor__topbar,
+.rt-toolbar,
+.rt-editor__inspector,
+.rt-video-bar {
+  background: var(--rt-surface-raised);
+  border: 1px solid var(--rt-line);
+  border-radius: var(--rt-radius-lg);
+  box-shadow: var(--rt-highlight), var(--rt-shadow-float);
 }
 
 .rt-editor-overlay:focus {
@@ -837,20 +851,11 @@ const CSS = /* css */ `
   display: flex;
   align-items: center;
   height: 52px;
-  padding: 0 16px;
-  background: var(--rt-surface-raised);
-  border-bottom: 1px solid var(--rt-line);
+  padding: 0 8px 0 6px;
   flex-shrink: 0;
 }
 
 /* Control tray — clearly separated from the stage above it */
-.rt-editor__tray {
-  display: flex;
-  flex-direction: column;
-  background: var(--rt-surface-raised);
-  border-top: 1px solid var(--rt-line);
-  flex-shrink: 0;
-}
 
 .rt-history {
   position: relative;
@@ -1119,6 +1124,7 @@ const CSS = /* css */ `
   display: flex;
   flex: 1;
   min-height: 0;
+  gap: 8px;
 }
 
 .rt-editor__center {
@@ -1126,16 +1132,16 @@ const CSS = /* css */ `
   display: flex;
   flex-direction: column;
   min-width: 0;
+  gap: 8px;
 }
 
+/* Tool rail: grouped icon buttons; names and shortcuts live in a tooltip. */
 .rt-toolbar {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 10px;
-  background: var(--rt-surface-raised);
-  border-right: 1px solid var(--rt-line);
+  gap: 2px;
+  padding: 8px 6px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -1148,12 +1154,11 @@ const CSS = /* css */ `
 
 .rt-toolbar__btn {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 76px;
-  padding: 12px 0 10px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: none;
   background: transparent;
   border-radius: var(--rt-radius-md);
@@ -1170,15 +1175,28 @@ const CSS = /* css */ `
 }
 
 .rt-toolbar__btn--active {
-  background: var(--rt-accent-glow);
-  color: var(--rt-accent-text);
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
+  box-shadow: inset 0 0 0 1px var(--rt-line-strong);
+}
+
+/* The active tool's marker, on the rail's leading edge. */
+.rt-toolbar__btn--active::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--rt-accent);
 }
 
 .rt-toolbar__btn--touched::after {
   content: '';
   position: absolute;
-  top: 8px;
-  right: 10px;
+  top: 7px;
+  right: 7px;
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -1190,14 +1208,164 @@ const CSS = /* css */ `
   height: 20px;
 }
 
-.rt-toolbar__btn span {
-  font-size: 11px;
+.rt-toolbar__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.rt-toolbar__sep {
+  width: 24px;
+  height: 1px;
+  margin: 6px 0;
+  background: var(--rt-line-strong);
+  flex-shrink: 0;
+}
+
+/* The AI launcher wears the prism: light split into its spectrum. */
+.rt-toolbar__btn--ai {
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(var(--rt-surface-raised), var(--rt-surface-raised)) padding-box,
+    var(--rt-prism) border-box;
+  color: var(--rt-text-1);
+}
+
+.rt-toolbar__btn--ai:hover,
+.rt-toolbar__btn--ai.rt-toolbar__btn--active {
+  background:
+    linear-gradient(var(--rt-surface-overlay), var(--rt-surface-overlay)) padding-box,
+    var(--rt-prism) border-box;
+}
+
+.rt-tooltip {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--rt-line);
+  border-radius: var(--rt-radius-sm);
+  background: var(--rt-surface-overlay);
+  color: var(--rt-text-1);
+  font-size: var(--rt-type-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--rt-shadow-md);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.rt-tooltip[data-side="top"] {
+  transform: translate(-50%, -100%);
+}
+
+.rt-tooltip[hidden] {
+  display: none;
+}
+
+.rt-tooltip kbd {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--rt-control-hover);
+  color: var(--rt-text-2);
+  font: 500 var(--rt-type-xs) var(--rt-font-mono);
+}
+
+/* AI tools menu */
+.rt-flyout {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  gap: 2px;
+  width: 316px;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  border: 1px solid var(--rt-line-strong);
+  border-radius: var(--rt-radius-lg);
+  background: var(--rt-surface-overlay);
+  box-shadow: var(--rt-shadow-lg);
+  animation: rt-pop-in var(--rt-dur-2) var(--rt-ease-decel);
+}
+
+.rt-flyout[hidden] {
+  display: none;
+}
+
+.rt-flyout__item {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: var(--rt-radius-md);
+  background: transparent;
+  color: var(--rt-text-1);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.rt-flyout__item:hover,
+.rt-flyout__item:focus-visible {
+  background: var(--rt-control-hover);
+}
+
+.rt-flyout__item--active {
+  background: var(--rt-accent-soft);
+}
+
+.rt-flyout__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--rt-control);
+}
+
+.rt-flyout__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.rt-flyout__text {
+  display: grid;
+  min-width: 0;
+}
+
+.rt-flyout__name {
+  font-size: var(--rt-type-md);
   font-weight: 600;
-  letter-spacing: 0.02em;
+}
+
+.rt-flyout__desc {
+  overflow: hidden;
+  color: var(--rt-text-3);
+  font-size: var(--rt-type-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rt-flyout__badge {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--rt-control);
+  color: var(--rt-text-2);
+  font: 500 var(--rt-type-xs) var(--rt-font-mono);
+  white-space: nowrap;
 }
 
 /* ── Canvas area ───────────────────────────── */
 
+/* The stage: a light table, a soft neutral pool of light under the print.
+   The bottom padding leaves room for the zoom controls. */
 .rt-editor__canvas-area {
   flex: 1;
   min-height: 0;
@@ -1206,7 +1374,87 @@ const CSS = /* css */ `
   justify-content: center;
   position: relative;
   overflow: hidden;
-  padding: 16px 24px;
+  padding: 16px 24px 60px;
+  border-radius: var(--rt-radius-lg);
+  background:
+    radial-gradient(65% 60% at 50% 45%, var(--rt-surface-wash), transparent 72%),
+    var(--rt-surface-subtle);
+}
+
+.rt-stage--zoomed.rt-stage--grab {
+  cursor: grab;
+}
+
+.rt-stage--panning,
+.rt-stage--panning * {
+  cursor: grabbing !important;
+}
+
+/* Zoom controls, floating at the foot of the stage */
+.rt-zoom {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--rt-line);
+  border-radius: var(--rt-radius-full);
+  background: var(--rt-surface-glass);
+  box-shadow: var(--rt-shadow-md);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+}
+
+.rt-zoom[hidden] {
+  display: none;
+}
+
+.rt-zoom button {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 9px;
+  border: none;
+  border-radius: var(--rt-radius-full);
+  background: transparent;
+  color: var(--rt-text-2);
+  font: 500 var(--rt-type-sm) var(--rt-font-mono);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-zoom button:hover:not([disabled]) {
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
+}
+
+.rt-zoom button[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rt-zoom button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-zoom__value {
+  min-width: 52px;
+  color: var(--rt-text-1);
+  font: 500 var(--rt-type-sm) var(--rt-font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.rt-zoom__sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--rt-line-strong);
 }
 
 .rt-editor__canvas-pane {
@@ -1254,9 +1502,10 @@ const CSS = /* css */ `
   flex: none;
 }
 
+/* 90%: the same fit margin the renderer gives the edited side. */
 .rt-compare-pane canvas {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: 90%;
+  max-height: 90%;
   border-radius: 2px;
 }
 
@@ -1294,10 +1543,12 @@ const CSS = /* css */ `
   color: var(--rt-on-accent);
 }
 
+/* Sized by its canvas, so zooming can grow it past the stage (which clips
+   it); zoom and pan are transforms on this element, overlays included. */
 .rt-editor__canvas-container {
   position: relative;
-  max-width: 100%;
-  max-height: 100%;
+  flex-shrink: 0;
+  box-shadow: 0 26px 64px -22px rgba(0, 0, 0, 0.8);
 }
 
 .rt-editor__canvas-container .canvas-container {
@@ -1323,6 +1574,13 @@ const CSS = /* css */ `
   z-index: 1;
 }
 
+/* One screen pixel inside the stage: the stage view scales the canvas
+   container past the preview's resolution, and overlay chrome divides
+   that back out so frames and handles keep their size at any zoom. */
+.rt-editor__canvas-container {
+  --rt-px: calc(1px / var(--rt-view-scale, 1));
+}
+
 .rt-crop__mask {
   position: absolute;
   background: var(--rt-scrim);
@@ -1331,7 +1589,7 @@ const CSS = /* css */ `
 
 .rt-crop__selection {
   position: absolute;
-  border: 2px solid var(--rt-on-media);
+  border: calc(2 * var(--rt-px, 1px)) solid var(--rt-on-media);
   pointer-events: auto;
   cursor: move;
 }
@@ -1346,31 +1604,32 @@ const CSS = /* css */ `
 }
 
 .rt-crop__grid-cell {
-  border-right: 1px solid var(--rt-on-media-faint);
-  border-bottom: 1px solid var(--rt-on-media-faint);
+  border-right: var(--rt-px, 1px) solid var(--rt-on-media-faint);
+  border-bottom: var(--rt-px, 1px) solid var(--rt-on-media-faint);
 }
 
 .rt-crop__grid-cell:nth-child(3n) { border-right: none; }
 .rt-crop__grid-cell:nth-child(n+7) { border-bottom: none; }
 
 .rt-crop__handle {
+  --rt-handle-offset: calc(-6 * var(--rt-px, 1px));
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: calc(12 * var(--rt-px, 1px));
+  height: calc(12 * var(--rt-px, 1px));
   background: var(--rt-on-media);
-  border-radius: 2px;
+  border-radius: calc(2 * var(--rt-px, 1px));
   box-shadow: var(--rt-shadow-sm);
   pointer-events: auto;
 }
 
-.rt-crop__handle--nw { top: -6px; left: -6px; cursor: nw-resize; }
-.rt-crop__handle--ne { top: -6px; right: -6px; cursor: ne-resize; }
-.rt-crop__handle--sw { bottom: -6px; left: -6px; cursor: sw-resize; }
-.rt-crop__handle--se { bottom: -6px; right: -6px; cursor: se-resize; }
-.rt-crop__handle--n { top: -6px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
-.rt-crop__handle--s { bottom: -6px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
-.rt-crop__handle--w { top: 50%; left: -6px; transform: translateY(-50%); cursor: w-resize; }
-.rt-crop__handle--e { top: 50%; right: -6px; transform: translateY(-50%); cursor: e-resize; }
+.rt-crop__handle--nw { top: var(--rt-handle-offset); left: var(--rt-handle-offset); cursor: nw-resize; }
+.rt-crop__handle--ne { top: var(--rt-handle-offset); right: var(--rt-handle-offset); cursor: ne-resize; }
+.rt-crop__handle--sw { bottom: var(--rt-handle-offset); left: var(--rt-handle-offset); cursor: sw-resize; }
+.rt-crop__handle--se { bottom: var(--rt-handle-offset); right: var(--rt-handle-offset); cursor: se-resize; }
+.rt-crop__handle--n { top: var(--rt-handle-offset); left: 50%; transform: translateX(-50%); cursor: n-resize; }
+.rt-crop__handle--s { bottom: var(--rt-handle-offset); left: 50%; transform: translateX(-50%); cursor: s-resize; }
+.rt-crop__handle--w { top: 50%; left: var(--rt-handle-offset); transform: translateY(-50%); cursor: w-resize; }
+.rt-crop__handle--e { top: 50%; right: var(--rt-handle-offset); transform: translateY(-50%); cursor: e-resize; }
 
 /* ── Context dock (controls below the canvas) ─
    One horizontal pane per tool, floating on the shared surface. */
@@ -1384,6 +1643,171 @@ const CSS = /* css */ `
   justify-content: center;
   padding: 0 16px;
   flex-shrink: 0;
+}
+
+/* ── Inspector: the active tool's controls, on the right ── */
+
+.rt-editor__inspector {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rt-inspector__head {
+  flex-shrink: 0;
+  padding: 14px 16px 10px;
+}
+
+.rt-inspector__title {
+  color: var(--rt-text-1);
+  font-size: var(--rt-type-lg);
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+}
+
+.rt-inspector__desc {
+  margin-top: 2px;
+  color: var(--rt-text-3);
+  font-size: var(--rt-type-sm);
+}
+
+.rt-inspector__desc[hidden],
+.rt-inspector__hist[hidden] {
+  display: none;
+}
+
+.rt-inspector__hist {
+  display: block;
+  flex-shrink: 0;
+  width: calc(100% - 32px);
+  height: 64px;
+  margin: 0 16px 8px;
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-wash);
+  box-shadow: inset 0 0 0 1px var(--rt-line);
+}
+
+.rt-inspector__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 16px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rt-line-strong) transparent;
+}
+
+/* The tool panes were laid out as one horizontal strip; in the inspector
+   they stack: rows wrap, sliders take the full width with their value on
+   the label's line, and the filter filmstrip becomes a grid. */
+.rt-editor__inspector .rt-dock {
+  display: block;
+  height: auto;
+  padding: 0;
+}
+
+.rt-editor__inspector .rt-dock__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rt-editor__inspector .rt-dock__row {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  overflow: visible;
+  gap: 8px;
+}
+
+.rt-editor__inspector .rt-dock__stack,
+.rt-editor__inspector .rt-adjust,
+.rt-editor__inspector .rt-filters {
+  align-items: stretch;
+  gap: 14px;
+}
+
+.rt-editor__inspector .rt-dock__group {
+  flex-wrap: wrap;
+}
+
+.rt-editor__inspector .rt-dock__divider {
+  display: none;
+}
+
+.rt-editor__inspector .rt-dock__row-title {
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+
+.rt-editor__inspector .rt-dock__slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px 8px;
+  width: 100%;
+}
+
+.rt-editor__inspector .rt-dock__slider .rt-dock__slider-label {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.rt-editor__inspector .rt-dock__slider .rt-dock__slider-value {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.rt-editor__inspector .rt-dock__slider > :not(.rt-dock__slider-label):not(.rt-dock__slider-value):not(input) {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+/* Outranks every pane's own fixed slider width (.rt-adjust, .rt-masks, …). */
+.rt-editor__inspector .rt-inspector__body .rt-dock__slider input[type="range"] {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+}
+
+/* Status and hint lines get their own line and wrap. */
+.rt-editor__inspector .rt-dock__status,
+.rt-editor__inspector .rt-dock__hint,
+.rt-editor__inspector .rt-liquify__hint {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin-left: 0;
+  white-space: normal;
+  text-wrap: pretty;
+}
+
+.rt-editor__inspector .rt-dock__filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 8px;
+  max-width: none;
+  overflow: visible;
+  padding: 0;
+}
+
+.rt-editor__inspector .rt-dock__filter-btn {
+  width: auto;
+}
+
+.rt-editor__inspector .rt-dock__filter-thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.rt-editor__inspector .rt-dock__filter-label {
+  font-size: var(--rt-type-xs);
+}
+
+.rt-editor__inspector .rt-curves__canvas {
+  align-self: center;
 }
 
 .rt-dock__pane {
@@ -1671,14 +2095,15 @@ const CSS = /* css */ `
 .rt-mask-overlay__ellipse {
   fill: none;
   stroke: var(--rt-on-media);
-  stroke-width: 2;
-  stroke-dasharray: 6 4;
+  stroke-width: calc(2 * var(--rt-px, 1px));
+  stroke-dasharray: calc(6 * var(--rt-px, 1px)) calc(4 * var(--rt-px, 1px));
 }
 
 .rt-mask-overlay__handle {
+  r: calc(7 * var(--rt-px, 1px));
   fill: var(--rt-accent);
   stroke: var(--rt-on-media);
-  stroke-width: 2;
+  stroke-width: calc(2 * var(--rt-px, 1px));
   pointer-events: auto;
   cursor: grab;
 }
@@ -1709,7 +2134,7 @@ const CSS = /* css */ `
 .rt-liquify-overlay__cursor {
   fill: var(--rt-glass);
   stroke: var(--rt-on-media);
-  stroke-width: 1.5;
+  stroke-width: calc(1.5 * var(--rt-px, 1px));
   pointer-events: none;
 }
 
@@ -1908,7 +2333,7 @@ const CSS = /* css */ `
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px 0;
+  padding: 8px 14px;
   flex-shrink: 0;
 }
 
@@ -2307,27 +2732,28 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   height: 40px;
   padding: 0 13px 0 16px;
   border-radius: 999px;
-  border: 1px solid var(--rt-line-strong);
-  background: var(--rt-surface-glass);
+  /* The prism ring marks AI, as on the rail's AI launcher. */
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(var(--rt-surface-overlay), var(--rt-surface-overlay)) padding-box,
+    var(--rt-prism) border-box;
   color: var(--rt-text-1);
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   box-shadow: var(--rt-shadow-md);
-  backdrop-filter: blur(8px);
-  transition: border-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease), transform var(--rt-dur-1) var(--rt-ease);
+  transition: filter var(--rt-dur-1) var(--rt-ease), transform var(--rt-dur-1) var(--rt-ease);
 }
 
 .rt-ai__trigger:hover {
-  border-color: var(--rt-line-loud);
-  color: var(--rt-text-1);
+  filter: brightness(1.15);
 }
 
 .rt-ai__trigger svg {
   width: 15px;
   height: 15px;
-  color: var(--rt-accent-text);
+  color: var(--rt-text-1);
 }
 
 .rt-ai__kbd {
@@ -2623,9 +3049,57 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
 
 /* ── Narrow screens ────────────────────────── */
 
-/* Phones get the same editor, compacted: the title gives way, button labels
-   collapse to icons, the action group scrolls instead of pushing Done off
-   screen, and the rail drops its text (each button keeps an aria-label). */
+/* Narrow windows and upright tablets (where three columns would leave the
+   stage a sliver): the panels stack. The stage (and video transport) on
+   top, the inspector beneath it, and the tool rail as a row along the
+   bottom edge, within thumb reach. */
+@media (max-width: 760px), (max-width: 1024px) and (orientation: portrait) {
+  .rt-editor-overlay {
+    gap: 6px;
+    padding: 6px;
+  }
+  .rt-editor__body {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .rt-editor__center {
+    flex: 1 1 auto;
+    min-height: 200px;
+    gap: 6px;
+  }
+  .rt-editor__inspector {
+    order: 1;
+    width: auto;
+    max-height: 42vh;
+  }
+  .rt-toolbar {
+    order: 2;
+    flex-direction: row;
+    padding: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .rt-toolbar__sep {
+    width: 1px;
+    height: 24px;
+    margin: 0 6px;
+  }
+  .rt-toolbar__btn--active::before {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: -7px;
+    width: auto;
+    height: 3px;
+  }
+  .rt-editor__canvas-area {
+    padding: 12px 12px 56px;
+  }
+}
+
+/* Phones: the top bar compacts too. The title gives way, button labels
+   collapse to icons, and the action group scrolls instead of pushing Done
+   off screen. */
 @media (max-width: 560px) {
   .rt-editor__topbar {
     padding: 0 8px;
@@ -2665,19 +3139,6 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   }
   .rt-editor__topbar-end .rt-editor__divider {
     display: none;
-  }
-  .rt-toolbar {
-    padding: 8px 6px;
-  }
-  .rt-toolbar__btn {
-    width: 52px;
-    padding: 10px 0;
-  }
-  .rt-toolbar__btn span {
-    display: none;
-  }
-  .rt-editor__canvas-area {
-    padding: 12px;
   }
 }
 

@@ -257,6 +257,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       id: "cutout",
       label: "Cutout",
       icon: CUTOUT_ICON,
+      group: "ai",
+      description: "Remove the background",
+      badge: "25 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
         const hint = "On-device background removal — the result is added as a new image";
@@ -303,6 +306,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       id: "erase",
       label: "Erase",
       icon: ERASE_ICON,
+      group: "ai",
+      description: "Paint over things to remove them",
+      badge: "208 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
         const root = document.createElement("div");
@@ -424,6 +430,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       id: "select",
       label: "Select",
       icon: SELECT_ICON,
+      group: "ai",
+      description: "Click an object to select it",
+      badge: "38 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
         const root = document.createElement("div");
@@ -654,6 +663,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       id: "depth",
       label: "Depth",
       icon: DEPTH_ICON,
+      group: "ai",
+      description: "Blur the background by distance",
+      badge: "27 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
         const root = document.createElement("div");
@@ -827,6 +839,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       id: "detect",
       label: "Detect",
       icon: DETECT_ICON,
+      group: "ai",
+      description: "Find faces and objects",
+      badge: "5 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
         const root = document.createElement("div");
@@ -1036,6 +1051,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       id: "upscale",
       label: "Upscale",
       icon: UPSCALE_ICON,
+      group: "ai",
+      description: "Four times the resolution",
+      badge: "67 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
         const hint = "On-device 4× super-resolution — the result is added as a new image";
@@ -1091,6 +1109,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       id: "denoise",
       label: "Denoise",
       icon: DENOISE_ICON,
+      group: "ai",
+      description: "Clean up sensor noise",
+      badge: "77 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
         const hint = "On-device noise removal — replaces this image in place";

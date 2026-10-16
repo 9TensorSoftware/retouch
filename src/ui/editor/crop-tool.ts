@@ -170,8 +170,10 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
       const imgRect = renderer.getImageRect();
       if (imgRect.width === 0 || imgRect.height === 0) return;
 
-      const dx = (e.clientX - dragging.startX) / imgRect.width;
-      const dy = (e.clientY - dragging.startY) / imgRect.height;
+      // Pointer deltas are screen px; the stage may be magnifying the canvas.
+      const zoom = renderer.getScreenScale();
+      const dx = (e.clientX - dragging.startX) / (imgRect.width * zoom);
+      const dy = (e.clientY - dragging.startY) / (imgRect.height * zoom);
       const ss = dragging.startSel;
 
       if (dragging.type === "move") {

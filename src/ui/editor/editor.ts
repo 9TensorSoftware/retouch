@@ -60,9 +60,10 @@ import { createLiquifyOverlay } from "./liquify-overlay";
 import { createLiquifyTool } from "./liquify-tool";
 import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
+import { createStageView } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
-import { getCustomTools } from "./tool-registry";
+import { getCustomTools, resolveToolDef } from "./tool-registry";
 import { createToolUi } from "./tool-ui";
 import { createToolbar } from "./toolbar";
 import type { TransportBarHandle } from "./transport-bar";
@@ -123,11 +124,21 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
   return `${parts[0]} · ${parts[1]} +${parts.length - 2}`;
 }
 
-/** True for elements that own text-editing keystrokes (so global shortcuts skip them). */
+/**
+ * True for fields that own text-editing keystrokes, so global shortcuts skip
+ * them; a focused slider or checkbox still lets shortcuts through.
+ */
 function isTextInput(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
-  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+  if (el instanceof HTMLInputElement) return !/^(range|checkbox|radio|button|color)$/.test(el.type);
+  return el.tagName === "TEXTAREA" || el.isContentEditable;
+}
+
+/** Any focused form field: Escape leaves it before it cancels the editor. */
+function isFormField(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 }
 
 export type EditorAiEvent =
@@ -319,6 +330,86 @@ export function createEditor(options: EditorOptions): ViewHandle {
     entry.kind === "video" ? entry.video : entry.image,
     entry.edits,
   );
+
+  // Inspector header: the active tool's name (and what it does, for tools
+  // that say), over a live histogram for the tone and look tools.
+  const inspectorTitle = h("h2", { class: "rt-inspector__title" });
+  const inspectorDesc = h("p", { class: "rt-inspector__desc" });
+  const histCanvas = h("canvas", { class: "rt-inspector__hist", "aria-hidden": "true" });
+  const histProbe = document.createElement("canvas");
+  let histTimer = 0;
+
+  function histogramShown(): boolean {
+    const group = resolveToolDef(activeTool).group;
+    return entry.kind === "image" && (group === "tone" || group === "looks");
+  }
+
+  /** Redraw the RGB histogram from the painted canvas, once paints pause. */
+  function scheduleHistogram(): void {
+    if (!histogramShown()) return;
+    clearTimeout(histTimer);
+    histTimer = window.setTimeout(drawHistogram, 60);
+  }
+  renderer.onPaint(scheduleHistogram);
+  signal.addEventListener("abort", () => clearTimeout(histTimer));
+
+  function drawHistogram(): void {
+    const source = renderer.getCanvasElement();
+    const width = histCanvas.clientWidth;
+    const height = histCanvas.clientHeight;
+    if (!source.width || !source.height || !width || !height) return;
+    histProbe.width = 128;
+    histProbe.height = Math.max(1, Math.round((128 * source.height) / source.width));
+    const probe = histProbe.getContext("2d", { willReadFrequently: true });
+    const ctx = histCanvas.getContext("2d");
+    if (!probe || !ctx) return;
+    probe.drawImage(source, 0, 0, histProbe.width, histProbe.height);
+    const data = probe.getImageData(0, 0, histProbe.width, histProbe.height).data;
+    const bins = 64;
+    const channels = [new Uint32Array(bins), new Uint32Array(bins), new Uint32Array(bins)];
+    for (let i = 0; i < data.length; i += 4) {
+      channels[0][data[i] >> 2]++;
+      channels[1][data[i + 1] >> 2]++;
+      channels[2][data[i + 2] >> 2]++;
+    }
+    let peak = 1;
+    for (const bin of channels) for (const n of bin) peak = Math.max(peak, n);
+    const ratio = window.devicePixelRatio || 1;
+    histCanvas.width = Math.round(width * ratio);
+    histCanvas.height = Math.round(height * ratio);
+    const w = histCanvas.width;
+    const hgt = histCanvas.height;
+    ctx.clearRect(0, 0, w, hgt);
+    // Canvas can't read CSS variables; these read well on the darkroom panel.
+    const colors = [
+      "rgba(255, 96, 76, 0.6)",
+      "rgba(96, 216, 132, 0.55)",
+      "rgba(88, 144, 255, 0.65)",
+    ];
+    ctx.globalCompositeOperation = "lighter";
+    channels.forEach((bin, c) => {
+      ctx.beginPath();
+      ctx.moveTo(0, hgt);
+      for (let i = 0; i < bins; i++) {
+        ctx.lineTo((i / (bins - 1)) * w, hgt - Math.sqrt(bin[i] / peak) * hgt * 0.94);
+      }
+      ctx.lineTo(w, hgt);
+      ctx.closePath();
+      ctx.fillStyle = colors[c];
+      ctx.fill();
+    });
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function updateInspector(tool: EditorTool): void {
+    const def = resolveToolDef(tool);
+    inspectorTitle.textContent = def.label;
+    inspectorDesc.textContent = def.description ?? "";
+    inspectorDesc.hidden = !def.description;
+    // Drawn on the next paint (selectTool re-renders), never from a canvas
+    // a resize has just cleared.
+    histCanvas.hidden = !histogramShown();
+  }
 
   // Video transport (playback persists across all tools)
   let seekQueue: SeekQueue | null = null;
@@ -765,7 +856,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
         : undefined,
   });
 
-  /** Apply a tool's side effects (crop overlay visibility, dock pane). */
+  /** Apply a tool's side effects (crop overlay visibility, inspector pane). */
   function selectTool(tool: EditorTool): void {
     // A marquee left behind is still the user's crop, not a draft to discard.
     if (activeTool === "crop" && tool !== "crop") applyCrop();
@@ -773,6 +864,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     activeTool = tool;
     transport?.setTrimEditable(tool === "trim");
     dock.setActiveTool(tool);
+    updateInspector(tool);
     customHandles.get(tool)?.onActivate?.();
     renderer.render();
     if (tool === "curves") curvesTool.refreshHistogram();
@@ -788,7 +880,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     }
   }
 
-  // Tool tabs (bottom)
+  // Tool rail (left)
   const toolbar = createToolbar({ tools, activeTool, onToolChange: selectTool });
 
   // Sync initial tool state (video opens on Trim, image on Crop).
@@ -1048,6 +1140,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     splitOn = on;
     compareBtn.classList.toggle("rt-editor__compare-btn--active", on);
     compareBtn.setAttribute("aria-pressed", String(on));
+    // Side by side always shows both at fit; zoom comes back with the single view.
+    stageView.setEnabled(!on);
     if (on) {
       beforePane = buildBeforePane();
       canvasArea.insertBefore(beforePane, canvasPane);
@@ -1223,15 +1317,39 @@ export function createEditor(options: EditorOptions): ViewHandle {
     canvasArea.appendChild(aiChat.root);
   }
 
-  // Feature-group tabs live in a left rail; the stage and the control tray
-  // (transport + contextual dock) share the center column.
-  const trayChildren: HTMLElement[] = [];
-  if (transport) trayChildren.push(transport.root);
-  trayChildren.push(dock.root);
-  const tray = h("div", { class: "rt-editor__tray" }, ...trayChildren);
-  const center = h("div", { class: "rt-editor__center" }, canvasArea, tray);
-  const body = h("div", { class: "rt-editor__body" }, toolbar.root, center);
+  // Floating panels on the stage: the tool rail on the left, the inspector
+  // (the active tool's controls) on the right, and the canvas in between,
+  // with the video transport under it.
+  const center = h(
+    "div",
+    { class: "rt-editor__center" },
+    canvasArea,
+    ...(transport ? [transport.root] : []),
+  );
+  const inspector = h(
+    "aside",
+    { class: "rt-editor__inspector", "aria-label": "Tool controls" },
+    h("div", { class: "rt-inspector__head" }, inspectorTitle, inspectorDesc),
+    histCanvas,
+    h("div", { class: "rt-inspector__body" }, dock.root),
+  );
+  const body = h("div", { class: "rt-editor__body" }, toolbar.root, center, inspector);
   const rootChildren: HTMLElement[] = [topbar, body];
+
+  // Zoom and pan. Every render re-applies the view, so overlays follow both
+  // edits and zooming.
+  const stageView = createStageView({
+    area: canvasArea,
+    target: canvasContainer,
+    renderer,
+    spacePan: entry.kind === "image",
+    onChange: () => {
+      if (activeTool === "crop") cropTool.refresh();
+      if (activeTool === "masks") masksOverlay.refresh();
+    },
+    signal,
+  });
+  canvasArea.appendChild(stageView.root);
   const root = h(
     "div",
     {
@@ -1274,7 +1392,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
       if (e.key === "Escape") {
         e.preventDefault();
-        if (inText) (e.target as HTMLElement).blur();
+        if (isFormField(e.target)) (e.target as HTMLElement).blur();
         else cancel();
         return;
       }
@@ -1334,10 +1452,25 @@ export function createEditor(options: EditorOptions): ViewHandle {
         return;
       }
 
-      const num = Number(e.key);
-      if (Number.isInteger(num) && num >= 1 && num <= tools.length) {
+      if (e.altKey) return;
+      if (stageView.handleKey(e)) {
         e.preventDefault();
-        const tool = tools[num - 1];
+        return;
+      }
+      if ((e.key === "i" || e.key === "I") && toolbar.openAiMenu()) {
+        e.preventDefault();
+        return;
+      }
+      // Tools by letter (C crop, A adjust, …) or by rail position (1–9).
+      const num = Number(e.key);
+      const tool =
+        e.key.length === 1 && Number.isNaN(num)
+          ? toolbar.toolForKey(e.key)
+          : Number.isInteger(num) && num >= 1
+            ? toolbar.order[num - 1]
+            : undefined;
+      if (tool) {
+        e.preventDefault();
         toolbar.setActiveTool(tool);
         selectTool(tool);
         return;

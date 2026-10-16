@@ -31,6 +31,7 @@ export type {
 export type {
   EditorToolPlugin,
   ToolContext,
+  ToolGroup,
   ToolPaneHandle,
 } from "./ui/editor/tool-registry";
 export type {
