@@ -25,6 +25,7 @@ license audit behind the ML and advanced-feature rows is in
 | ✅ | — | Design system: semantic tokens, neutral darkroom editor, unified icon set, motion + reduced-motion, filled slider tracks |
 | ✅ | — | Editor frame: grouped tool rail with an AI tools menu, right-hand inspector with a live RGB histogram, floating panels |
 | ✅ | — | Zoom & pan canvas (Cmd/Ctrl+wheel and trackpad pinch, wheel/Space/middle-drag pan, fit/1:1, sharp re-render up to the preview's resolution) |
+| ✅ | — | Controls v2: typed slider values, changed dots, semantic tracks; Adjust in sections, full-width Curves, Color mix swatches, preview tiles (Filters, Stylize, plugin looks), crop aspect tiles + straighten ruler, masks list, brush ring, before/after divider |
 | ⬜ | P1 | Mobile: touch pinch-zoom, bottom-sheet inspector, touch-size hit targets (the panels already stack on narrow screens) |
 | ⬜ | P3 | Highlights/shadows recovery · custom LUT import · auto-enhance |
 | ⬜ | P3 | Straighten-with-grid overlay · loading skeletons · pixel-size readout on crop |

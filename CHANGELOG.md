@@ -24,6 +24,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   each tool and its key. `I` opens the AI tools menu.
 - Plugin tools take `group` (`"frame" | "tone" | "looks" | "plugins" | "ai"`, type `ToolGroup`),
   `shortcut`, and, for the AI menu, `description` and `badge`. `@retouchjs/ml` tools use them.
+- A before/after divider for images: Compare (or `\`) lays it across the photo; drag the grip or
+  use the arrow keys. The left side is the photo without its look edits but framed the same way,
+  so the halves line up at any zoom. After a commit it shows the pristine original, unless a
+  committed crop or turn means it can't line up, in which case Compare shows the two side by side.
+- Sliders show their value as a field you can type into (`↑`/`↓` step it), mark themselves with a
+  dot when they're off neutral, and reset on a double-click of the label or the track. Color
+  sliders draw what they do on their tracks.
+- The inspector's Reset clears the active tool's edits; the top bar's button now reads "Reset all".
+- `ctx.ui.tiles()` builds preview tiles and `ctx.preview(edits)` draws the photo with a look
+  applied for them (types `UiTiles`, `UiTilesOptions`, `UiTileOption`, `PreviewEdits`). Sliders
+  from `ctx.ui.slider()` take `track` and `parse`.
+- A brush ring for Liquify and the ML package's Erase, sized to the brush; `[` and `]` resize the
+  Liquify brush.
 
 ### Changed
 
@@ -39,6 +52,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   accent, `#F5753F`.
 - On narrow windows (760 px and below) and upright tablets, the editor stacks: stage, then the
   inspector, then the rail along the bottom edge.
+- Every tool pane is rebuilt for the inspector. Adjust shows all 14 sliders in four folding
+  sections (Light, Color, Effects, Detail) instead of one slider picked by chip. Curves spans the
+  inspector's width with an input → output readout. Color mix picks bands from swatches and draws
+  its sliders in the band's color. Filters, Stylize and the demo's Looks are preview tiles drawn
+  from the photo. Crop has aspect tiles, a straighten ruler and rotate/flip buttons, and no Apply
+  button (the crop applies on tool switch, Enter or Done). Masks are a list with invert and delete
+  on each row, and all six local sliders visible.
+- `ctx.ui.section()` returns a titled group whose controls stack, matching the built-in sections.
+- The Transform straighten slider moves in 0.1° steps.
 
 ### Fixed
 

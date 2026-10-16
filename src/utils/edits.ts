@@ -37,3 +37,27 @@ export function imageEditsAreNeutral(edits: ImageEdits): boolean {
     liquifyIsNeutral(edits.liquify)
   );
 }
+
+/**
+ * True when the edits leave every pixel where it was: no crop, turn, flip,
+ * straighten, perspective, lens warp, content-aware width or liquify. Tone
+ * and color edits don't count.
+ */
+export function framingIsNeutral(edits: ImageEdits): boolean {
+  const c = edits.crop;
+  return (
+    c.x === 0 &&
+    c.y === 0 &&
+    c.width === 1 &&
+    c.height === 1 &&
+    edits.rotation === 0 &&
+    edits.orientation === 0 &&
+    !edits.flipH &&
+    !edits.flipV &&
+    edits.keystoneV === 0 &&
+    edits.keystoneH === 0 &&
+    edits.lensDistortion === 0 &&
+    edits.seamWidth === 100 &&
+    liquifyIsNeutral(edits.liquify)
+  );
+}

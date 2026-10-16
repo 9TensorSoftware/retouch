@@ -30,6 +30,7 @@ export type {
 } from "./types";
 export type {
   EditorToolPlugin,
+  PreviewEdits,
   ToolContext,
   ToolGroup,
   ToolPaneHandle,
@@ -43,6 +44,9 @@ export type {
   UiNote,
   UiSlider,
   UiSliderOptions,
+  UiTileOption,
+  UiTiles,
+  UiTilesOptions,
 } from "./ui/editor/tool-ui";
 export { refreshRangeFill } from "./ui/range-fill";
 export { isImageEntry, isVideoEntry } from "./utils/video";

@@ -6,7 +6,7 @@ import { Retouch } from "../src/index";
 import { injectStyles } from "../src/styles";
 import { createToolUi } from "../src/ui/editor/tool-ui";
 import { createToastHost } from "../src/ui/toast";
-import { samplePhotos } from "./samples";
+import { paintScene, samplePhotos } from "./samples";
 
 injectStyles();
 
@@ -167,7 +167,25 @@ for (const theme of WORLDS) {
       "Light",
       ui.slider({ label: "Exposure", min: -100, max: 100, value: 24, onInput: nop }).root,
       ui.slider({ label: "Grain", min: 0, max: 100, value: 30, onInput: nop }).root,
+      ui.slider({
+        label: "Temperature",
+        min: -100,
+        max: 100,
+        value: -20,
+        track: "linear-gradient(90deg, #3f86ff, #9db4d4 46%, #d9c49c 54%, #ffa53a)",
+        onInput: nop,
+      }).root,
     ),
+    ui.tiles({
+      label: "Look",
+      options: (["fjord", "forest", "night"] as const).map((scene) => ({
+        value: scene,
+        label: scene[0].toUpperCase() + scene.slice(1),
+        preview: paintScene(scene, 120, 120).toDataURL("image/jpeg", 0.85),
+      })),
+      value: "forest",
+      onChange: (value) => note.set(`Look ${value}`),
+    }).root,
     ui.row(
       ui.button({ label: "Default", onClick: nop }).root,
       ui.button({ label: "Primary", variant: "primary", onClick: nop }).root,

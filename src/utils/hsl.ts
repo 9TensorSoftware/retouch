@@ -19,7 +19,7 @@ export const HSL_BANDS = [
 ] as const;
 
 /** Band hue centers in degrees, ascending (red wraps around 0/360). */
-const BAND_CENTERS: Record<(typeof HSL_BANDS)[number], number> = {
+export const BAND_CENTERS: Record<(typeof HSL_BANDS)[number], number> = {
   red: 0,
   orange: 30,
   yellow: 60,
@@ -31,7 +31,7 @@ const BAND_CENTERS: Record<(typeof HSL_BANDS)[number], number> = {
 };
 
 /** Max hue rotation at ±100, in degrees. */
-const MAX_HUE_SHIFT = 30;
+export const MAX_HUE_SHIFT = 30;
 /** Max luminance shift at ±100 (scaled toward the nearer bound). */
 const MAX_LUM_SHIFT = 0.35;
 

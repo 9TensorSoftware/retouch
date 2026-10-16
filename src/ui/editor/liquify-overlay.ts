@@ -17,14 +17,16 @@ export interface LiquifyOverlayOptions {
 export interface LiquifyOverlayHandle {
   root: HTMLElement;
   setVisible(visible: boolean): void;
+  /** Redraw the brush ring at the last pointer position (after a size change). */
+  refreshCursor(): void;
   destroy(): void;
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /**
- * Full-canvas pointer surface for the liquify brush: shows a circle cursor
- * sized to the brush and streams drag segments as displacement pushes.
+ * Full-canvas pointer surface for the liquify brush: shows a ring sized to
+ * the brush and streams drag segments as displacement pushes.
  * Stroke segments coalesce per animation frame so the remap cost never
  * outruns pointer events.
  */
@@ -35,15 +37,25 @@ export function createLiquifyOverlay(options: LiquifyOverlayOptions): LiquifyOve
 
   const root = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
   root.setAttribute("class", "rt-liquify-overlay");
-  const cursor = document.createElementNS(SVG_NS, "circle");
-  cursor.setAttribute("class", "rt-liquify-overlay__cursor");
-  cursor.setAttribute("r", "40");
+  // The brush ring: a dark halo under a light ring, so it reads on any
+  // photo, with a center dot where the push starts.
+  const cursor = document.createElementNS(SVG_NS, "g");
+  cursor.setAttribute("class", "rt-brush-ring");
+  const halo = document.createElementNS(SVG_NS, "circle");
+  halo.setAttribute("class", "rt-brush-ring__halo");
+  const ring = document.createElementNS(SVG_NS, "circle");
+  ring.setAttribute("class", "rt-brush-ring__ring");
+  const dot = document.createElementNS(SVG_NS, "circle");
+  dot.setAttribute("class", "rt-brush-ring__dot");
+  cursor.append(halo, ring, dot);
   cursor.style.display = "none";
   root.appendChild(cursor);
   container.appendChild(root);
 
   let dragging = false;
   let last: { x: number; y: number } | null = null;
+  /** Where the pointer last hovered, for redrawing the ring in place. */
+  let hover: { x: number; y: number } | null = null;
   /** Movement accumulated since the last applied frame, in overlay px. */
   let pending: { x: number; y: number; dx: number; dy: number } | null = null;
   let rafId = 0;
@@ -60,10 +72,14 @@ export function createLiquifyOverlay(options: LiquifyOverlayOptions): LiquifyOve
   }
 
   function updateCursor(x: number, y: number): void {
-    const r = rect();
-    cursor.setAttribute("cx", String(x));
-    cursor.setAttribute("cy", String(y));
-    cursor.setAttribute("r", String(Math.max(6, getBrush().size * r.height)));
+    hover = { x, y };
+    const radius = String(Math.max(6, getBrush().size * rect().height));
+    for (const circle of [halo, ring, dot]) {
+      circle.setAttribute("cx", String(x));
+      circle.setAttribute("cy", String(y));
+    }
+    halo.setAttribute("r", radius);
+    ring.setAttribute("r", radius);
     cursor.style.display = "";
   }
 
@@ -136,6 +152,7 @@ export function createLiquifyOverlay(options: LiquifyOverlayOptions): LiquifyOve
   root.addEventListener(
     "pointerleave",
     () => {
+      hover = null;
       cursor.style.display = "none";
     },
     { signal },
@@ -146,6 +163,9 @@ export function createLiquifyOverlay(options: LiquifyOverlayOptions): LiquifyOve
     setVisible(visible) {
       root.style.display = visible ? "" : "none";
       if (!visible) cursor.style.display = "none";
+    },
+    refreshCursor() {
+      if (hover) updateCursor(hover.x, hover.y);
     },
     destroy() {
       if (rafId) cancelAnimationFrame(rafId);

@@ -1,14 +1,17 @@
+import { ASPECT_RATIOS } from "../../constants";
 import type { AspectRatioPreset, EditorTool, ImageEdits, ViewHandle } from "../../types";
 import { h } from "../h";
 import { ICON_FLIP_H, ICON_FLIP_V, ICON_ROTATE_CCW, ICON_ROTATE_CW } from "../icons";
-import { refreshRangeFill } from "../range-fill";
 import type { AdjustToolHandle } from "./adjust-tool";
+import { createSection } from "./controls";
 import type { CropToolHandle } from "./crop-tool";
 import type { CurvesToolHandle } from "./curves-tool";
 import type { FiltersToolHandle } from "./filters-tool";
 import type { HslToolHandle } from "./hsl-tool";
 import type { LiquifyToolHandle } from "./liquify-tool";
 import type { MasksToolHandle } from "./masks-tool";
+import { createRuler } from "./ruler";
+import { createSlider, signed } from "./slider";
 import type { StylizeToolHandle } from "./stylize-tool";
 import type { TrimToolHandle } from "./trim-tool";
 
@@ -30,10 +33,6 @@ export interface ContextDockOptions {
   edits: ImageEdits;
   onRotationChange: (degrees: number) => void;
   onTransform: (op: TransformOp) => void;
-  /** Commit the pending crop selection. */
-  onApplyCrop: () => void;
-  /** Restore the full original frame. */
-  onResetCrop: () => void;
   /** Perspective (keystone) correction changed. */
   onKeystoneChange: (vertical: number, horizontal: number) => void;
   /** Lens correction changed. */
@@ -44,13 +43,9 @@ export interface ContextDockOptions {
 
 export interface ContextDockHandle extends ViewHandle {
   setActiveTool(tool: EditorTool): void;
-  /** Sync the straighten slider after an external change (does not fire onRotationChange). */
+  /** Sync the straighten controls after an external change (does not fire onRotationChange). */
   setRotation(degrees: number): void;
-  /** Enable/disable the Apply-crop button (enabled while a selection is pending). */
-  setCropApplyEnabled(enabled: boolean): void;
-  /** Enable/disable Reset-crop (enabled while a crop is committed). */
-  setCropResetEnabled(enabled: boolean): void;
-  /** Reflect the crop tool's aspect preset in the chips. */
+  /** Reflect the crop tool's aspect preset in the tiles. */
   setAspect(preset: AspectRatioPreset): void;
   /** Sync the keystone sliders after an external change (does not fire onKeystoneChange). */
   setKeystone(vertical: number, horizontal: number): void;
@@ -62,10 +57,10 @@ export interface ContextDockHandle extends ViewHandle {
 
 const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
   { id: "free", label: "Free" },
-  { id: "16:9", label: "16:9" },
+  { id: "1:1", label: "Square" },
   { id: "4:3", label: "4:3" },
-  { id: "1:1", label: "1:1" },
   { id: "3:2", label: "3:2" },
+  { id: "16:9", label: "16:9" },
   { id: "9:16", label: "9:16" },
 ];
 
@@ -77,8 +72,8 @@ const TRANSFORM_BUTTONS: { op: TransformOp; label: string; icon: string }[] = [
 ];
 
 /**
- * Contextual controls strip below the canvas (Pintura-style): one horizontal
- * pane per tool, only the active tool's pane visible.
+ * The tool panes shown in the inspector, one per tool; only the active
+ * tool's pane is visible.
  */
 export function createContextDock(options: ContextDockOptions): ContextDockHandle {
   const {
@@ -98,33 +93,42 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const abort = new AbortController();
   const signal = abort.signal;
 
-  // ── Crop pane: transforms · aspect chips · straighten ──
-
-  const transformGroup = h("div", { class: "rt-dock__group" });
-  for (const def of TRANSFORM_BUTTONS) {
-    const btn = h("button", {
-      class: "rt-dock__icon-btn",
-      title: def.label,
-      "aria-label": def.label,
-    });
-    btn.innerHTML = def.icon;
-    btn.addEventListener("click", () => onTransform(def.op), { signal });
-    transformGroup.appendChild(btn);
+  // Rotate/flip buttons, built once per pane that offers them.
+  function transformButtons(): HTMLElement {
+    const group = h("div", { class: "rt-dock__group rt-transform-btns" });
+    for (const def of TRANSFORM_BUTTONS) {
+      const btn = h("button", {
+        type: "button",
+        class: "rt-dock__icon-btn",
+        title: def.label,
+        "aria-label": def.label,
+      });
+      btn.innerHTML = def.icon;
+      btn.addEventListener("click", () => onTransform(def.op), { signal });
+      group.appendChild(btn);
+    }
+    return group;
   }
 
-  const aspectBtns = new Map<AspectRatioPreset, HTMLElement>();
-  const aspectGroup = h("div", { class: "rt-dock__group" });
+  // ── Crop pane: aspect tiles · straighten ruler · rotate/flip ──
+
+  const aspectBtns = new Map<AspectRatioPreset, HTMLButtonElement>();
+  const aspectGrid = h("div", { class: "rt-aspects", role: "group", "aria-label": "Aspect ratio" });
   function setActiveAspect(preset: AspectRatioPreset): void {
-    for (const [id, b] of aspectBtns) {
-      b.classList.toggle("rt-dock__chip--active", id === preset);
-    }
+    for (const [id, b] of aspectBtns) b.setAttribute("aria-pressed", String(id === preset));
   }
   for (const preset of ASPECT_PRESETS) {
-    const isActive = cropTool.getAspectRatio() === preset.id;
+    // The glyph is the shape itself, scaled into a 22 px box.
+    const ratio = ASPECT_RATIOS[preset.id];
+    const glyph = h("span", { class: "rt-aspect__glyph", "aria-hidden": "true" });
+    const r = ratio ?? 1.2;
+    glyph.style.width = `${r >= 1 ? 22 : Math.round(22 * r)}px`;
+    glyph.style.height = `${r >= 1 ? Math.round(22 / r) : 22}px`;
     const btn = h(
       "button",
-      { class: `rt-dock__chip${isActive ? " rt-dock__chip--active" : ""}` },
-      preset.label,
+      { type: "button", class: `rt-aspect${ratio === null ? " rt-aspect--free" : ""}` },
+      glyph,
+      h("span", { class: "rt-aspect__label" }, preset.label),
     );
     btn.addEventListener(
       "click",
@@ -135,142 +139,105 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       { signal },
     );
     aspectBtns.set(preset.id, btn);
-    aspectGroup.appendChild(btn);
+    aspectGrid.appendChild(btn);
   }
+  setActiveAspect(cropTool.getAspectRatio());
 
-  // Commit / restore — the selection only takes effect on Apply.
-  const applyBtn = h(
-    "button",
-    { class: "rt-dock__chip rt-dock__chip--primary", disabled: "" },
-    "Apply crop",
+  const formatDegrees = (v: number): string => `${signed(v, 1)}°`;
+  const ruler = createRuler(
+    {
+      label: "Straighten",
+      min: -45,
+      max: 45,
+      step: 0.1,
+      keyStep: 0.1,
+      value: edits.rotation,
+      format: formatDegrees,
+      onInput: (v) => {
+        straighten.set(v);
+        onRotationChange(v);
+      },
+    },
+    signal,
   );
-  applyBtn.addEventListener("click", () => options.onApplyCrop(), { signal });
-  const resetCropBtn = h("button", { class: "rt-dock__chip", disabled: "" }, "Reset crop");
-  resetCropBtn.addEventListener("click", () => options.onResetCrop(), { signal });
-  const commitGroup = h("div", { class: "rt-dock__group" }, applyBtn, resetCropBtn);
 
-  /** Inline labeled slider with double-click-to-reset. */
-  function makeSlider(
+  const cropPane = h(
+    "div",
+    { class: "rt-dock__pane rt-crop-pane" },
+    aspectGrid,
+    ruler.root,
+    transformButtons(),
+    h(
+      "p",
+      { class: "rt-dock__hint rt-crop-pane__note" },
+      "Drag the frame's edges and corners on the photo. The crop applies when you switch tools, press Enter or Done.",
+    ),
+  );
+
+  // ── Transform pane: turns and straighten · perspective · lens ──
+
+  function slider(
     label: string,
     min: number,
     max: number,
     value: number,
-    format: (v: number) => string,
     onInput: (v: number) => void,
+    extra: { step?: number; format?: (v: number) => string; neutral?: number } = {},
   ) {
-    const valueEl = h("span", { class: "rt-dock__slider-value" }, format(value));
-    const input = h("input", {
-      type: "range",
-      min,
-      max,
-      step: 1,
-      value,
-      "aria-label": label,
-    }) as HTMLInputElement;
-    refreshRangeFill(input);
-    input.addEventListener(
-      "input",
-      () => {
-        valueEl.textContent = format(Number(input.value));
-        refreshRangeFill(input);
-        onInput(Number(input.value));
-      },
-      { signal },
-    );
-    const labelEl = h(
-      "span",
-      { class: "rt-dock__slider-label", title: "Double-click to reset" },
-      label,
-    );
-    labelEl.addEventListener(
-      "dblclick",
-      () => {
-        input.value = "0";
-        valueEl.textContent = format(0);
-        refreshRangeFill(input);
-        onInput(0);
-      },
-      { signal },
-    );
-    const group = h("div", { class: "rt-dock__group rt-dock__slider" }, labelEl, input, valueEl);
-    const set = (v: number): void => {
-      input.value = String(v);
-      valueEl.textContent = format(v);
-      refreshRangeFill(input);
-    };
-    return { group, set };
+    return createSlider({ label, min, max, value, onInput, ...extra }, signal);
   }
 
-  const straighten = makeSlider(
+  const straighten = slider(
     "Straighten",
     -45,
     45,
     edits.rotation,
-    (v) => `${v}°`,
-    (v) => onRotationChange(v),
+    (v) => {
+      ruler.set(v);
+      onRotationChange(v);
+    },
+    { step: 0.1, format: formatDegrees },
   );
-  const keystoneVSlider = makeSlider("Vertical", -100, 100, edits.keystoneV, String, (v) =>
+  const keystoneVSlider = slider("Vertical", -100, 100, edits.keystoneV, (v) =>
     options.onKeystoneChange(v, Number.NaN),
   );
-  const keystoneHSlider = makeSlider("Horizontal", -100, 100, edits.keystoneH, String, (v) =>
+  const keystoneHSlider = slider("Horizontal", -100, 100, edits.keystoneH, (v) =>
     options.onKeystoneChange(Number.NaN, v),
   );
-  const lensDistortionSlider = makeSlider(
-    "Distortion",
-    -100,
-    100,
-    edits.lensDistortion,
-    String,
-    (v) => options.onLensChange(v, Number.NaN),
+  const lensDistortionSlider = slider("Distortion", -100, 100, edits.lensDistortion, (v) =>
+    options.onLensChange(v, Number.NaN),
   );
-  const lensDevignetteSlider = makeSlider("Devignette", 0, 100, edits.lensDevignette, String, (v) =>
+  const lensDevignetteSlider = slider("Devignette", 0, 100, edits.lensDevignette, (v) =>
     options.onLensChange(Number.NaN, v),
   );
-  const seamSlider = makeSlider(
+  const seamSlider = slider(
     "Width",
     50,
     100,
     edits.seamWidth,
-    (v) => `${v}%`,
     (v) => options.onSeamWidthChange?.(v),
-  );
-  const seamLabel = seamSlider.group.querySelector(".rt-dock__slider-label");
-
-  const divider = () => h("div", { class: "rt-dock__divider" });
-  const cropPane = h(
-    "div",
-    { class: "rt-dock__pane rt-dock__row" },
-    commitGroup,
-    divider(),
-    aspectGroup,
+    { neutral: 100, format: (v) => `${v}%` },
   );
 
-  // Transform pane: coarse turns/flips, fine straighten, perspective.
+  const rotateSection = createSection({ title: "Rotate" }, transformButtons(), straighten.root);
+  const perspectiveSection = createSection(
+    { title: "Perspective" },
+    keystoneVSlider.root,
+    keystoneHSlider.root,
+  );
+  const lensSection = createSection(
+    { title: "Lens" },
+    lensDistortionSlider.root,
+    lensDevignetteSlider.root,
+  );
+  const seamSection = createSection({ title: "Content-aware width" }, seamSlider.root);
   const transformPane = h(
     "div",
-    { class: "rt-dock__pane rt-dock__stack" },
-    h("div", { class: "rt-dock__row" }, transformGroup, divider(), straighten.group),
-    h(
-      "div",
-      { class: "rt-dock__row" },
-      h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Perspective"),
-      keystoneVSlider.group,
-      keystoneHSlider.group,
-    ),
-    h(
-      "div",
-      { class: "rt-dock__row" },
-      h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Lens"),
-      lensDistortionSlider.group,
-      lensDevignetteSlider.group,
-      ...(options.onSeamWidthChange
-        ? [
-            divider(),
-            h("span", { class: "rt-dock__slider-label rt-dock__row-title" }, "Content-aware"),
-            seamSlider.group,
-          ]
-        : []),
-    ),
+    { class: "rt-dock__pane rt-transform-pane" },
+    rotateSection.root,
+    perspectiveSection.root,
+    lensSection.root,
+    ...(options.onSeamWidthChange ? [seamSection.root] : []),
   );
 
   // ── Tool panes ──
@@ -327,6 +294,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     },
     setRotation(degrees) {
       straighten.set(degrees);
+      ruler.set(degrees);
     },
     setKeystone(vertical, horizontal) {
       keystoneVSlider.set(vertical);
@@ -338,13 +306,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     },
     setSeamWidth(percent, busy) {
       seamSlider.set(percent);
-      if (seamLabel) seamLabel.textContent = busy ? "Carving…" : "Width";
-    },
-    setCropApplyEnabled(enabled) {
-      applyBtn.toggleAttribute("disabled", !enabled);
-    },
-    setCropResetEnabled(enabled) {
-      resetCropBtn.toggleAttribute("disabled", !enabled);
+      seamSlider.setLabel(busy ? "Carving…" : "Width", "Content-aware width");
     },
     setAspect(preset) {
       setActiveAspect(preset);

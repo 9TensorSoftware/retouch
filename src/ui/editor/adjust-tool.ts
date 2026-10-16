@@ -1,7 +1,18 @@
 import type { Adjustments } from "../../types";
 import { h } from "../h";
 import { ICON_EYEDROPPER } from "../icons";
-import { refreshRangeFill } from "../range-fill";
+import { createSection } from "./controls";
+import type { SliderHandle } from "./slider";
+import { createSlider, parseTyped, signed } from "./slider";
+import {
+  TRACK_BRIGHTNESS,
+  TRACK_EXPOSURE,
+  TRACK_HUE,
+  TRACK_SATURATION,
+  TRACK_TEMPERATURE,
+  TRACK_TINT,
+  TRACK_VIBRANCE,
+} from "./tracks";
 
 export interface AdjustToolOptions {
   adjustments: Adjustments;
@@ -24,150 +35,171 @@ interface SliderDef {
   min: number;
   max: number;
   neutral: number;
+  /** A track showing what the slider does; omitted ones fill from neutral. */
+  track?: string;
+  unit?: string;
 }
 
-const DEFS: SliderDef[] = [
-  { key: "exposure", label: "Exposure", min: -100, max: 100, neutral: 0 },
-  { key: "brightness", label: "Brightness", min: 0, max: 200, neutral: 100 },
-  { key: "contrast", label: "Contrast", min: 0, max: 200, neutral: 100 },
-  { key: "temperature", label: "Temperature", min: -100, max: 100, neutral: 0 },
-  { key: "tint", label: "Tint", min: -100, max: 100, neutral: 0 },
-  { key: "hue", label: "Hue", min: -180, max: 180, neutral: 0 },
-  { key: "saturation", label: "Saturation", min: 0, max: 200, neutral: 100 },
-  { key: "vibrance", label: "Vibrance", min: -100, max: 100, neutral: 0 },
-  { key: "sharpen", label: "Sharpen", min: 0, max: 100, neutral: 0 },
-  { key: "blur", label: "Blur", min: 0, max: 100, neutral: 0 },
-  { key: "grain", label: "Grain", min: 0, max: 100, neutral: 0 },
-  { key: "vignette", label: "Vignette", min: 0, max: 100, neutral: 0 },
-  { key: "clarity", label: "Clarity", min: -100, max: 100, neutral: 0 },
-  { key: "dehaze", label: "Dehaze", min: 0, max: 100, neutral: 0 },
+const DEFS: Record<keyof Adjustments, SliderDef> = {
+  exposure: {
+    key: "exposure",
+    label: "Exposure",
+    min: -100,
+    max: 100,
+    neutral: 0,
+    track: TRACK_EXPOSURE,
+  },
+  brightness: {
+    key: "brightness",
+    label: "Brightness",
+    min: 0,
+    max: 200,
+    neutral: 100,
+    track: TRACK_BRIGHTNESS,
+  },
+  contrast: { key: "contrast", label: "Contrast", min: 0, max: 200, neutral: 100 },
+  dehaze: { key: "dehaze", label: "Dehaze", min: 0, max: 100, neutral: 0 },
+  temperature: {
+    key: "temperature",
+    label: "Temperature",
+    min: -100,
+    max: 100,
+    neutral: 0,
+    track: TRACK_TEMPERATURE,
+  },
+  tint: {
+    key: "tint",
+    label: "Tint",
+    min: -100,
+    max: 100,
+    neutral: 0,
+    track: TRACK_TINT,
+  },
+  vibrance: {
+    key: "vibrance",
+    label: "Vibrance",
+    min: -100,
+    max: 100,
+    neutral: 0,
+    track: TRACK_VIBRANCE,
+  },
+  saturation: {
+    key: "saturation",
+    label: "Saturation",
+    min: 0,
+    max: 200,
+    neutral: 100,
+    track: TRACK_SATURATION,
+  },
+  hue: {
+    key: "hue",
+    label: "Hue",
+    min: -180,
+    max: 180,
+    neutral: 0,
+    unit: "°",
+    track: TRACK_HUE,
+  },
+  clarity: { key: "clarity", label: "Clarity", min: -100, max: 100, neutral: 0 },
+  vignette: { key: "vignette", label: "Vignette", min: 0, max: 100, neutral: 0 },
+  grain: { key: "grain", label: "Grain", min: 0, max: 100, neutral: 0 },
+  sharpen: { key: "sharpen", label: "Sharpen", min: 0, max: 100, neutral: 0 },
+  blur: { key: "blur", label: "Blur", min: 0, max: 100, neutral: 0 },
+};
+
+const SECTIONS: { title: string; open: boolean; keys: (keyof Adjustments)[] }[] = [
+  { title: "Light", open: true, keys: ["exposure", "brightness", "contrast", "dehaze"] },
+  { title: "Color", open: true, keys: ["temperature", "tint", "vibrance", "saturation", "hue"] },
+  { title: "Effects", open: false, keys: ["clarity", "vignette", "grain"] },
+  { title: "Detail", open: false, keys: ["sharpen", "blur"] },
 ];
 
-/** Signed offset from neutral: "0", "+12", "-45". */
-function formatValue(value: number, neutral: number): string {
-  const diff = value - neutral;
-  if (diff === 0) return "0";
-  return diff > 0 ? `+${diff}` : `${diff}`;
-}
+/** Which sections are folded, remembered for the page's lifetime. */
+const sectionOpen = new Map<string, boolean>();
 
 /**
- * One slider + a horizontal chip per adjustment (the Pintura/Apple Photos
- * finetune pattern). Selecting a chip retargets the slider; a dot on the chip
- * marks values away from neutral. Double-click a chip or the slider label to
- * reset that adjustment.
+ * All fourteen adjustments at once, in four sections (Light, Color, Effects,
+ * Detail). Values read as offsets from neutral; each section counts its
+ * changed sliders, so a folded section still shows it's been touched.
  */
 export function createAdjustTool(options: AdjustToolOptions): AdjustToolHandle {
   const adj: Adjustments = { ...options.adjustments };
   const abort = new AbortController();
   const signal = abort.signal;
+  const sliders = new Map<keyof Adjustments, SliderHandle>();
+  const counters: Array<() => void> = [];
 
-  let selected: SliderDef = DEFS[0];
-  const chips = new Map<keyof Adjustments, HTMLElement>();
-
-  // ── Slider row (retargeted by the chips) ──
-
-  const label = h(
-    "span",
-    { class: "rt-dock__slider-label", title: "Double-click to reset" },
-    selected.label,
-  );
-  const valueEl = h(
-    "span",
-    { class: "rt-dock__slider-value" },
-    formatValue(adj[selected.key], selected.neutral),
-  );
-  const input = h("input", {
-    type: "range",
-    min: selected.min,
-    max: selected.max,
-    step: 1,
-    value: adj[selected.key],
-    "aria-label": selected.label,
-  }) as HTMLInputElement;
-  refreshRangeFill(input, selected.neutral);
-
-  function syncChipDot(key: keyof Adjustments): void {
-    const def = DEFS.find((d) => d.key === key);
-    chips.get(key)?.classList.toggle("rt-dock__chip--touched", adj[key] !== def?.neutral);
-  }
-
-  function setValue(value: number): void {
-    adj[selected.key] = value;
-    input.value = String(value);
-    valueEl.textContent = formatValue(value, selected.neutral);
-    refreshRangeFill(input, selected.neutral);
-    syncChipDot(selected.key);
-    options.onChange({ ...adj });
-  }
-
-  input.addEventListener("input", () => setValue(Number(input.value)), { signal });
-  label.addEventListener("dblclick", () => setValue(selected.neutral), { signal });
-
-  const sliderRow = h("div", { class: "rt-dock__row rt-dock__slider" }, label, input, valueEl);
-  if (options.onWhiteBalancePick) {
-    const wbBtn = h("button", {
-      class: "rt-dock__icon-btn rt-adjust__wb",
-      title: "White balance: click a neutral gray/white area in the image",
-      "aria-label": "White balance eyedropper",
-    });
-    wbBtn.innerHTML = ICON_EYEDROPPER;
-    wbBtn.addEventListener("click", () => options.onWhiteBalancePick?.(), { signal });
-    sliderRow.appendChild(wbBtn);
-  }
-
-  // ── Chip row ──
-
-  function select(def: SliderDef): void {
-    chips.get(selected.key)?.classList.remove("rt-dock__chip--active");
-    selected = def;
-    chips.get(def.key)?.classList.add("rt-dock__chip--active");
-    label.textContent = def.label;
-    input.min = String(def.min);
-    input.max = String(def.max);
-    input.value = String(adj[def.key]);
-    input.setAttribute("aria-label", def.label);
-    valueEl.textContent = formatValue(adj[def.key], def.neutral);
-    refreshRangeFill(input, def.neutral);
-  }
-
-  const chipRow = h("div", { class: "rt-dock__row rt-dock__chips" });
-  for (const def of DEFS) {
-    const chip = h(
-      "button",
+  function slider(def: SliderDef): SliderHandle {
+    const unit = def.unit ?? "";
+    const handle = createSlider(
       {
-        class: `rt-dock__chip${def === selected ? " rt-dock__chip--active" : ""}`,
-        title: `${def.label} — double-click to reset`,
+        label: def.label,
+        min: def.min,
+        max: def.max,
+        value: adj[def.key],
+        neutral: def.neutral,
+        track: def.track,
+        // Readouts are offsets from neutral, so typed values are too.
+        format: (v) => `${signed(v - def.neutral)}${unit}`,
+        parse: (text) => {
+          const typed = parseTyped(text);
+          return typed === null ? null : def.neutral + typed;
+        },
+        onInput: (v) => {
+          adj[def.key] = v;
+          for (const count of counters) count();
+          options.onChange({ ...adj });
+        },
       },
-      def.label,
+      signal,
     );
-    chip.addEventListener("click", () => select(def), { signal });
-    chip.addEventListener(
-      "dblclick",
-      () => {
-        select(def);
-        setValue(def.neutral);
-      },
+    sliders.set(def.key, handle);
+    return handle;
+  }
+
+  const root = h("div", { class: "rt-adjust" });
+  for (const def of SECTIONS) {
+    const section = createSection({
+      title: def.title,
+      collapsible: true,
+      open: sectionOpen.get(def.title) ?? def.open,
+    });
+    section.root.addEventListener(
+      "toggle",
+      () => sectionOpen.set(def.title, (section.root as HTMLDetailsElement).open),
       { signal },
     );
-    chips.set(def.key, chip);
-    chipRow.appendChild(chip);
+    for (const key of def.keys) {
+      const handle = slider(DEFS[key]);
+      if (key === "temperature" && options.onWhiteBalancePick) {
+        const pick = h("button", {
+          type: "button",
+          class: "rt-dock__icon-btn rt-adjust__wb",
+          title: "White balance: click something that should be neutral gray or white",
+          "aria-label": "White balance eyedropper",
+        });
+        pick.innerHTML = ICON_EYEDROPPER;
+        pick.addEventListener("click", () => options.onWhiteBalancePick?.(), { signal });
+        handle.addAccessory(pick);
+      }
+      section.body.appendChild(handle.root);
+    }
+    const count = (): void =>
+      section.setCount(def.keys.filter((k) => adj[k] !== DEFS[k].neutral).length);
+    count();
+    counters.push(count);
+    root.appendChild(section.root);
   }
-
-  for (const def of DEFS) syncChipDot(def.key);
-
-  const root = h("div", { class: "rt-adjust" }, sliderRow, chipRow);
 
   return {
     root,
     getAdjustments: () => ({ ...adj }),
     setAdjustments(next) {
-      for (const def of DEFS) {
-        adj[def.key] = next[def.key];
-        syncChipDot(def.key);
+      for (const key of Object.keys(DEFS) as (keyof Adjustments)[]) {
+        adj[key] = next[key];
+        sliders.get(key)?.set(next[key]);
       }
-      input.value = String(adj[selected.key]);
-      valueEl.textContent = formatValue(adj[selected.key], selected.neutral);
-      refreshRangeFill(input, selected.neutral);
+      for (const count of counters) count();
     },
     destroy() {
       abort.abort();

@@ -102,6 +102,22 @@ export const ICON_SEND = icon('<path d="M12 19V5"/><path d="M5.5 11.5L12 5l6.5 6
 export const ICON_CLOSE = icon('<path d="M6 6l12 12M18 6L6 18"/>');
 export const ICON_PLUS = icon('<path d="M12 6v12M6 12h12"/>');
 export const ICON_MINUS = icon('<path d="M6 12h12"/>');
+export const ICON_CHEVRON_DOWN = icon('<path d="M6 9l6 6 6-6"/>');
+export const ICON_RESET = icon('<path d="M4 4v6h6"/><path d="M5.6 15A8 8 0 1 0 6.3 6.3L4 10"/>');
+export const ICON_TRASH = icon(
+  '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/>',
+);
+/** Mask kinds: a linear gradient band, and a radial ellipse. */
+export const ICON_MASK_LINEAR = icon(
+  '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 9.5h16" stroke-dasharray="2 2.5"/><path d="M4 14.5h16"/>',
+);
+export const ICON_MASK_RADIAL = icon(
+  '<ellipse cx="12" cy="12" rx="8" ry="6.5"/><ellipse cx="12" cy="12" rx="3.5" ry="2.5" stroke-dasharray="2 2"/>',
+);
+/** Invert a mask: the shape and its outside swap. */
+export const ICON_INVERT = icon(
+  '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/>',
+);
 export const ICON_ALERT = icon(
   '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>',
 );

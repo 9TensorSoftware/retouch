@@ -27,9 +27,10 @@ describe("editor crop commit", () => {
     onCancel = vi.fn();
     editor = createEditor({ entry, onDone, onCancel });
     document.body.appendChild(editor.root);
-    // Images open on Crop; shaping a 1:1 marquee leaves a pending selection.
-    button(".rt-dock__chip", "1:1").click();
-    expect(button(".rt-dock__chip", "Apply crop").disabled).toBe(false);
+    // Images open on Crop; shaping a 1:1 marquee leaves a pending selection,
+    // which the inspector's Reset already counts as a change.
+    button(".rt-aspect", "Square").click();
+    expect(button(".rt-inspector__reset").hidden).toBe(false);
   });
 
   afterEach(() => {

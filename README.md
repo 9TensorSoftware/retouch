@@ -121,7 +121,7 @@ when `onDone` is configured) to export everything.
 
 ### 3. Editor
 
-Opens as a modal overlay: a neutral graphite stage that keeps focus — and color judgment — on the image, with floating panels around it. The tool rail down the left edge groups tools by job (frame, tone, looks, then plugins), with the AI tools gathered behind one ✦ launcher; the inspector on the right holds the active tool's controls and a live RGB histogram. Zoom up to 800% and pan around the stage. On narrow windows and upright tablets the panels stack: stage on top, inspector beneath, rail along the bottom edge. Tools are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
+Opens as a modal overlay: a neutral graphite stage that keeps focus — and color judgment — on the image, with floating panels around it. The tool rail down the left edge groups tools by job (frame, tone, looks, then plugins), with the AI tools gathered behind one ✦ launcher; the inspector on the right holds the active tool's controls — sliders whose tracks show what they do, preview tiles drawn from your photo — and a live RGB histogram. Zoom up to 800%, pan around the stage, and drag a before/after divider across the photo to compare. On narrow windows and upright tablets the panels stack: stage on top, inspector beneath, rail along the bottom edge. Tools are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
 
 <br />
 
@@ -129,15 +129,15 @@ Opens as a modal overlay: a neutral graphite stage that keeps focus — and colo
 
 | Tool | Description |
 |------|-------------|
-| **Crop** | Commit-style: drag a selection (free-form or fixed aspect — 16:9, 4:3, 1:1, 3:2, 9:16) over a rule-of-thirds grid, then **Apply crop** (or press Enter) — the discarded area disappears everywhere; **Reset crop** brings the full frame back. Works on video too. |
-| **Transform** | Rotate 90° and flip H/V that keep the crop over your content, a straighten slider that auto-crops to the largest inscribed window (no black corners), vertical/horizontal **perspective (keystone) correction**, **lens corrections** — barrel/pincushion distortion and corner devignetting — and **content-aware width** (seam carving in a worker, images only). |
-| **Liquify** | Brush-based push warp: drag on the image to bend and reshape content, with size and strength controls. Displacements live in a coarse grid in the edit model, so strokes preview live, undo cleanly, and apply to image and video exports alike. |
-| **Adjust** | 14 controls: exposure, brightness, contrast, temperature, tint, hue, saturation, vibrance, sharpen, blur, grain, vignette, plus **clarity** (midtone local contrast) and **dehaze** — real-time, live on playing video. Double-click a label to reset it. Includes a **white-balance eyedropper**: click a neutral area and temperature/tint correct themselves. |
-| **Curves** | Photoshop-style tone curves: master + per-channel (R/G/B) with draggable control points over a **live histogram**. Monotone-cubic interpolation (no overshoot), applied identically in the preview, image export, and per-frame video export. |
-| **Color mix** | Lightroom-style **HSL mixer**: eight hue bands (red → magenta), each with hue/saturation/luminance shifts and smooth falloff to neighboring bands. Grays stay untouched. The AI understands it too — "make the sky bluer" targets just the blue band. |
-| **Masks** | Selective adjustments: add **linear or radial gradient masks**, drag their handles on the canvas, and dial local exposure/brightness/contrast/saturation/temperature/tint that apply only inside the feathered gradient. Invertible, stackable, fully non-destructive. |
-| **Stylize** | Parametric effects: **tilt-shift** (miniature look with a movable focus band), **duotone** (pick shadow/highlight colors), **posterize**, **pixelate**, **halftone** — each with a strength slider, applied identically at export. |
-| **Filters** | 11 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — plus Original, with an intensity slider and live thumbnails. |
+| **Crop** | Drag the frame over a rule-of-thirds grid, free or locked to an aspect tile (square, 4:3, 3:2, 16:9, 9:16). The crop applies when you switch tools, press Enter or Done; the inspector's **Reset** brings the full frame back. A **straighten ruler** (drag it, or use the arrow keys) and rotate/flip buttons sit right in the pane. Works on video too. |
+| **Transform** | Rotate 90° and flip H/V that keep the crop over your content, a straighten slider (0.1° steps) that auto-crops to the largest inscribed window (no black corners), vertical/horizontal **perspective (keystone) correction**, **lens corrections** — barrel/pincushion distortion and corner devignetting — and **content-aware width** (seam carving in a worker, images only). |
+| **Liquify** | Brush-based push warp: drag on the image to bend and reshape content under a **brush ring** sized to the brush (`[` and `]` resize it), with size and strength controls. Displacements live in a coarse grid in the edit model, so strokes preview live, undo cleanly, and apply to image and video exports alike. |
+| **Adjust** | All 14 controls at once, in four folding sections — **Light** (exposure, brightness, contrast, dehaze), **Color** (temperature, tint, vibrance, saturation, hue), **Effects** (clarity, vignette, grain) and **Detail** (sharpen, blur) — real-time, live on playing video. Color sliders show what they do on their tracks (cool to warm, green to magenta, around the hue wheel). Includes a **white-balance eyedropper**: click a neutral area and temperature/tint correct themselves. |
+| **Curves** | Photoshop-style tone curves across the inspector's full width: master + per-channel (R/G/B) with draggable control points over a **live histogram**, the other channels' curves drawn faintly, and an input → output readout. Monotone-cubic interpolation (no overshoot), applied identically in the preview, image export, and per-frame video export. |
+| **Color mix** | Lightroom-style **HSL mixer**: pick one of eight hue bands (red → magenta) from its swatch, then shift its hue, saturation and luminance on sliders drawn in that band's color, with smooth falloff to neighboring bands. Grays stay untouched. The AI understands it too — "make the sky bluer" targets just the blue band. |
+| **Masks** | Selective adjustments: add **linear or radial gradient masks** to a list, drag their handles on the canvas, and dial local exposure/brightness/contrast/saturation/temperature/tint that apply only inside the feathered gradient. Invert or delete each from its row; stackable, fully non-destructive. |
+| **Stylize** | Parametric effects, picked from preview tiles drawn from your photo: **tilt-shift** (miniature look with a movable focus band), **duotone** (pick shadow/highlight colors), **posterize**, **pixelate**, **halftone** — each with a strength slider, applied identically at export. |
+| **Filters** | 11 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — plus Original, as preview tiles drawn from your photo, with an intensity slider. |
 | **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging (0.1 s, Shift for 1 s), and playback speed in nine steps from 0.25× to 4×. |
 | **Draw** | _Planned._ Freehand drawing and annotation directly on the canvas. |
 | **Text** | _Planned._ Add and position text overlays with font and color controls. |
@@ -233,9 +233,29 @@ built-ins, so previews, undo/redo, AI ops, and export work unchanged. (Tools
 that need their own render passes — draw/text layers — are on the roadmap.)
 
 `ctx.ui` builds pane controls that match the built-in tools — `row`, `section`,
-`slider`, `button`, `choice` (one of several options) and `note` (status text,
-announced to screen readers) — and keeps them matching as the editor's design
-changes, so a plugin never styles anything itself. Panes built by hand still
+`slider`, `button`, `choice` (one of several options), `tiles` (preview tiles,
+like Filters) and `note` (status text, announced to screen readers) — and keeps
+them matching as the editor's design changes, so a plugin never styles anything
+itself. Sliders take an optional `track` (a CSS gradient showing what the
+slider does) and `parse` (reading a typed value back, the inverse of `format`).
+`ctx.preview(edits)` draws the current photo with `edits` (adjustments, filter,
+curves, color mix, stylize) laid over the current ones, as an image URL for a
+tile:
+
+```ts
+const tiles = ctx.ui.tiles({
+  label: "Look",
+  options: LOOKS.map((look) => ({
+    value: look.name,
+    label: look.name,
+    preview: ctx.preview({ filter: look.filter }),
+  })),
+  value: null,
+  onChange: (name) => applyLook(name),
+});
+```
+
+Panes built by hand still
 work: the `rt-dock__*` classes stay styled, and a hand-built slider gets the
 filled track by calling `refreshRangeFill(input)` (exported from
 `@retouchjs/core`) after creating it, from its `input` listener, and wherever
@@ -337,6 +357,8 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | `1`–`9` | Switch tool, in rail order |
 | `+` / `-` · `0` | Zoom in / out · fit to screen |
 | `Cmd/Ctrl` + scroll or pinch · scroll · `Space`+drag (images) or middle-drag | Zoom at the pointer · pan when zoomed · pan |
+| `\` | Compare before and after (images) |
+| `[` / `]` (Liquify) | Smaller / larger brush |
 | `Enter` (Crop tab) · `Space` (video) | Apply crop · play/pause |
 
 Hover a rail button for its name and key. Past the preview's own resolution
@@ -344,17 +366,25 @@ the stage magnifies (crop handles and mask gizmos keep their size), and the
 zoom controls at the foot of the stage show the scale, with **Fit** and
 **1:1** (one image pixel per CSS pixel).
 
-Plus a **side-by-side compare view** — the labeled Compare button splits the
-canvas into bordered "Original" and "Edited" panels (the original comes from
-the pristine buffer once edits have been committed); click again to go back
-to the single canvas. Videos keep the momentary hold-to-compare gesture. **Reset** clears
-all edits, and **toasts** announce rejected files (the `file:rejected` event
-still fires for custom handling).
+Every slider shows its value as a field you can type into (`↑`/`↓` step it,
+Shift for ten); a dot marks a slider that's off neutral, and double-clicking
+the label or the track resets it. The inspector's **Reset** clears the active
+tool's edits; the top bar's **Reset all** clears every edit.
+
+**Compare** (or `\`) lays a before/after divider across the photo: drag the
+grip, or move it with the arrow keys. Left of it is the photo without its
+look edits (tone, color, filters, effects, masks, liquify), still framed the
+same way, so the two sides line up even when zoomed. Once edits have been
+committed, the before is the pristine original; if a committed crop or turn
+means it can't line up, Compare shows "Original" and "Edited" side by side
+instead. Videos keep the momentary hold-to-compare gesture. **Toasts**
+announce rejected files (the `file:rejected` event still fires for custom
+handling).
 
 **Done commits the edits.** Pressing Done on an image bakes the edits into
 the image itself — the entry's file and pixels become the edited version, and
 its controls read neutral on the next visit. The pristine original stays in a
-buffer on the entry, so **Reset** always brings it back, even across several
+buffer on the entry, so **Reset all** always brings it back, even across several
 Done rounds or destructive ML tools (erase, face pixelate). `image:commit`
 and `image:restore` events fire around the swap, and
 `restoreOriginal(id)` does it programmatically. Prefer the classic
@@ -459,8 +489,9 @@ Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `ShellTheme`, `MediaEntr
 `VideoEntry`, `MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `TrimRange`,
 `EditMask`, `FilterPreset`, `AspectRatioPreset`, `Orientation`, `GalleryViewMode`, `EditorTool`,
 `BuiltinEditorTool`, `ImageExportOptions`, `GifExportOptions`, `GifLoopMode`, `FileRejectionReason`, `AiOptions`, `AiRequest`,
-`AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolGroup`, `ToolPaneHandle`, `ToolUi`, `UiSlider`,
-`UiSliderOptions`, `UiButton`, `UiButtonOptions`, `UiChoice`, `UiChoiceOptions`, `UiNote`.
+`AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolGroup`, `ToolPaneHandle`, `PreviewEdits`,
+`ToolUi`, `UiSlider`, `UiSliderOptions`, `UiButton`, `UiButtonOptions`, `UiChoice`,
+`UiChoiceOptions`, `UiTiles`, `UiTilesOptions`, `UiTileOption`, `UiNote`.
 
 <br />
 
