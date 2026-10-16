@@ -143,23 +143,32 @@ export const ICON_DOWNLOAD = icon(
 export const ICON_EDIT = icon('<path d="M16.5 3.5a2.121 2.121 0 013 3L7.5 19l-4 1 1-4z"/>');
 export const ICON_REMOVE = ICON_CLOSE;
 export const ICON_PLAY_BADGE = ICON_PLAY;
+/** Choose files: an open folder (nothing leaves the device, so no cloud). */
+export const ICON_FOLDER = icon(
+  '<path d="M3.5 18V6.5a2 2 0 012-2h3.6l2 2.5h7.4a2 2 0 012 2V10"/><path d="M3.5 18l2.4-6.6a1.5 1.5 0 011.4-1h13.2a1 1 0 01.9 1.3L19.2 18a1.5 1.5 0 01-1.4 1H5a1.5 1.5 0 01-1.5-1z"/>',
+);
+/** Paste: a clipboard. */
+export const ICON_PASTE = icon(
+  '<path d="M15.5 4.5h1.5a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2v-12a2 2 0 012-2h1.5"/><rect x="8.5" y="3" width="7" height="3.5" rx="1.2"/>',
+);
 
 // View-mode pictograms: solid bars read crisper than outlines at 16px.
 const bar = (x: number, y: number, w: number, h: number, r: number): string =>
   `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="currentColor" stroke="none"/>`;
 
-export const ICON_VIEW_COLS_2 = icon(bar(3.5, 4.5, 7.5, 15, 1.5) + bar(13, 4.5, 7.5, 15, 1.5));
-export const ICON_VIEW_COLS_3 = icon(
-  bar(3.5, 4.5, 4.6, 15, 1.3) + bar(9.7, 4.5, 4.6, 15, 1.3) + bar(15.9, 4.5, 4.6, 15, 1.3),
+/** Justified rows: frames of different widths, one height per row. */
+export const ICON_VIEW_ROWS = icon(
+  bar(3.5, 5, 9, 6, 1.3) +
+    bar(14, 5, 6.5, 6, 1.3) +
+    bar(3.5, 13, 5.5, 6, 1.3) +
+    bar(10.5, 13, 10, 6, 1.3),
 );
-export const ICON_VIEW_COLS_4 = icon(
-  bar(3.5, 4.5, 3.2, 15, 1.1) +
-    bar(8.1, 4.5, 3.2, 15, 1.1) +
-    bar(12.7, 4.5, 3.2, 15, 1.1) +
-    bar(17.3, 4.5, 3.2, 15, 1.1),
+/** Square crops in a grid. */
+export const ICON_VIEW_GRID = icon(
+  bar(4, 4, 7, 7, 1.4) + bar(13, 4, 7, 7, 1.4) + bar(4, 13, 7, 7, 1.4) + bar(13, 13, 7, 7, 1.4),
 );
-export const ICON_VIEW_WIDTH_FIT = icon(bar(3.5, 6.5, 17, 11, 1.5));
-export const ICON_VIEW_HEIGHT_FIT = icon(bar(3.5, 6.5, 9.5, 11, 1.5) + bar(15, 6.5, 5.5, 11, 1.5));
+/** A filmstrip of tall frames running off the edge. */
+export const ICON_VIEW_STRIP = icon(bar(3.5, 6.5, 9.5, 11, 1.5) + bar(15, 6.5, 5.5, 11, 1.5));
 export const ICON_VIEW_LIST = icon(
   bar(3.5, 4.5, 17, 3, 1.5) + bar(3.5, 10.5, 17, 3, 1.5) + bar(3.5, 16.5, 17, 3, 1.5),
 );

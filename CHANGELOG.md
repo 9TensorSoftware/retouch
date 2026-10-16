@@ -56,6 +56,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - A rail taller than the screen fades at the end with more to scroll; short screens get a denser
   rail.
 - Transparent pixels show as a checkerboard in the editor.
+- A new drop zone: a stack of prints that fans out when files are dragged over, the accepted
+  formats, and **Choose files** and **Paste** buttons. ⌘/Ctrl+V adds pasted images while the drop
+  zone or gallery is up and nothing else on the page has focus.
+- The gallery is a contact sheet: justified rows at true aspect ratios (the new default layout),
+  frame numbers, an Edited badge and video lengths. Layouts are Rows, Grid (square crops),
+  Filmstrip and List, remembered per browser. Frames can be selected (the circle, ⌘/Ctrl-click,
+  Shift to extend, ⌘/Ctrl+A, Esc to clear) and downloaded or removed together; a selection is
+  circled like a grease pencil on a contact sheet. `GalleryViewMode` adds `"rows"` and `"grid"`.
+- Removing from the gallery offers Undo for a few seconds. The removal fires `images:remove` at
+  once, and Undo fires `images:add` for the entries it puts back, in their old places.
+- The export sheet shows every file's thumbnail with a ring that fills as it exports, a check or a
+  mark when it's done, one bar for the run, the time left, and Cancel (or Esc). It opens straight
+  away for runs with video and after 400 ms for images, so quick runs don't flash it.
+- Toasts take a detail line and one action, pause while pointed at or focused, and stack three at
+  most.
 
 ### Changed
 
@@ -82,6 +97,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - The Transform straighten slider moves in 0.1° steps.
 - `@retouchjs/ml` panes are built with `ctx.ui`, so they follow the editor's design; status text is
   rewritten in plain language.
+- Rejected files make one toast per batch ("3 files couldn't be added · 2 unsupported · 1 too
+  large") instead of one each, and a single rejection says what would have worked. Failed exports
+  make one toast per run, named for the file, and say the original went out instead.
+- The 0.1 gallery layouts open as their nearest new one: `"cols-2"`, `"cols-3"` and `"cols-4"` as the
+  grid, `"width-fit"` as rows.
+- In the gallery and drop zone, every control is 44 px on touch screens.
+- `downloadImage()` falls back to the original file when an image fails to export, as `exportAll()`
+  does, instead of rejecting.
 
 ### Fixed
 
@@ -91,6 +114,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   host resets still can't restyle them.
 - Setting only `--rt-accent` no longer leaves terracotta-tinted washes behind.
 - Side-by-side compare showed the original larger than the edited image; both now fit the same.
+- The gallery kept neither its layout nor its scroll position when it re-rendered after an edit
+  or an added file; it keeps both now, and the selection too.
 
 ## [0.1.0] — 2026-09-19
 
