@@ -1,4 +1,10 @@
-import { createSection, createSegmented, createTiles } from "../src/ui/editor/controls";
+import {
+  createCard,
+  createSection,
+  createSegmented,
+  createSteps,
+  createTiles,
+} from "../src/ui/editor/controls";
 import { createRuler } from "../src/ui/editor/ruler";
 
 describe("createSection", () => {
@@ -139,5 +145,62 @@ describe("createRuler", () => {
     expect(onChange).toHaveBeenLastCalledWith(3);
     tape.dispatchEvent(new MouseEvent("dblclick"));
     expect(ruler.value).toBe(0);
+  });
+});
+
+describe("createCard", () => {
+  it("lays out the description, facts, and a body for controls", () => {
+    const card = createCard({
+      description: "Removes the background.",
+      facts: [
+        ["Model", "MODNet"],
+        ["Download", "25 MB, once, then saved"],
+      ],
+    });
+    expect(card.root.querySelector(".rt-card__desc")?.textContent).toBe("Removes the background.");
+    const dts = [...card.root.querySelectorAll("dt")].map((d) => d.textContent);
+    expect(dts).toEqual(["Model", "Download"]);
+    card.setFact("Download", "Saved on this device");
+    card.setFact("Runs on", "This device · WebGPU");
+    expect([...card.root.querySelectorAll("dd")].map((d) => d.textContent)).toEqual([
+      "MODNet",
+      "Saved on this device",
+      "This device · WebGPU",
+    ]);
+    expect(card.root.contains(card.body)).toBe(true);
+  });
+});
+
+describe("createSteps", () => {
+  it("moves each step through its states and announces the changes", () => {
+    const steps = createSteps({
+      label: "Progress",
+      steps: [
+        { label: "Download the model", detail: "25 MB" },
+        { label: "Find the subject" },
+        { label: "Add to your gallery" },
+      ],
+    });
+    const rows = [...steps.root.querySelectorAll<HTMLElement>(".rt-step")];
+    const announcer = steps.root.querySelector("[aria-live]") as HTMLElement;
+    expect(rows.map((r) => r.dataset.state)).toEqual(["waiting", "waiting", "waiting"]);
+
+    steps.set(0, "active", { detail: "5 MB of 25 MB", progress: 0.2 });
+    const bar = rows[0].querySelector(".rt-step__bar") as HTMLElement;
+    expect(bar.hidden).toBe(false);
+    expect((bar.firstElementChild as HTMLElement).style.width).toBe("20%");
+    expect(rows[0].querySelector(".rt-step__detail")?.textContent).toBe("5 MB of 25 MB");
+    expect(announcer.textContent).toBe("Download the model: started");
+
+    steps.set(0, "done", { detail: "25 MB" });
+    expect(bar.hidden).toBe(true);
+    expect(rows[0].querySelector(".rt-step__mark svg")).not.toBeNull();
+    steps.set(1, "failed");
+    expect(rows[1].dataset.state).toBe("failed");
+    expect(announcer.textContent).toBe("Find the subject: failed");
+
+    steps.reset();
+    expect(rows.map((r) => r.dataset.state)).toEqual(["waiting", "waiting", "waiting"]);
+    expect(rows[0].querySelector(".rt-step__detail")?.textContent).toBe("25 MB");
   });
 });

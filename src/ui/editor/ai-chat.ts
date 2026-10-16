@@ -2,10 +2,22 @@ import type { AiOptions } from "../../types";
 import { h } from "../h";
 import { ICON_CLOSE, ICON_SEND, ICON_SPARKLE } from "../icons";
 
+/** What an applied AI command reports back to the chat. */
+export interface AiReply {
+  /** The model's one-line account of what it did. */
+  explanation: string;
+  /** Short labels for what changed ("Contrast +15", "Crop"). */
+  changes: string[];
+  /** Take the change back; false when other edits came after it. */
+  undo?: () => boolean;
+}
+
 export interface AiChatOptions {
   ai: AiOptions;
-  /** Runs the command; resolves with the applied-ops explanation. */
-  onSubmit: (prompt: string) => Promise<string>;
+  /** Runs the command and applies it. */
+  onSubmit: (prompt: string) => Promise<AiReply>;
+  /** One-tap prompts shown above the input. */
+  suggestions?: string[];
 }
 
 export interface AiChatHandle {
@@ -67,9 +79,28 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
   const empty = h(
     "div",
     { class: "rt-ai__empty" },
-    "Describe an edit — “moody and cinematic, crop to a square”. Follow-ups refine it.",
+    "Describe an edit — “moody and cinematic, crop to a square”. Each one lands as a single step you can undo, and follow-ups refine it.",
   );
   messages.appendChild(empty);
+
+  // One-tap prompts: a way in for people who don't know what to ask.
+  const suggestions = h("div", {
+    class: "rt-ai__suggestions",
+    role: "group",
+    "aria-label": "Suggestions",
+  });
+  for (const text of options.suggestions ?? []) {
+    const chip = h("button", { type: "button", class: "rt-ai__suggestion" }, text);
+    chip.addEventListener(
+      "click",
+      () => {
+        input.value = text;
+        void submit();
+      },
+      { signal },
+    );
+    suggestions.appendChild(chip);
+  }
 
   const input = h("input", {
     type: "text",
@@ -85,7 +116,14 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
   sendBtn.innerHTML = SEND_ICON;
   const form = h("div", { class: "rt-ai__form" }, input, sendBtn);
 
-  const panel = h("div", { class: "rt-ai__panel" }, header, messages, form);
+  const panel = h(
+    "div",
+    { class: "rt-ai__panel" },
+    header,
+    messages,
+    ...(options.suggestions?.length ? [suggestions] : []),
+    form,
+  );
   const root = h("div", { class: "rt-ai" }, panel, trigger);
 
   function addMessage(kind: "user" | "assistant" | "error" | "busy", text: string): HTMLElement {
@@ -230,6 +268,44 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
     keyInput.focus();
   }
 
+  // ── Change cards: what the AI did, and a way back ──
+
+  function changeCard(reply: AiReply): HTMLElement {
+    const card = h(
+      "div",
+      { class: "rt-ai__msg rt-ai__msg--assistant rt-ai__card" },
+      h("p", { class: "rt-ai__card-text" }, reply.explanation),
+    );
+    if (reply.changes.length) {
+      const deltas = h("ul", { class: "rt-ai__deltas", "aria-label": "Changes" });
+      for (const change of reply.changes) deltas.appendChild(h("li", null, change));
+      card.appendChild(deltas);
+    }
+    if (reply.undo) {
+      const undo = h("button", { type: "button", class: "rt-ai__undo" }, "Undo");
+      undo.addEventListener(
+        "click",
+        () => {
+          if (reply.undo?.()) {
+            card.classList.add("rt-ai__card--undone");
+            undo.replaceWith(h("span", { class: "rt-ai__undone" }, "Undone"));
+          } else {
+            undo.replaceWith(
+              h(
+                "span",
+                { class: "rt-ai__undone" },
+                "Other edits came after this one; step back with Undo or the history.",
+              ),
+            );
+          }
+        },
+        { signal },
+      );
+      card.appendChild(undo);
+    }
+    return card;
+  }
+
   // ── Submit ──
 
   async function submit(): Promise<void> {
@@ -246,9 +322,8 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
     const pending = addMessage("busy", "Thinking…");
     input.value = "";
     try {
-      const explanation = await options.onSubmit(prompt);
-      pending.textContent = explanation;
-      pending.className = "rt-ai__msg rt-ai__msg--assistant";
+      const reply = await options.onSubmit(prompt);
+      pending.replaceWith(changeCard(reply));
     } catch (err) {
       pending.textContent = err instanceof Error ? err.message.replace("[Retouch] ", "") : "Failed";
       pending.className = "rt-ai__msg rt-ai__msg--error";

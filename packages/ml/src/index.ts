@@ -65,7 +65,7 @@ export {
   type Region,
   strokesBoundingBox,
 } from "./inpaint";
-export { clearModelCache, type FetchProgress, fetchModel } from "./model-cache";
+export { clearModelCache, type FetchProgress, fetchModel, isModelCached } from "./model-cache";
 export { installMlTools, type MlToolsOptions } from "./plugin";
 export { enqueueInference } from "./queue";
 export {

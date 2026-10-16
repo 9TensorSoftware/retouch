@@ -35,6 +35,15 @@ export interface ToolContext {
    * color and effect edits: adjustments, filter, curves, color mix, stylize.
    */
   preview(edits?: PreviewEdits): string;
+  /**
+   * Wipe a new version of the photo in over the stage, with the photo's
+   * current look — how a tool shows its result just before committing it
+   * (replacing the pixels, or opening the new image). Resolves when the wipe
+   * ends; call the function it resolves with to take the result back off if
+   * you don't commit. Instant under reduced motion, and skipped while a
+   * crop or warp means the result wouldn't line up.
+   */
+  reveal(result: HTMLCanvasElement | HTMLImageElement): Promise<() => void>;
 }
 
 /** The edits `ctx.preview()` can show. */

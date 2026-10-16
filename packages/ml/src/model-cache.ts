@@ -90,6 +90,23 @@ async function fetchModelUncached(
   return buffer;
 }
 
+/**
+ * True when every file in `urls` is already saved on this device, so a run
+ * needs no download. False when any is missing — or when the Cache API is
+ * unavailable (private windows), since the run will download then.
+ */
+export async function isModelCached(urls: readonly string[]): Promise<boolean> {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    for (const url of urls) {
+      if (!(await cache.match(url))) return false;
+    }
+    return urls.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Drop every cached model (frees storage; next run re-downloads). */
 export async function clearModelCache(): Promise<void> {
   try {

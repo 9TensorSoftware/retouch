@@ -37,6 +37,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   from `ctx.ui.slider()` take `track` and `parse`.
 - A brush ring for Liquify and the ML package's Erase, sized to the brush; `[` and `]` resize the
   Liquify brush.
+- AI tools explain themselves before they cost anything. `@retouchjs/ml` panes open on a card with
+  the model, its download size and where it runs; the run button names the download ("Download
+  208 MB and erase") until the model is saved; Select asks before downloading instead of starting
+  on a click; runs show download, run and save steps, with a progress bar; and results wipe in
+  over the photo. Without `openResults`, a finished gallery result offers "Open it".
+- Ask AI replies are cards listing what they set ("Contrast +15", "Warm filter") with an Undo for
+  exactly that step, and suggestion chips sit above the input.
+- Plugin kit: `ctx.ui.card()`, `ctx.ui.steps()`, `button({ variant: "ai" })`, slider
+  `ariaLabel` and `fillFrom`, and `ctx.reveal(result)` to wipe a result in before committing it (types `UiCard`,
+  `UiCardOptions`, `UiSteps`, `UiStepsOptions`, `UiStep`, `UiStepState`).
+- `@retouchjs/ml`: `isModelCached(urls)`.
+- Transparent pixels show as a checkerboard in the editor.
 
 ### Changed
 
@@ -61,6 +73,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   on each row, and all six local sliders visible.
 - `ctx.ui.section()` returns a titled group whose controls stack, matching the built-in sections.
 - The Transform straighten slider moves in 0.1° steps.
+- `@retouchjs/ml` panes are built with `ctx.ui`, so they follow the editor's design; status text is
+  rewritten in plain language.
 
 ### Fixed
 

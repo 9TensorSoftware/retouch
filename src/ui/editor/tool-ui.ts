@@ -1,5 +1,6 @@
 import { h } from "../h";
-import { createSection, createTiles } from "./controls";
+import { ICON_SPARKLE } from "../icons";
+import { createCard, createSection, createSteps, createTiles } from "./controls";
 import { createSlider } from "./slider";
 
 type Content = Node | string;
@@ -7,6 +8,8 @@ type Content = Node | string;
 /** Options for `ctx.ui.slider()`. */
 export interface UiSliderOptions {
   label: string;
+  /** Accessible name, when the visible label alone is ambiguous ("Aperture strength"). */
+  ariaLabel?: string;
   min: number;
   max: number;
   /** Defaults to 1. */
@@ -18,6 +21,8 @@ export interface UiSliderOptions {
    * to 0 when the range spans zero, otherwise `min`.
    */
   neutral?: number;
+  /** Where the fill starts, when that isn't `neutral` (a brush size resting at 6 still fills from its minimum). */
+  fillFrom?: number;
   /**
    * A track that shows what the slider does, as a CSS image — e.g.
    * `"linear-gradient(90deg, #3f86ff, #ffa53a)"` for a cool-to-warm control.
@@ -48,8 +53,11 @@ export interface UiSlider {
 export interface UiButtonOptions {
   label: string;
   onClick: () => void;
-  /** "primary" marks the pane's main action. */
-  variant?: "default" | "primary";
+  /**
+   * "primary" marks the pane's main action; "ai" marks one that runs a model
+   * on this device (the prism ring, with a sparkle).
+   */
+  variant?: "default" | "primary" | "ai";
   /** Give it a pressed state (and make it a toggle for assistive tech). */
   active?: boolean;
   disabled?: boolean;
@@ -83,6 +91,49 @@ export interface UiChoice<T extends string> {
 export interface UiNote {
   root: HTMLElement;
   set(text: string): void;
+}
+
+/** Options for `ctx.ui.card()`. */
+export interface UiCardOptions {
+  /** What the tool does, and where its result goes. */
+  description?: string;
+  /** Label–value rows: the model, what it downloads, where it runs. */
+  facts?: ReadonlyArray<readonly [label: string, value: string]>;
+}
+
+export interface UiCard {
+  root: HTMLElement;
+  /** Where the card's own controls go (a run button, steps). */
+  body: HTMLElement;
+  /** Change a fact's value (or add the fact), e.g. once a model is saved. */
+  setFact(label: string, value: string): void;
+}
+
+/** One line of `ctx.ui.steps()`. */
+export interface UiStep {
+  label: string;
+  /** A note on the right: a size, a time, where the result goes. */
+  detail?: string;
+}
+
+export type UiStepState = "waiting" | "active" | "done" | "failed";
+
+/** Options for `ctx.ui.steps()`. */
+export interface UiStepsOptions {
+  /** Names the list for assistive tech. */
+  label: string;
+  steps: ReadonlyArray<UiStep>;
+}
+
+export interface UiSteps {
+  root: HTMLElement;
+  /**
+   * Mark a step. While it's active, `progress` (0–1) shows a bar; `detail`
+   * replaces its note. State changes are announced to screen readers.
+   */
+  set(index: number, state: UiStepState, update?: { detail?: string; progress?: number }): void;
+  /** Every step back to waiting, with its original note. */
+  reset(): void;
 }
 
 /** One tile for `ctx.ui.tiles()`. */
@@ -137,6 +188,13 @@ export interface ToolUi {
   note(text: string): UiNote;
   /** Preview tiles to choose between, like the built-in Filters. */
   tiles<T extends string>(options: UiTilesOptions<T>): UiTiles<T>;
+  /**
+   * A card for an AI tool: what it does, then facts such as the model, its
+   * download size and where it runs, so nobody starts a download blind.
+   */
+  card(options: UiCardOptions): UiCard;
+  /** A run's steps (download, run, save), each waiting, active, done or failed. */
+  steps(options: UiStepsOptions): UiSteps;
 }
 
 /** Listeners are bound to `signal`, so they go away with the editor. */
@@ -160,7 +218,16 @@ export function createToolUi(signal?: AbortSignal): ToolUi {
     },
 
     button(options) {
-      const root = h("button", { type: "button", class: "rt-dock__chip" }, options.label);
+      const root = h("button", { type: "button", class: "rt-dock__chip" });
+      // The "ai" variant leads with a sparkle; its label lives beside it.
+      let labelEl: HTMLElement = root;
+      if (options.variant === "ai") {
+        root.classList.add("rt-dock__chip--ai");
+        root.innerHTML = ICON_SPARKLE;
+        labelEl = h("span", { class: "rt-dock__chip-label" });
+        root.appendChild(labelEl);
+      }
+      labelEl.textContent = options.label;
       if (options.variant === "primary") root.classList.add("rt-dock__chip--primary");
       if (options.title) root.title = options.title;
       root.disabled = options.disabled ?? false;
@@ -173,7 +240,7 @@ export function createToolUi(signal?: AbortSignal): ToolUi {
       return {
         root,
         setLabel: (label) => {
-          root.textContent = label;
+          labelEl.textContent = label;
         },
         setActive,
         setDisabled: (disabled) => {
@@ -225,6 +292,10 @@ export function createToolUi(signal?: AbortSignal): ToolUi {
     },
 
     tiles: (options) => createTiles(options, signal),
+
+    card: (options) => createCard(options),
+
+    steps: (options) => createSteps(options),
 
     note(text) {
       const root = h(

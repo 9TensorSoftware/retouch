@@ -1,16 +1,38 @@
-import {
-  type EditMask,
-  type ImageEdits,
-  type Retouch,
-  refreshRangeFill,
-  type ToolContext,
+import type {
+  EditMask,
+  ImageEdits,
+  Retouch,
+  ToolContext,
+  UiCard,
+  UiNote,
+  UiStep,
+  UiSteps,
 } from "@retouchjs/core";
 import { KEEP_RGB, ON_KEEP, rgba } from "./colors";
-import { applyMatteAlpha, type CutoutOptions, removeBackground } from "./cutout";
-import { type DenoiseOptions, denoiseImage } from "./denoise";
-import { composeBokeh, type DepthOptions, depthAt, estimateDepth, prepareBokeh } from "./depth";
+import {
+  applyMatteAlpha,
+  type CutoutOptions,
+  DEFAULT_CUTOUT_MODEL_URL,
+  removeBackground,
+} from "./cutout";
+import {
+  DEFAULT_DENOISE_DATA_URL,
+  DEFAULT_DENOISE_MODEL_URL,
+  type DenoiseOptions,
+  denoiseImage,
+} from "./denoise";
+import {
+  composeBokeh,
+  DEFAULT_DEPTH_MODEL_URL,
+  type DepthOptions,
+  depthAt,
+  estimateDepth,
+  prepareBokeh,
+} from "./depth";
 import { createDepthSurface } from "./depth-tool";
 import {
+  DEFAULT_FACE_MODEL_URL,
+  DEFAULT_OBJECT_MODEL_URL,
   type DetectFacesOptions,
   type Detection,
   type DetectObjectsOptions,
@@ -27,11 +49,25 @@ import {
   SELECT_ICON,
   UPSCALE_ICON,
 } from "./icons";
-import { dilateMask, type InpaintOptions, inpaintMask, inpaintStrokes } from "./inpaint";
-import type { FetchProgress } from "./model-cache";
-import { decodeSamClicks, encodeSamImage, type SamOptions, type SamPoint } from "./sam";
+import {
+  DEFAULT_INPAINT_MODEL_URL,
+  dilateMask,
+  type InpaintOptions,
+  inpaintMask,
+  inpaintStrokes,
+} from "./inpaint";
+import { type FetchProgress, isModelCached } from "./model-cache";
+import {
+  DEFAULT_SAM_DECODER_URL,
+  DEFAULT_SAM_ENCODER_URL,
+  decodeSamClicks,
+  encodeSamImage,
+  type SamEmbeddings,
+  type SamOptions,
+  type SamPoint,
+} from "./sam";
 import { createSelectSurface } from "./select-tool";
-import { type UpscaleOptions, upscaleImage } from "./upscale";
+import { DEFAULT_UPSCALE_MODEL_URL, type UpscaleOptions, upscaleImage } from "./upscale";
 
 export interface MlToolsOptions {
   cutout?: CutoutOptions | false;
@@ -48,32 +84,126 @@ export interface MlToolsOptions {
   openResults?: boolean;
 }
 
-interface RunPaneParts {
-  root: HTMLElement;
-  status: HTMLElement;
-  button: HTMLButtonElement;
+// ── Models: what each tool downloads, and how that's said ────────────────
+
+interface ModelSpec {
+  /** The card's Model fact. */
+  name: string;
+  /** Every file a run downloads; all must be saved to skip the download. */
+  urls: string[];
+  /** The default files' total size in MB; null for self-hosted models. */
+  mb: number | null;
 }
 
-function buildRunPane(hint: string, action: string): RunPaneParts {
-  const root = document.createElement("div");
-  root.className = "rt-dock__row";
-  const status = buildStatus(hint);
-  const button = document.createElement("button");
-  button.className = "rt-dock__chip rt-dock__chip--primary";
-  button.textContent = action;
-  root.appendChild(status);
-  root.appendChild(button);
-  return { root, status, button };
+/** Self-hosted URLs make the size unknown; the defaults' sizes are known. */
+function spec(
+  name: string,
+  mb: number,
+  files: Array<[custom: string | undefined, fallback: string]>,
+): ModelSpec {
+  const urls = files.map(([custom, fallback]) => custom ?? fallback);
+  const custom = files.some(([url]) => url !== undefined);
+  return { name, urls, mb: custom ? null : mb };
 }
 
-/** Status line: announced politely so model progress reaches screen readers. */
-function buildStatus(text = ""): HTMLElement {
-  const status = document.createElement("span");
-  status.className = "rt-dock__slider-label rt-dock__status";
-  status.setAttribute("aria-live", "polite");
-  status.textContent = text;
-  return status;
+function formatMb(bytes: number): string {
+  const mb = bytes / 1e6;
+  return `${mb >= 10 ? Math.round(mb) : mb.toFixed(1)} MB`;
 }
+
+function downloadFact(model: ModelSpec, cached: boolean): string {
+  if (cached) return "Saved on this device";
+  return model.mb === null ? "Once, then saved" : `${model.mb} MB, once, then saved`;
+}
+
+/** The run button names the download until the model is saved: nobody starts one blind. */
+function actionLabel(action: string, model: ModelSpec, cached: boolean): string {
+  if (cached) return action;
+  const rest = action[0].toLowerCase() + action.slice(1);
+  return model.mb === null ? `Download and ${rest}` : `Download ${model.mb} MB and ${rest}`;
+}
+
+function runsOn(): string {
+  const gpu = typeof navigator !== "undefined" && "gpu" in navigator;
+  return gpu ? "This device · WebGPU" : "This device · WebAssembly";
+}
+
+/**
+ * A model-backed pane's card: what the tool does, then the model, its
+ * download and where it runs. `onCached` fires once the cache check
+ * resolves (and again after each run), so labels can drop the size.
+ */
+function modelCard(
+  ctx: ToolContext,
+  model: ModelSpec,
+  description: string,
+  onCached: (cached: boolean) => void,
+): { card: UiCard; refresh(): Promise<boolean>; cached(): boolean } {
+  let cached = false;
+  const card = ctx.ui.card({
+    description,
+    facts: [
+      ["Model", model.name],
+      ["Download", downloadFact(model, false)],
+      ["Runs on", runsOn()],
+    ],
+  });
+  async function refresh(): Promise<boolean> {
+    cached = await isModelCached(model.urls);
+    card.setFact("Download", downloadFact(model, cached));
+    onCached(cached);
+    return cached;
+  }
+  void refresh();
+  return { card, refresh, cached: () => cached };
+}
+
+/**
+ * Feed download progress into step 0. A completed file (or the single
+ * event a cache hit sends) hands over to the run step.
+ */
+function trackDownload(
+  steps: UiSteps,
+  forward?: (progress: FetchProgress) => void,
+): (progress: FetchProgress) => void {
+  return (p) => {
+    if (p.total > 0 && p.loaded >= p.total) {
+      steps.set(0, "done", { detail: formatMb(p.total) });
+      steps.set(1, "active");
+    } else {
+      steps.set(0, "active", {
+        detail: p.total > 0 ? `${formatMb(p.loaded)} of ${formatMb(p.total)}` : formatMb(p.loaded),
+        progress: p.total > 0 ? p.loaded / p.total : undefined,
+      });
+    }
+    forward?.(p);
+  };
+}
+
+/** Start a run's steps: the download is done already when the model is saved. */
+function beginSteps(steps: UiSteps, cached: boolean): void {
+  steps.reset();
+  if (cached) {
+    steps.set(0, "done", { detail: "Saved" });
+    steps.set(1, "active");
+  } else {
+    steps.set(0, "active", { detail: "Starting…", progress: 0 });
+  }
+}
+
+/** Mark whichever step was running as failed. */
+function failSteps(steps: UiSteps): void {
+  const failed = steps.root.querySelector('[data-state="active"]');
+  const index = failed ? [...steps.root.querySelectorAll(".rt-step")].indexOf(failed) : 1;
+  steps.set(Math.max(0, index), "failed");
+}
+
+function errorText(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  return message ? `${fallback}: ${message.replace(/^\[Retouch ML\]\s*/, "")}` : fallback;
+}
+
+// ── Canvas helpers ────────────────────────────────────────────────────────
 
 /**
  * Erase strokes map 1:1 onto the source only while no geometric edit
@@ -99,6 +229,9 @@ function geometryIsNeutral(edits: ImageEdits): boolean {
       (edits.liquify.dx.every((v) => v === 0) && edits.liquify.dy.every((v) => v === 0)))
   );
 }
+
+const NEEDS_FRAME =
+  "This works on the uncropped, unturned photo. Reset Crop, Transform and Liquify first.";
 
 /** Non-interactive overlay that outlines detected boxes over the preview. */
 function createBoxOverlay(canvasArea: HTMLElement): {
@@ -200,39 +333,6 @@ function resultFileName(sourceName: string, suffix: string, type: string): strin
   return `${base}-${suffix}.${type === "image/png" ? "png" : "jpg"}`;
 }
 
-// Guards runs across editor remounts: a pane's local busy flag dies with
-// the pane, but the underlying run keeps going.
-const activeRuns = new Set<string>();
-
-/**
- * Download-progress → status text. The last progress event (and the single
- * event a cache hit emits) flips to "Processing" — the model is running,
- * not downloading, and on WASM that phase can take a while.
- */
-function downloadStatus(
-  status: HTMLElement,
-  forward?: (progress: FetchProgress) => void,
-): (progress: FetchProgress) => void {
-  return (p) => {
-    if (p.total > 0 && p.loaded >= p.total) {
-      status.textContent = "Processing on-device… (first run can take a while)";
-    } else {
-      const pct = p.total > 0 ? ` ${Math.round((p.loaded / p.total) * 100)}%` : "";
-      status.textContent = `Downloading model…${pct}`;
-    }
-    forward?.(p);
-  };
-}
-
-/** Show a just-added gallery entry in the editor so the result is visible. */
-function openLatestResult(retouch: Retouch): void {
-  const media = retouch.getMedia();
-  const latest = media[media.length - 1];
-  if (!latest) return;
-  retouch.closeEditor(true);
-  retouch.openEditor(latest.id);
-}
-
 function encodeCanvas(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -243,6 +343,10 @@ function encodeCanvas(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
   });
 }
 
+// Guards runs across editor remounts: a pane's local busy flag dies with
+// the pane, but the underlying run keeps going.
+const activeRuns = new Set<string>();
+
 /**
  * Register the ML feature groups on the editor. Call once, before opening
  * the editor. The instance is needed so results (new images) can land in
@@ -250,9 +354,134 @@ function encodeCanvas(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
  */
 export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): void {
   const ctor = retouch.constructor as typeof Retouch;
+  const openResults = options.openResults !== false;
+
+  /** The entry's own format: JPEG stays JPEG, everything else keeps alpha as PNG. */
+  const typeOf = (ctx: ToolContext): string =>
+    ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
+
+  /** Wipe the result in, then replace this photo's pixels with it (the editor remounts). */
+  async function replacePhoto(ctx: ToolContext, result: HTMLCanvasElement): Promise<void> {
+    const type = typeOf(ctx);
+    const [blob] = await Promise.all([encodeCanvas(result, type), ctx.reveal(result)]);
+    await retouch.replaceImageSource(ctx.entry.id, new File([blob], ctx.entry.file.name, { type }));
+  }
+
+  /**
+   * Add a result to the gallery. With openResults it wipes in and the editor
+   * moves to it; otherwise the last step offers a link to it.
+   */
+  async function addToGallery(
+    ctx: ToolContext,
+    result: HTMLCanvasElement,
+    suffix: string,
+    type: string,
+    note: UiNote,
+    steps?: UiSteps,
+  ): Promise<void> {
+    const reveal = openResults ? ctx.reveal(result) : Promise.resolve(() => {});
+    const blob = await encodeCanvas(result, type);
+    const name = resultFileName(ctx.entry.file.name, suffix, type);
+    const before = retouch.getMedia().length;
+    await retouch.addFiles([new File([blob], name, { type })]);
+    const media = retouch.getMedia();
+    const added = media.length > before ? media[media.length - 1] : undefined;
+    const putBack = await reveal;
+    if (!added) {
+      putBack();
+      steps?.set(2, "failed", { detail: "not added" });
+      note.set("The gallery turned the result down, most likely over its size limit.");
+      return;
+    }
+    steps?.set(2, "done", { detail: "Added" });
+    if (openResults) {
+      retouch.closeEditor(true);
+      retouch.openEditor(added.id);
+      return;
+    }
+    note.set(`${name} is in your gallery.`);
+    const open = ctx.ui.button({
+      label: "Open it",
+      onClick: () => {
+        retouch.closeEditor(true);
+        retouch.openEditor(added.id);
+      },
+    });
+    note.root.after(ctx.ui.row(open.root));
+  }
+
+  /**
+   * A one-button tool (cutout, upscale, denoise): card, run button, steps.
+   * `run` does the work and reports tiles; `finish` commits the result.
+   */
+  function oneShot(
+    ctx: ToolContext,
+    def: {
+      id: string;
+      model: ModelSpec;
+      description: string;
+      action: string;
+      steps: [UiStep, UiStep, UiStep];
+      run(hooks: {
+        download: (p: FetchProgress) => void;
+        tile: (done: number, total: number) => void;
+      }): Promise<HTMLCanvasElement>;
+      finish(result: HTMLCanvasElement, steps: UiSteps, note: UiNote): Promise<void>;
+      failure(error: unknown): string;
+    },
+  ) {
+    const note = ctx.ui.note("");
+    const steps = ctx.ui.steps({ label: "Progress", steps: def.steps });
+    steps.root.hidden = true;
+    let busy = false;
+    const button = ctx.ui.button({
+      label: actionLabel(def.action, def.model, false),
+      variant: "ai",
+      onClick: () => void start(),
+    });
+    const { card, refresh, cached } = modelCard(ctx, def.model, def.description, (isCached) =>
+      button.setLabel(actionLabel(def.action, def.model, isCached)),
+    );
+
+    async function start(): Promise<void> {
+      if (busy || activeRuns.has(def.id) || ctx.entry.kind !== "image") return;
+      busy = true;
+      activeRuns.add(def.id);
+      button.setDisabled(true);
+      note.set("");
+      steps.root.hidden = false;
+      beginSteps(steps, cached());
+      try {
+        const result = await def.run({
+          download: trackDownload(steps),
+          tile: (done, total) =>
+            steps.set(1, "active", { detail: `tile ${done} of ${total}`, progress: done / total }),
+        });
+        steps.set(0, "done", { detail: cached() ? "Saved" : undefined });
+        steps.set(1, "done");
+        steps.set(2, "active");
+        await def.finish(result, steps, note);
+      } catch (error) {
+        failSteps(steps);
+        note.set(def.failure(error));
+        console.error(error);
+      } finally {
+        busy = false;
+        activeRuns.delete(def.id);
+        button.setDisabled(false);
+        void refresh();
+      }
+    }
+
+    card.body.append(button.root, steps.root, note.root);
+    return { root: card.root };
+  }
+
+  // ── Cutout ──
 
   if (options.cutout !== false) {
     const cutoutOptions = options.cutout ?? {};
+    const model = spec("MODNet", 25, [[cutoutOptions.modelUrl, DEFAULT_CUTOUT_MODEL_URL]]);
     ctor.registerTool({
       id: "cutout",
       label: "Cutout",
@@ -262,46 +491,40 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "25 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
-        const hint = "On-device background removal — the result is added as a new image";
-        const { root, status, button } = buildRunPane(hint, "Remove background");
-        let busy = false;
-        button.addEventListener("click", async () => {
-          if (busy || activeRuns.has("cutout") || ctx.entry.kind !== "image") return;
-          busy = true;
-          activeRuns.add("cutout");
-          button.disabled = true;
-          try {
-            status.textContent = "Preparing model…";
-            const result = await removeBackground(ctx.entry.image, {
-              ...cutoutOptions,
-              onDownloadProgress: downloadStatus(status, cutoutOptions.onDownloadProgress),
-            });
-            status.textContent = "Compositing…";
-            const blob = await encodeCanvas(result, "image/png");
-            const name = resultFileName(ctx.entry.file.name, "cutout", "image/png");
-            const before = retouch.getMedia().length;
-            await retouch.addFiles([new File([blob], name, { type: "image/png" })]);
-            const added = retouch.getMedia().length > before;
-            status.textContent = added
-              ? "Done — cutout added to the gallery"
-              : "The result was rejected — likely over the size limit";
-            if (added && options.openResults !== false) openLatestResult(retouch);
-          } catch (error) {
-            status.textContent = "Cutout failed — check the console for details";
-            console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("cutout");
-            button.disabled = false;
-          }
+        return oneShot(ctx, {
+          id: "cutout",
+          model,
+          description:
+            "Finds the subject and cuts it out. The cutout lands in your gallery as a new image; this photo stays as it is.",
+          action: "Remove the background",
+          steps: [
+            { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
+            { label: "Find the subject", detail: "on this device" },
+            { label: "Add to your gallery", detail: "new image" },
+          ],
+          run: ({ download }) =>
+            ctx.entry.kind === "image"
+              ? removeBackground(ctx.entry.image, {
+                  ...cutoutOptions,
+                  onDownloadProgress: (p) => {
+                    download(p);
+                    cutoutOptions.onDownloadProgress?.(p);
+                  },
+                })
+              : Promise.reject(new Error("Cutout needs an image")),
+          finish: (result, steps, note) =>
+            addToGallery(ctx, result, "cutout", "image/png", note, steps),
+          failure: (error) => errorText(error, "Cutout failed"),
         });
-        return { root };
       },
     });
   }
 
+  // ── Erase ──
+
   if (options.erase !== false) {
     const eraseOptions = options.erase ?? {};
+    const model = spec("LaMa", 208, [[eraseOptions.modelUrl, DEFAULT_INPAINT_MODEL_URL]]);
     ctor.registerTool({
       id: "erase",
       label: "Erase",
@@ -311,101 +534,85 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "208 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
-        const root = document.createElement("div");
-        root.className = "rt-dock__row";
-        const status = buildStatus();
-
-        const sizeLabel = document.createElement("span");
-        sizeLabel.className = "rt-dock__slider-label";
-        sizeLabel.textContent = "Brush";
-        const sizeInput = document.createElement("input");
-        sizeInput.type = "range";
-        sizeInput.min = "2";
-        sizeInput.max = "20";
-        sizeInput.value = "6";
-        sizeInput.setAttribute("aria-label", "Brush size");
-        const sizeValue = document.createElement("span");
-        sizeValue.className = "rt-dock__slider-value";
-        sizeValue.textContent = sizeInput.value;
-        refreshRangeFill(sizeInput);
-
-        const clearBtn = document.createElement("button");
-        clearBtn.className = "rt-dock__chip";
-        clearBtn.textContent = "Clear";
-        const runBtn = document.createElement("button");
-        runBtn.className = "rt-dock__chip rt-dock__chip--primary";
-        runBtn.textContent = "Erase";
-
-        const surface = createEraseSurface(ctx.canvasArea, () => {
-          const has = surface.hasStrokes();
-          runBtn.disabled = !has || !geometryIsNeutral(ctx.edits as ImageEdits);
-          clearBtn.disabled = !has;
+        const note = ctx.ui.note("");
+        const steps = ctx.ui.steps({
+          label: "Progress",
+          steps: [
+            { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
+            { label: "Fill it in", detail: "on this device" },
+            { label: "Replace this photo", detail: "Reset all undoes it" },
+          ],
         });
+        steps.root.hidden = true;
+        let busy = false;
+
+        const brush = ctx.ui.slider({
+          label: "Brush",
+          min: 2,
+          max: 20,
+          value: 6,
+          neutral: 6,
+          fillFrom: 2,
+          format: (v) => `${v}%`,
+          onInput: (v) => surface.setBrush(v / 100),
+        });
+        const clear = ctx.ui.button({ label: "Clear", onClick: () => surface.clear() });
+        const run = ctx.ui.button({
+          label: actionLabel("Erase", model, false),
+          variant: "ai",
+          onClick: () => void start(),
+        });
+        const { card, refresh, cached } = modelCard(
+          ctx,
+          model,
+          "Paint over what should go, then Erase fills it in from its surroundings. It replaces this photo's pixels; Reset all brings the original back.",
+          (isCached) => run.setLabel(actionLabel("Erase", model, isCached)),
+        );
+
+        const surface = createEraseSurface(ctx.canvasArea, () => syncState());
         surface.setBrush(0.06);
 
         function syncState(): void {
           const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
-          status.textContent = neutral
-            ? "Paint over what to remove, then hit Erase — replaces this image"
-            : "Erase needs the un-transformed image — reset crop/transform/liquify first";
-          runBtn.disabled = !surface.hasStrokes() || !neutral;
-          clearBtn.disabled = !surface.hasStrokes();
+          if (!busy) note.set(neutral ? "" : NEEDS_FRAME);
+          run.setDisabled(busy || !surface.hasStrokes() || !neutral);
+          clear.setDisabled(busy || !surface.hasStrokes());
         }
-        syncState();
 
-        sizeInput.addEventListener("input", () => {
-          sizeValue.textContent = sizeInput.value;
-          refreshRangeFill(sizeInput);
-          surface.setBrush(Number(sizeInput.value) / 100);
-        });
-        clearBtn.addEventListener("click", () => surface.clear());
-
-        let busy = false;
-        runBtn.addEventListener("click", async () => {
+        async function start(): Promise<void> {
           if (busy || activeRuns.has("erase") || ctx.entry.kind !== "image") return;
           if (!surface.hasStrokes() || !geometryIsNeutral(ctx.edits as ImageEdits)) return;
           busy = true;
           activeRuns.add("erase");
-          runBtn.disabled = true;
-          clearBtn.disabled = true;
+          syncState();
+          steps.root.hidden = false;
+          beginSteps(steps, cached());
           try {
-            status.textContent = "Preparing model…";
             const result = await inpaintStrokes(ctx.entry.image, surface.getStrokes(), {
               ...eraseOptions,
-              onDownloadProgress: downloadStatus(status, eraseOptions.onDownloadProgress),
+              onDownloadProgress: trackDownload(steps, eraseOptions.onDownloadProgress),
             });
-            status.textContent = "Compositing…";
-            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
-            const blob = await encodeCanvas(result, type);
-            // In place: the entry keeps its identity, the pixels change.
-            // replaceImageSource remounts the editor, which rebuilds this pane.
-            await retouch.replaceImageSource(
-              ctx.entry.id,
-              new File([blob], ctx.entry.file.name, { type }),
-            );
+            steps.set(1, "done");
+            steps.set(2, "active");
+            // In place: the entry keeps its identity, the pixels change, and
+            // the editor remounts (rebuilding this pane).
+            await replacePhoto(ctx, result);
           } catch (error) {
-            status.textContent = "Erase failed — check the console for details";
+            failSteps(steps);
+            note.set(errorText(error, "Erase failed"));
             console.error(error);
           } finally {
             busy = false;
             activeRuns.delete("erase");
-            clearBtn.disabled = !surface.hasStrokes();
-            runBtn.disabled = !surface.hasStrokes() || !geometryIsNeutral(ctx.edits as ImageEdits);
+            syncState();
+            void refresh();
           }
-        });
+        }
 
-        const sizeGroup = document.createElement("div");
-        sizeGroup.className = "rt-dock__group rt-dock__slider";
-        sizeGroup.appendChild(sizeLabel);
-        sizeGroup.appendChild(sizeInput);
-        sizeGroup.appendChild(sizeValue);
-
-        root.appendChild(status);
-        root.appendChild(sizeGroup);
-        root.appendChild(clearBtn);
-        root.appendChild(runBtn);
+        card.body.append(brush.root, ctx.ui.row(clear.root, run.root), steps.root, note.root);
+        syncState();
         return {
-          root,
+          root: card.root,
           onActivate() {
             surface.setVisible(true);
             syncState();
@@ -413,9 +620,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           onDeactivate() {
             surface.setVisible(false);
           },
-          sync() {
-            syncState();
-          },
+          sync: syncState,
           destroy() {
             surface.destroy();
           },
@@ -424,8 +629,16 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     });
   }
 
+  // ── Select ──
+
   if (options.select !== false) {
     const selectOptions = options.select ?? {};
+    const model = spec("SlimSAM", 38, [
+      [selectOptions.encoderUrl, DEFAULT_SAM_ENCODER_URL],
+      [selectOptions.decoderUrl, DEFAULT_SAM_DECODER_URL],
+    ]);
+    const eraseModel = options.erase !== false ? options.erase : undefined;
+    const fillModel = spec("LaMa", 208, [[eraseModel?.modelUrl, DEFAULT_INPAINT_MODEL_URL]]);
     ctor.registerTool({
       id: "select",
       label: "Select",
@@ -435,62 +648,77 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "38 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
-        const root = document.createElement("div");
-        root.className = "rt-dock__row";
-        const status = buildStatus();
+        const note = ctx.ui.note("");
+        const steps = ctx.ui.steps({
+          label: "Getting ready",
+          steps: [
+            { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
+            { label: "Read the photo", detail: "on this device" },
+          ],
+        });
+        steps.root.hidden = true;
 
-        const addBtn = document.createElement("button");
-        addBtn.className = "rt-dock__chip rt-dock__chip--active";
-        addBtn.textContent = "+ Add";
-        addBtn.setAttribute("aria-pressed", "true");
-        const subBtn = document.createElement("button");
-        subBtn.className = "rt-dock__chip";
-        subBtn.textContent = "− Subtract";
-        subBtn.setAttribute("aria-pressed", "false");
-        const cutBtn = document.createElement("button");
-        cutBtn.className = "rt-dock__chip";
-        cutBtn.textContent = "Cut out";
-        const eraseBtn = document.createElement("button");
-        eraseBtn.className = "rt-dock__chip";
-        eraseBtn.textContent = "Erase object";
-        const clearBtn = document.createElement("button");
-        clearBtn.className = "rt-dock__chip";
-        clearBtn.textContent = "Clear";
-
-        let subtractMode = false;
         let points: SamPoint[] = [];
         let mask: HTMLCanvasElement | null = null;
+        let embeddings: SamEmbeddings | null = null;
         let busy = false;
 
-        function setMode(subtract: boolean): void {
-          subtractMode = subtract;
-          addBtn.classList.toggle("rt-dock__chip--active", !subtract);
-          addBtn.setAttribute("aria-pressed", String(!subtract));
-          subBtn.classList.toggle("rt-dock__chip--active", subtract);
-          subBtn.setAttribute("aria-pressed", String(subtract));
-        }
-        addBtn.addEventListener("click", () => setMode(false));
-        subBtn.addEventListener("click", () => setMode(true));
+        // Clicking the photo would start a 38 MB download; until the model
+        // is saved, that waits behind an explicit button.
+        const prepare = ctx.ui.button({
+          label: actionLabel("Start selecting", model, false),
+          variant: "ai",
+          onClick: () => void ready(),
+        });
+        const mode = ctx.ui.choice({
+          label: "Click mode",
+          options: [
+            { value: "add", label: "Add" },
+            { value: "subtract", label: "Subtract" },
+          ],
+          value: "add",
+          onChange: () => {},
+        });
+        const cut = ctx.ui.button({ label: "Cut out", onClick: () => void cutOut() });
+        const eraseIt = ctx.ui.button({
+          label: actionLabel("Erase it", fillModel, false),
+          onClick: () => void eraseObject(),
+        });
+        const clear = ctx.ui.button({ label: "Clear", onClick: () => clearSelection() });
+        const actions = ctx.ui.row(mode.root);
+        const results = ctx.ui.row(cut.root, eraseIt.root, clear.root);
+
+        const { card, refresh, cached } = modelCard(
+          ctx,
+          model,
+          "Click an object to select it; click again to add to it, or switch to Subtract. Cut it out as a new image, or erase it from this photo.",
+          () => syncState(),
+        );
+        void isModelCached(fillModel.urls).then((saved) =>
+          eraseIt.setLabel(actionLabel("Erase it", fillModel, saved)),
+        );
 
         function syncState(): void {
           const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
-          if (!neutral) {
-            status.textContent =
-              "Select needs the un-transformed image — reset crop/transform/liquify first";
-          } else if (busy) {
-            // status text is being driven by the run
-          } else if (mask) {
-            status.textContent = "Selection ready — click to refine, or pick an action";
-          } else {
-            status.textContent = "Click an object to select it (shift-click removes)";
-          }
+          const armed = embeddings !== null || cached();
+          prepare.root.hidden = armed;
+          prepare.setLabel(actionLabel("Start selecting", model, cached()));
+          prepare.setDisabled(busy || !neutral);
+          actions.hidden = !armed;
+          results.hidden = !armed;
           const usable = neutral && mask !== null && !busy;
-          cutBtn.disabled = !usable;
-          eraseBtn.disabled = !usable;
-          clearBtn.disabled = points.length === 0 || busy;
+          cut.setDisabled(!usable);
+          eraseIt.setDisabled(!usable);
+          clear.setDisabled(points.length === 0 || busy);
+          if (busy) return;
+          if (!neutral) note.set(NEEDS_FRAME);
+          else if (!armed) note.set("");
+          else if (mask) note.set("Selected. Click to refine it, or pick what to do with it.");
+          else note.set("Click an object in the photo.");
         }
 
         function clearSelection(): void {
+          if (busy) return;
           points = [];
           mask = null;
           surface.setPoints(points);
@@ -498,31 +726,61 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           syncState();
         }
 
+        /** Download (if needed) and encode the photo, so clicks only decode. */
+        async function ready(): Promise<SamEmbeddings | null> {
+          if (embeddings) return embeddings;
+          if (ctx.entry.kind !== "image") return null;
+          busy = true;
+          activeRuns.add("select");
+          syncState();
+          steps.root.hidden = false;
+          beginSteps(steps, cached());
+          note.set("");
+          try {
+            embeddings = await encodeSamImage(ctx.entry.image, {
+              ...selectOptions,
+              onDownloadProgress: trackDownload(steps, selectOptions.onDownloadProgress),
+            });
+            steps.set(0, "done", { detail: cached() ? "Saved" : undefined });
+            steps.set(1, "done");
+            return embeddings;
+          } catch (error) {
+            failSteps(steps);
+            note.set(errorText(error, "Select couldn't start"));
+            console.error(error);
+            return null;
+          } finally {
+            busy = false;
+            activeRuns.delete("select");
+            void refresh();
+            syncState();
+          }
+        }
+
         const surface = createSelectSurface(ctx.canvasArea, (x, y, shiftKey) => {
           if (busy || activeRuns.has("select") || ctx.entry.kind !== "image") return;
           if (!geometryIsNeutral(ctx.edits as ImageEdits)) return;
-          points.push({ x, y, label: shiftKey || subtractMode ? 0 : 1 });
+          if (!embeddings && !cached()) {
+            note.set(`Start selecting first: it downloads the model (${model.mb ?? "?"} MB) once.`);
+            return;
+          }
+          points.push({ x, y, label: shiftKey || mode.value === "subtract" ? 0 : 1 });
           surface.setPoints(points);
           void refine();
         });
 
         async function refine(): Promise<void> {
-          if (ctx.entry.kind !== "image") return;
+          const ready_ = await ready();
+          if (!ready_) return;
           busy = true;
           activeRuns.add("select");
-          syncState();
+          note.set("Selecting…");
           try {
-            status.textContent = "Preparing model…";
-            const embeddings = await encodeSamImage(ctx.entry.image, {
-              ...selectOptions,
-              onDownloadProgress: downloadStatus(status, selectOptions.onDownloadProgress),
-            });
-            status.textContent = "Segmenting…";
-            const result = await decodeSamClicks(embeddings, points, selectOptions);
+            const result = await decodeSamClicks(ready_, points, selectOptions);
             mask = result.mask;
             surface.setMask(mask);
           } catch (error) {
-            status.textContent = "Select failed — check the console for details";
+            note.set(errorText(error, "Select failed"));
             console.error(error);
           } finally {
             busy = false;
@@ -531,17 +789,13 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           }
         }
 
-        clearBtn.addEventListener("click", () => {
-          if (!busy) clearSelection();
-        });
-
-        cutBtn.addEventListener("click", async () => {
-          if (cutBtn.disabled || busy || !mask || ctx.entry.kind !== "image") return;
+        async function cutOut(): Promise<void> {
+          if (busy || !mask || ctx.entry.kind !== "image") return;
           busy = true;
           activeRuns.add("select");
           syncState();
+          note.set("Cutting out…");
           try {
-            status.textContent = "Compositing…";
             const image = ctx.entry.image;
             const out = document.createElement("canvas");
             out.width = image.naturalWidth;
@@ -549,42 +803,30 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             const outCtx = out.getContext("2d");
             if (!outCtx) throw new Error("[Retouch ML] Failed to create canvas context");
             outCtx.drawImage(image, 0, 0);
-            const outImage = outCtx.getImageData(0, 0, out.width, out.height);
+            const pixels = outCtx.getImageData(0, 0, out.width, out.height);
             const maskCtx = mask.getContext("2d");
             if (!maskCtx) throw new Error("[Retouch ML] Failed to read the mask");
-            applyMatteAlpha(outImage.data, maskCtx.getImageData(0, 0, out.width, out.height).data);
-            outCtx.putImageData(outImage, 0, 0);
-            const blob = await encodeCanvas(out, "image/png");
-            const name = resultFileName(ctx.entry.file.name, "cutout", "image/png");
-            const before = retouch.getMedia().length;
-            await retouch.addFiles([new File([blob], name, { type: "image/png" })]);
-            const added = retouch.getMedia().length > before;
-            status.textContent = added
-              ? "Done — cutout added to the gallery"
-              : "The result was rejected — likely over the size limit";
-            if (added) {
-              clearSelection();
-              if (options.openResults !== false) openLatestResult(retouch);
-            }
+            applyMatteAlpha(pixels.data, maskCtx.getImageData(0, 0, out.width, out.height).data);
+            outCtx.putImageData(pixels, 0, 0);
+            await addToGallery(ctx, out, "cutout", "image/png", note);
           } catch (error) {
-            status.textContent = "Cut out failed — check the console for details";
+            note.set(errorText(error, "Cut out failed"));
             console.error(error);
           } finally {
             busy = false;
             activeRuns.delete("select");
             syncState();
           }
-        });
+        }
 
-        eraseBtn.addEventListener("click", async () => {
-          if (eraseBtn.disabled || busy || !mask || ctx.entry.kind !== "image") return;
-          if (activeRuns.has("erase")) return;
+        async function eraseObject(): Promise<void> {
+          if (busy || !mask || ctx.entry.kind !== "image" || activeRuns.has("erase")) return;
           busy = true;
           activeRuns.add("select");
           activeRuns.add("erase");
           syncState();
+          note.set("Erasing… (the first time downloads the fill model)");
           try {
-            status.textContent = "Preparing model…";
             const image = ctx.entry.image;
             const maskCtx = mask.getContext("2d");
             if (!maskCtx) throw new Error("[Retouch ML] Failed to read the mask");
@@ -604,23 +846,22 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             dilatedCanvas
               .getContext("2d")
               ?.putImageData(new ImageData(dilated, mask.width, mask.height), 0, 0);
-            // The inpaint model honors a self-hosted `erase` URL when set.
-            const eraseModel = options.erase !== false ? options.erase : undefined;
             const result = await inpaintMask(image, dilatedCanvas, {
               ...selectOptions,
+              // The inpaint model honors a self-hosted `erase` URL when set.
               modelUrl: eraseModel?.modelUrl,
-              onDownloadProgress: downloadStatus(status, selectOptions.onDownloadProgress),
+              onDownloadProgress: (p) => {
+                if (p.total > 0 && p.loaded < p.total) {
+                  note.set(
+                    `Downloading the fill model… ${formatMb(p.loaded)} of ${formatMb(p.total)}`,
+                  );
+                } else note.set("Erasing…");
+                selectOptions.onDownloadProgress?.(p);
+              },
             });
-            status.textContent = "Compositing…";
-            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
-            const blob = await encodeCanvas(result, type);
-            // In place — replaceImageSource remounts the editor and this pane.
-            await retouch.replaceImageSource(
-              ctx.entry.id,
-              new File([blob], ctx.entry.file.name, { type }),
-            );
+            await replacePhoto(ctx, result);
           } catch (error) {
-            status.textContent = "Erase failed — check the console for details";
+            note.set(errorText(error, "Erase failed"));
             console.error(error);
           } finally {
             busy = false;
@@ -628,17 +869,12 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             activeRuns.delete("erase");
             syncState();
           }
-        });
+        }
 
+        card.body.append(prepare.root, actions, results, steps.root, note.root);
         syncState();
-        root.appendChild(status);
-        root.appendChild(addBtn);
-        root.appendChild(subBtn);
-        root.appendChild(cutBtn);
-        root.appendChild(eraseBtn);
-        root.appendChild(clearBtn);
         return {
-          root,
+          root: card.root,
           onActivate() {
             surface.setVisible(true);
             syncState();
@@ -646,9 +882,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           onDeactivate() {
             surface.setVisible(false);
           },
-          sync() {
-            syncState();
-          },
+          sync: syncState,
           destroy() {
             surface.destroy();
           },
@@ -657,8 +891,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     });
   }
 
+  // ── Depth ──
+
   if (options.depth !== false) {
     const depthOptions = options.depth ?? {};
+    const model = spec("Depth Anything V2", 27, [[depthOptions.modelUrl, DEFAULT_DEPTH_MODEL_URL]]);
     ctor.registerTool({
       id: "depth",
       label: "Depth",
@@ -668,153 +905,147 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "27 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
-        const root = document.createElement("div");
-        root.className = "rt-dock__row";
-        const status = buildStatus();
-
-        const analyzeBtn = document.createElement("button");
-        analyzeBtn.className = "rt-dock__chip";
-        analyzeBtn.textContent = "Analyze depth";
-        const apertureLabel = document.createElement("span");
-        apertureLabel.className = "rt-dock__slider-label";
-        apertureLabel.textContent = "Aperture";
-        const apertureInput = document.createElement("input");
-        apertureInput.type = "range";
-        apertureInput.min = "10";
-        apertureInput.max = "100";
-        apertureInput.value = "60";
-        apertureInput.setAttribute("aria-label", "Aperture strength");
-        const apertureValue = document.createElement("span");
-        apertureValue.className = "rt-dock__slider-value";
-        apertureValue.textContent = apertureInput.value;
-        refreshRangeFill(apertureInput);
-        const applyBtn = document.createElement("button");
-        applyBtn.className = "rt-dock__chip rt-dock__chip--primary";
-        applyBtn.textContent = "Apply";
-        const clearBtn = document.createElement("button");
-        clearBtn.className = "rt-dock__chip";
-        clearBtn.textContent = "Clear";
+        const note = ctx.ui.note("");
+        const steps = ctx.ui.steps({
+          label: "Progress",
+          steps: [
+            { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
+            { label: "Measure the depth", detail: "on this device" },
+            { label: "Click what stays sharp" },
+          ],
+        });
+        steps.root.hidden = true;
 
         let prep: ReturnType<typeof prepareBokeh> | null = null;
-        let depthMapRef: Awaited<ReturnType<typeof estimateDepth>> | null = null;
+        let depthMap: Awaited<ReturnType<typeof estimateDepth>> | null = null;
         let focus = 0.75;
         let busy = false;
 
+        const analyze = ctx.ui.button({
+          label: actionLabel("Measure depth", model, false),
+          variant: "ai",
+          onClick: () => void measure(),
+        });
+        const aperture = ctx.ui.slider({
+          label: "Aperture",
+          ariaLabel: "Aperture strength",
+          min: 10,
+          max: 100,
+          value: 60,
+          neutral: 60,
+          fillFrom: 10,
+          format: (v) => `${v}%`,
+          onInput: () => recompose(),
+        });
+        const apply = ctx.ui.button({
+          label: "Apply",
+          variant: "primary",
+          onClick: () => void applyBlur(),
+        });
+        const clear = ctx.ui.button({ label: "Clear", onClick: () => clearPreview() });
+        const tune = ctx.ui.row(apply.root, clear.root);
+
+        const { card, refresh, cached } = modelCard(
+          ctx,
+          model,
+          "Measures how far away everything is, then blurs the background like a wide aperture. Click what should stay sharp; Apply replaces this photo's pixels.",
+          (isCached) => analyze.setLabel(actionLabel("Measure depth", model, isCached)),
+        );
+
         function syncState(): void {
           const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
-          if (!neutral) {
-            status.textContent =
-              "Depth needs the un-transformed image — reset crop/transform/liquify first";
-          } else if (busy) {
-            // run drives the status
-          } else if (prep) {
-            status.textContent = "Click to focus, tune Aperture, then Apply";
-          } else {
-            status.textContent = "Analyze the photo, then click what should stay sharp";
-          }
-          analyzeBtn.disabled = busy || !neutral;
-          applyBtn.disabled = busy || !prep || !neutral;
-          clearBtn.disabled = busy || !prep;
-          apertureInput.disabled = !prep;
+          analyze.setDisabled(busy || !neutral);
+          analyze.root.hidden = prep !== null;
+          aperture.root.hidden = prep === null;
+          tune.hidden = prep === null;
+          apply.setDisabled(busy || !prep || !neutral);
+          clear.setDisabled(busy || !prep);
+          if (busy) return;
+          if (!neutral) note.set(NEEDS_FRAME);
+          else if (prep) note.set("Click what should stay sharp, tune Aperture, then Apply.");
+          else note.set("");
         }
 
         function recompose(): void {
-          if (!prep) return;
-          surface.setPreview(composeBokeh(prep, focus, Number(apertureInput.value) / 100));
+          if (prep) surface.setPreview(composeBokeh(prep, focus, aperture.value / 100));
+        }
+
+        function clearPreview(): void {
+          if (busy) return;
+          prep = null;
+          surface.setPreview(null);
+          steps.root.hidden = true;
+          syncState();
         }
 
         const surface = createDepthSurface(ctx.canvasArea, (x, y) => {
-          if (!prep || !depthMapRef || busy) return;
-          focus = depthAt(depthMapRef, x, y);
+          if (!prep || !depthMap || busy) return;
+          focus = depthAt(depthMap, x, y);
           recompose();
-          status.textContent = "Focus set — tune Aperture, then Apply";
+          steps.set(2, "done", { detail: "focus set" });
         });
 
-        analyzeBtn.addEventListener("click", async () => {
+        async function measure(): Promise<void> {
           if (busy || activeRuns.has("depth") || ctx.entry.kind !== "image") return;
           if (!geometryIsNeutral(ctx.edits as ImageEdits)) return;
           busy = true;
           activeRuns.add("depth");
           syncState();
+          steps.root.hidden = false;
+          beginSteps(steps, cached());
+          note.set("");
           try {
-            status.textContent = "Preparing model…";
-            depthMapRef = await estimateDepth(ctx.entry.image, {
+            depthMap = await estimateDepth(ctx.entry.image, {
               ...depthOptions,
-              onDownloadProgress: downloadStatus(status, depthOptions.onDownloadProgress),
+              onDownloadProgress: trackDownload(steps, depthOptions.onDownloadProgress),
             });
-            status.textContent = "Preparing preview…";
             await new Promise((r) => setTimeout(r, 0));
-            prep = prepareBokeh(ctx.entry.image, depthMapRef, 1280);
+            prep = prepareBokeh(ctx.entry.image, depthMap, 1280);
             recompose();
+            steps.set(0, "done", { detail: cached() ? "Saved" : undefined });
+            steps.set(1, "done");
+            steps.set(2, "active");
           } catch (error) {
-            status.textContent = "Depth analysis failed — check the console for details";
+            failSteps(steps);
+            note.set(errorText(error, "Measuring depth failed"));
             console.error(error);
           } finally {
             busy = false;
             activeRuns.delete("depth");
             syncState();
+            void refresh();
           }
-        });
+        }
 
-        apertureInput.addEventListener("input", () => {
-          apertureValue.textContent = apertureInput.value;
-          refreshRangeFill(apertureInput);
-          recompose();
-        });
-
-        clearBtn.addEventListener("click", () => {
-          if (busy) return;
-          prep = null;
-          surface.setPreview(null);
-          syncState();
-        });
-
-        applyBtn.addEventListener("click", async () => {
-          if (applyBtn.disabled || busy || !depthMapRef || ctx.entry.kind !== "image") return;
+        async function applyBlur(): Promise<void> {
+          if (busy || !depthMap || ctx.entry.kind !== "image") return;
           busy = true;
           activeRuns.add("depth");
           syncState();
+          note.set("Rendering at full resolution…");
           try {
-            status.textContent = "Rendering at full resolution…";
             await new Promise((r) => setTimeout(r, 0));
             const image = ctx.entry.image;
-            const fullPrep = prepareBokeh(
+            const full = prepareBokeh(
               image,
-              depthMapRef,
+              depthMap,
               Math.max(image.naturalWidth, image.naturalHeight),
             );
-            const result = composeBokeh(fullPrep, focus, Number(apertureInput.value) / 100);
-            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
-            const blob = await encodeCanvas(result, type);
-            // In place — replaceImageSource remounts the editor and this pane.
-            await retouch.replaceImageSource(
-              ctx.entry.id,
-              new File([blob], ctx.entry.file.name, { type }),
-            );
+            await replacePhoto(ctx, composeBokeh(full, focus, aperture.value / 100));
           } catch (error) {
-            status.textContent = "Apply failed — check the console for details";
+            note.set(errorText(error, "Apply failed"));
             console.error(error);
           } finally {
             busy = false;
             activeRuns.delete("depth");
             syncState();
           }
-        });
+        }
 
+        card.body.append(analyze.root, aperture.root, tune, steps.root, note.root);
         syncState();
-        const apertureGroup = document.createElement("div");
-        apertureGroup.className = "rt-dock__group rt-dock__slider";
-        apertureGroup.appendChild(apertureLabel);
-        apertureGroup.appendChild(apertureInput);
-        apertureGroup.appendChild(apertureValue);
-
-        root.appendChild(status);
-        root.appendChild(analyzeBtn);
-        root.appendChild(apertureGroup);
-        root.appendChild(applyBtn);
-        root.appendChild(clearBtn);
         return {
-          root,
+          root: card.root,
           onActivate() {
             surface.setVisible(true);
             syncState();
@@ -822,9 +1053,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           onDeactivate() {
             surface.setVisible(false);
           },
-          sync() {
-            syncState();
-          },
+          sync: syncState,
           destroy() {
             surface.destroy();
           },
@@ -833,8 +1062,15 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     });
   }
 
+  // ── Detect ──
+
   if (options.detect !== false) {
     const detectOptions = options.detect ?? {};
+    const objectOptions = detectOptions.objects ?? {};
+    const faceModel = spec("UltraFace", 1.2, [[detectOptions.modelUrl, DEFAULT_FACE_MODEL_URL]]);
+    const objectModel = spec("YOLOX-nano", 3.5, [
+      [objectOptions.modelUrl, DEFAULT_OBJECT_MODEL_URL],
+    ]);
     ctor.registerTool({
       id: "detect",
       label: "Detect",
@@ -844,99 +1080,108 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "5 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
-        const root = document.createElement("div");
-        root.className = "rt-dock__row";
-        const status = buildStatus();
-        status.textContent = "Find faces or objects on-device, then mask, pixelate, or crop";
-
-        const findBtn = document.createElement("button");
-        findBtn.className = "rt-dock__chip";
-        findBtn.textContent = "Find faces";
-        const objectsBtn = document.createElement("button");
-        objectsBtn.className = "rt-dock__chip";
-        objectsBtn.textContent = "Find objects";
-        const maskBtn = document.createElement("button");
-        maskBtn.className = "rt-dock__chip";
-        maskBtn.textContent = "Add masks";
-        const pixelateBtn = document.createElement("button");
-        pixelateBtn.className = "rt-dock__chip";
-        pixelateBtn.textContent = "Pixelate";
-        const cropBtn = document.createElement("button");
-        cropBtn.className = "rt-dock__chip";
-        cropBtn.textContent = "Crop to boxes";
-
+        const note = ctx.ui.note("");
         const overlay = createBoxOverlay(ctx.canvasArea);
-        let faces: Detection[] = [];
+        let found: Detection[] = [];
+        let busy = false;
 
-        function syncActions(): void {
-          const usable = faces.length > 0 && geometryIsNeutral(ctx.edits as ImageEdits);
-          maskBtn.disabled = !usable;
-          pixelateBtn.disabled = !usable;
-          cropBtn.disabled = !usable;
+        const card = ctx.ui.card({
+          description:
+            "Finds faces or objects, then adds a mask over each, pixelates them for privacy, or crops to them.",
+          facts: [
+            ["Models", "UltraFace (faces) · YOLOX-nano (objects)"],
+            [
+              "Download",
+              faceModel.mb !== null && objectModel.mb !== null
+                ? `${faceModel.mb} MB and ${objectModel.mb} MB, once, then saved`
+                : "Once, then saved",
+            ],
+            ["Runs on", runsOn()],
+          ],
+        });
+        void Promise.all([isModelCached(faceModel.urls), isModelCached(objectModel.urls)]).then(
+          ([faces, objects]) => {
+            if (faces && objects) card.setFact("Download", "Saved on this device");
+          },
+        );
+
+        const findFaces = ctx.ui.button({
+          label: "Find faces",
+          variant: "ai",
+          onClick: () => void find("faces"),
+        });
+        const findObjects = ctx.ui.button({
+          label: "Find objects",
+          variant: "ai",
+          onClick: () => void find("objects"),
+        });
+        const addMasks = ctx.ui.button({ label: "Add masks", onClick: () => maskThem() });
+        const pixelate = ctx.ui.button({ label: "Pixelate", onClick: () => void pixelateThem() });
+        const cropTo = ctx.ui.button({ label: "Crop to them", onClick: () => cropToThem() });
+        const actions = ctx.ui.row(addMasks.root, pixelate.root, cropTo.root);
+
+        function syncState(): void {
+          const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
+          findFaces.setDisabled(busy);
+          findObjects.setDisabled(busy);
+          actions.hidden = found.length === 0;
+          for (const b of [addMasks, pixelate, cropTo])
+            b.setDisabled(busy || !neutral || found.length === 0);
         }
-        syncActions();
 
-        findBtn.addEventListener("click", async () => {
-          if (activeRuns.has("detect") || ctx.entry.kind !== "image") return;
+        async function find(kind: "faces" | "objects"): Promise<void> {
+          if (busy || activeRuns.has("detect") || ctx.entry.kind !== "image") return;
+          busy = true;
           activeRuns.add("detect");
-          findBtn.disabled = true;
+          syncState();
+          note.set("Looking…");
           try {
-            status.textContent = "Detecting…";
-            faces = await detectFaces(ctx.entry.image, {
-              ...detectOptions,
-              onDownloadProgress: downloadStatus(status, detectOptions.onDownloadProgress),
-            });
-            overlay.draw(faces);
-            status.textContent =
-              faces.length === 0
-                ? "No faces found"
-                : `${faces.length} face${faces.length > 1 ? "s" : ""} found`;
-            if (faces.length > 0 && !geometryIsNeutral(ctx.edits as ImageEdits)) {
-              status.textContent += " — reset crop/transform to use the actions";
+            const progress = (p: FetchProgress): void => {
+              if (p.total > 0 && p.loaded < p.total) {
+                note.set(`Downloading the model… ${formatMb(p.loaded)} of ${formatMb(p.total)}`);
+              } else note.set("Looking…");
+            };
+            if (kind === "faces") {
+              found = await detectFaces(ctx.entry.image, {
+                ...detectOptions,
+                onDownloadProgress: (p) => {
+                  progress(p);
+                  detectOptions.onDownloadProgress?.(p);
+                },
+              });
+            } else {
+              found = await detectObjects(ctx.entry.image, {
+                ...objectOptions,
+                onDownloadProgress: (p) => {
+                  progress(p);
+                  objectOptions.onDownloadProgress?.(p);
+                },
+              });
+            }
+            overlay.draw(found);
+            const noun = kind === "faces" ? "face" : "object";
+            if (found.length === 0) {
+              note.set(`No ${noun}s found.`);
+            } else {
+              const labels = [...new Set(found.map((f) => f.label).filter(Boolean))];
+              const what = labels.length
+                ? `: ${labels.slice(0, 4).join(", ")}${labels.length > 4 ? "…" : ""}`
+                : ".";
+              note.set(`${found.length} ${noun}${found.length > 1 ? "s" : ""} found${what}`);
+              if (!geometryIsNeutral(ctx.edits as ImageEdits)) note.set(NEEDS_FRAME);
             }
           } catch (error) {
-            status.textContent = "Detection failed — check the console for details";
+            note.set(errorText(error, "Detection failed"));
             console.error(error);
           } finally {
+            busy = false;
             activeRuns.delete("detect");
-            findBtn.disabled = false;
-            syncActions();
+            syncState();
           }
-        });
+        }
 
-        objectsBtn.addEventListener("click", async () => {
-          if (activeRuns.has("detect") || ctx.entry.kind !== "image") return;
-          activeRuns.add("detect");
-          objectsBtn.disabled = true;
-          try {
-            status.textContent = "Detecting…";
-            const objectOptions = detectOptions.objects ?? {};
-            faces = await detectObjects(ctx.entry.image, {
-              ...objectOptions,
-              onDownloadProgress: downloadStatus(status, objectOptions.onDownloadProgress),
-            });
-            overlay.draw(faces);
-            const labels = [...new Set(faces.map((f) => f.label).filter(Boolean))];
-            status.textContent =
-              faces.length === 0
-                ? "No objects found"
-                : `${faces.length} object${faces.length > 1 ? "s" : ""}: ${labels.slice(0, 4).join(", ")}${labels.length > 4 ? "…" : ""}`;
-            if (faces.length > 0 && !geometryIsNeutral(ctx.edits as ImageEdits)) {
-              status.textContent += " — reset crop/transform to use the actions";
-            }
-          } catch (error) {
-            status.textContent = "Detection failed — check the console for details";
-            console.error(error);
-          } finally {
-            activeRuns.delete("detect");
-            objectsBtn.disabled = false;
-            syncActions();
-          }
-        });
-
-        maskBtn.addEventListener("click", () => {
-          if (maskBtn.disabled) return;
-          for (const f of faces) {
+        function maskThem(): void {
+          for (const f of found) {
             const mask: EditMask = {
               id:
                 typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -961,45 +1206,42 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           }
           ctx.render();
           ctx.record();
-          status.textContent = `Added ${faces.length} radial mask${faces.length > 1 ? "s" : ""} — tune them in the Masks tab`;
-        });
+          note.set(
+            `Added ${found.length} radial mask${found.length > 1 ? "s" : ""}. Tune them in Masks.`,
+          );
+        }
 
-        pixelateBtn.addEventListener("click", async () => {
-          if (pixelateBtn.disabled || activeRuns.has("detect") || ctx.entry.kind !== "image")
-            return;
+        async function pixelateThem(): Promise<void> {
+          if (busy || activeRuns.has("detect") || ctx.entry.kind !== "image") return;
+          busy = true;
           activeRuns.add("detect");
-          pixelateBtn.disabled = true;
+          syncState();
+          note.set("Pixelating…");
           try {
-            status.textContent = "Pixelating…";
             const canvas = document.createElement("canvas");
             canvas.width = ctx.entry.image.naturalWidth;
             canvas.height = ctx.entry.image.naturalHeight;
             const cctx = canvas.getContext("2d");
             if (!cctx) throw new Error("[Retouch ML] Failed to create canvas context");
             cctx.drawImage(ctx.entry.image, 0, 0);
-            for (const f of faces) pixelateRegion(canvas, f);
-            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
-            const blob = await encodeCanvas(canvas, type);
-            await retouch.replaceImageSource(
-              ctx.entry.id,
-              new File([blob], ctx.entry.file.name, { type }),
-            );
+            for (const f of found) pixelateRegion(canvas, f);
+            await replacePhoto(ctx, canvas);
           } catch (error) {
-            status.textContent = "Pixelate failed — check the console for details";
+            note.set(errorText(error, "Pixelate failed"));
             console.error(error);
           } finally {
+            busy = false;
             activeRuns.delete("detect");
-            syncActions();
+            syncState();
           }
-        });
+        }
 
-        cropBtn.addEventListener("click", () => {
-          if (cropBtn.disabled) return;
+        function cropToThem(): void {
           let x0 = 1;
           let y0 = 1;
           let x1 = 0;
           let y1 = 0;
-          for (const f of faces) {
+          for (const f of found) {
             x0 = Math.min(x0, f.x);
             y0 = Math.min(y0, f.y);
             x1 = Math.max(x1, f.x + f.w);
@@ -1015,28 +1257,22 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           ctx.render();
           ctx.record();
           overlay.draw([]);
-          faces = [];
-          syncActions();
-          status.textContent = "Cropped to the detected faces — undo to revert";
-        });
+          found = [];
+          syncState();
+          note.set("Cropped to what was found. Undo to go back.");
+        }
 
-        root.appendChild(status);
-        root.appendChild(findBtn);
-        root.appendChild(objectsBtn);
-        root.appendChild(maskBtn);
-        root.appendChild(pixelateBtn);
-        root.appendChild(cropBtn);
+        card.body.append(ctx.ui.row(findFaces.root, findObjects.root), actions, note.root);
+        syncState();
         return {
-          root,
+          root: card.root,
           onActivate() {
             overlay.setVisible(true);
           },
           onDeactivate() {
             overlay.setVisible(false);
           },
-          sync() {
-            syncActions();
-          },
+          sync: syncState,
           destroy() {
             overlay.destroy();
           },
@@ -1045,8 +1281,14 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     });
   }
 
+  // ── Upscale ──
+
   if (options.upscale !== false) {
     const upscaleOptions = options.upscale ?? {};
+    const model = spec("Real-ESRGAN ×4", 67, [
+      [upscaleOptions.modelUrl, DEFAULT_UPSCALE_MODEL_URL],
+    ]);
+    const maxEdge = upscaleOptions.maxInputDim ?? 2048;
     ctor.registerTool({
       id: "upscale",
       label: "Upscale",
@@ -1056,55 +1298,59 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "67 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
-        const hint = "On-device 4× super-resolution — the result is added as a new image";
-        const { root, status, button } = buildRunPane(hint, "Upscale 4×");
-        let busy = false;
-        button.addEventListener("click", async () => {
-          if (busy || activeRuns.has("upscale") || ctx.entry.kind !== "image") return;
-          busy = true;
-          activeRuns.add("upscale");
-          button.disabled = true;
-          try {
-            status.textContent = "Preparing model…";
-            const result = await upscaleImage(ctx.entry.image, {
-              ...upscaleOptions,
-              onDownloadProgress: downloadStatus(status, upscaleOptions.onDownloadProgress),
-              onTileProgress: (done, total) => {
-                status.textContent = `Upscaling… tile ${done}/${total}`;
-                upscaleOptions.onTileProgress?.(done, total);
-              },
-            });
-            status.textContent = "Encoding…";
-            // JPEG only for JPEG sources: everything else keeps alpha via PNG.
-            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
-            const blob = await encodeCanvas(result, type);
-            const name = resultFileName(ctx.entry.file.name, "upscaled", type);
-            const before = retouch.getMedia().length;
-            await retouch.addFiles([new File([blob], name, { type })]);
-            const added = retouch.getMedia().length > before;
-            status.textContent = added
-              ? "Done — upscaled image added to the gallery"
-              : "The result was rejected — likely over the size limit";
-            if (added && options.openResults !== false) openLatestResult(retouch);
-          } catch (error) {
+        return oneShot(ctx, {
+          id: "upscale",
+          model,
+          description: `Rebuilds the photo at four times the resolution (from up to ${maxEdge} px on the long edge). The result lands in your gallery as a new image.`,
+          action: "Upscale 4×",
+          steps: [
+            { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
+            { label: "Upscale", detail: "on this device" },
+            { label: "Add to your gallery", detail: "new image" },
+          ],
+          run: ({ download, tile }) =>
+            ctx.entry.kind === "image"
+              ? upscaleImage(ctx.entry.image, {
+                  ...upscaleOptions,
+                  onDownloadProgress: (p) => {
+                    download(p);
+                    upscaleOptions.onDownloadProgress?.(p);
+                  },
+                  onTileProgress: (done, total) => {
+                    tile(done, total);
+                    upscaleOptions.onTileProgress?.(done, total);
+                  },
+                })
+              : Promise.reject(new Error("Upscale needs an image")),
+          finish: (result, steps, note) =>
+            addToGallery(ctx, result, "upscaled", typeOf(ctx), note, steps),
+          failure: (error) => {
             const message = error instanceof Error ? error.message : "";
-            status.textContent = message.includes("input limit")
-              ? `Image is too large to upscale (${upscaleOptions.maxInputDim ?? 2048}px max edge)`
-              : "Upscale failed — check the console for details";
-            console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("upscale");
-            button.disabled = false;
-          }
+            return message.includes("input limit")
+              ? `This photo is too large to upscale (${maxEdge} px on the long edge at most).`
+              : errorText(error, "Upscale failed");
+          },
         });
-        return { root };
       },
     });
   }
 
+  // ── Denoise ──
+
   if (options.denoise !== false) {
     const denoiseOptions = options.denoise ?? {};
+    const model = spec("SCUNet", 77, [
+      [denoiseOptions.modelUrl, DEFAULT_DENOISE_MODEL_URL],
+      ...(denoiseOptions.modelUrl && !denoiseOptions.externalDataUrl
+        ? []
+        : [
+            [denoiseOptions.externalDataUrl, DEFAULT_DENOISE_DATA_URL] as [
+              string | undefined,
+              string,
+            ],
+          ]),
+    ]);
+    const maxEdge = denoiseOptions.maxInputDim ?? 2048;
     ctor.registerTool({
       id: "denoise",
       label: "Denoise",
@@ -1114,46 +1360,40 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "77 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
-        const hint = "On-device noise removal — replaces this image in place";
-        const { root, status, button } = buildRunPane(hint, "Remove noise");
-        let busy = false;
-        button.addEventListener("click", async () => {
-          if (busy || activeRuns.has("denoise") || ctx.entry.kind !== "image") return;
-          busy = true;
-          activeRuns.add("denoise");
-          button.disabled = true;
-          try {
-            status.textContent = "Preparing model…";
-            const result = await denoiseImage(ctx.entry.image, {
-              ...denoiseOptions,
-              onDownloadProgress: downloadStatus(status, denoiseOptions.onDownloadProgress),
-              onTileProgress: (done, total) => {
-                status.textContent = `Denoising… tile ${done}/${total}`;
-                denoiseOptions.onTileProgress?.(done, total);
-              },
-            });
-            status.textContent = "Encoding…";
-            const type = ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
-            const blob = await encodeCanvas(result, type);
-            // In place — replaceImageSource remounts the editor and this pane.
-            // Pixels map 1:1, so existing crop/mask edits stay valid.
-            await retouch.replaceImageSource(
-              ctx.entry.id,
-              new File([blob], ctx.entry.file.name, { type }),
-            );
-          } catch (error) {
+        return oneShot(ctx, {
+          id: "denoise",
+          model,
+          description:
+            "Cleans up sensor noise while keeping detail. It replaces this photo's pixels; Reset all brings the original back.",
+          action: "Remove the noise",
+          steps: [
+            { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
+            { label: "Clean it up", detail: "on this device" },
+            { label: "Replace this photo", detail: "Reset all undoes it" },
+          ],
+          run: ({ download, tile }) =>
+            ctx.entry.kind === "image"
+              ? denoiseImage(ctx.entry.image, {
+                  ...denoiseOptions,
+                  onDownloadProgress: (p) => {
+                    download(p);
+                    denoiseOptions.onDownloadProgress?.(p);
+                  },
+                  onTileProgress: (done, total) => {
+                    tile(done, total);
+                    denoiseOptions.onTileProgress?.(done, total);
+                  },
+                })
+              : Promise.reject(new Error("Denoise needs an image")),
+          // In place: pixels map 1:1, so crop and mask edits stay valid.
+          finish: (result) => replacePhoto(ctx, result),
+          failure: (error) => {
             const message = error instanceof Error ? error.message : "";
-            status.textContent = message.includes("input limit")
-              ? `Image is too large to denoise (${denoiseOptions.maxInputDim ?? 2048}px max edge)`
-              : "Denoise failed — check the console for details";
-            console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("denoise");
-            button.disabled = false;
-          }
+            return message.includes("input limit")
+              ? `This photo is too large to denoise (${maxEdge} px on the long edge at most).`
+              : errorText(error, "Denoise failed");
+          },
         });
-        return { root };
       },
     });
   }

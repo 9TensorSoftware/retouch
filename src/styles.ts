@@ -1967,6 +1967,198 @@ const CSS = /* css */ `
   gap: 0;
 }
 
+/* ── AI tool cards: what it does, what it downloads, then the run ── */
+
+.rt-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border-radius: var(--rt-radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+  box-shadow: inset 0 0 0 1px var(--rt-line);
+}
+
+/* The prism's light along the top edge marks on-device AI. */
+.rt-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #ffc457, #8ce99a, #5cc8ff, #a58bff, transparent);
+  opacity: 0.85;
+}
+
+.rt-card__desc {
+  margin: 0;
+  color: var(--rt-text-2);
+  font-size: var(--rt-type-md);
+  line-height: 1.5;
+}
+
+.rt-card__facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px 14px;
+  margin: 0;
+  font-size: var(--rt-type-sm);
+}
+
+.rt-card__facts dt {
+  color: var(--rt-text-3);
+}
+
+.rt-card__facts dd {
+  margin: 0;
+  color: var(--rt-text-1);
+  font: 500 var(--rt-type-xs) / 1.6 var(--rt-font-mono);
+}
+
+.rt-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rt-dock__status:empty {
+  display: none;
+}
+
+/* The run button for a model: the prism ring, with a sparkle. */
+.rt-dock__chip.rt-dock__chip--ai,
+.rt-dock__chip.rt-dock__chip--ai:hover {
+  gap: 8px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(var(--rt-surface-overlay), var(--rt-surface-overlay)) padding-box,
+    var(--rt-prism) border-box;
+  color: var(--rt-text-1);
+  font-weight: 600;
+}
+
+.rt-dock__chip.rt-dock__chip--ai:hover:not([disabled]) {
+  box-shadow: 0 0 0 4px rgba(165, 139, 255, 0.12), 0 0 24px rgba(92, 200, 255, 0.18);
+}
+
+.rt-dock__chip--ai svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.rt-card__body > .rt-dock__chip--ai {
+  justify-content: center;
+  width: 100%;
+  height: 42px;
+  border-radius: var(--rt-radius-md);
+  font-size: var(--rt-type-md);
+}
+
+.rt-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rt-step {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--rt-text-3);
+  font-size: var(--rt-type-sm);
+  transition: color var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-step__mark {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--rt-line-loud);
+  transition: background-color var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-step__mark svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.5;
+}
+
+.rt-step[data-state="active"] {
+  color: var(--rt-text-1);
+}
+
+.rt-step[data-state="active"] .rt-step__mark {
+  box-shadow: inset 0 0 0 2px var(--rt-accent);
+  animation: rt-breathe 1s ease-in-out infinite;
+}
+
+.rt-step[data-state="done"] {
+  color: var(--rt-text-2);
+}
+
+.rt-step[data-state="done"] .rt-step__mark {
+  background: var(--rt-success);
+  box-shadow: none;
+  color: #06140d;
+}
+
+.rt-step[data-state="failed"] {
+  color: var(--rt-danger-text);
+}
+
+.rt-step[data-state="failed"] .rt-step__mark {
+  background: var(--rt-danger);
+  box-shadow: none;
+  color: #fff;
+}
+
+.rt-step__detail {
+  color: var(--rt-text-3);
+  font: 500 var(--rt-type-xs) / 1 var(--rt-font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rt-step__bar {
+  grid-column: 2 / -1;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--rt-control);
+}
+
+.rt-step__bar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #ffc457, #5cc8ff, #a58bff);
+  transition: width var(--rt-dur-2) var(--rt-ease);
+}
+
+@keyframes rt-breathe {
+  50% { box-shadow: inset 0 0 0 2px var(--rt-accent), 0 0 0 4px var(--rt-accent-glow); }
+}
+
+.rt-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  white-space: nowrap;
+}
+
 /* ── Inspector controls: sections, tiles, segmented buttons ── */
 
 .rt-section + .rt-section {
@@ -2557,6 +2749,40 @@ input.rt-dock__slider-value:focus-visible {
 
 .rt-mask-overlay__handle--end {
   fill: var(--rt-surface-overlay);
+}
+
+/* Transparent pixels (a cutout) read as a checkerboard, not as the stage. */
+.rt-editor__canvas-container .lower-canvas,
+.rt-reveal__layer {
+  background: repeating-conic-gradient(#2c2c30 0% 25%, #212124 0% 50%) 0 0 / 16px 16px;
+}
+
+/* ctx.reveal: a tool's result wipes in over the photo, led by a bright edge. */
+.rt-reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.rt-reveal__layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rt-reveal__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(2 * var(--rt-px, 1px));
+  margin-left: calc(-1 * var(--rt-px, 1px));
+  background: #fff;
+  box-shadow:
+    0 0 calc(18 * var(--rt-px, 1px)) calc(4 * var(--rt-px, 1px)) rgba(255, 255, 255, 0.5),
+    0 0 calc(44 * var(--rt-px, 1px)) rgba(165, 139, 255, 0.55);
 }
 
 /* Compare: the before/after divider on the photo. Sized in --rt-px so the
@@ -3668,6 +3894,102 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
 .rt-ai__msg--error {
   background: var(--rt-danger-soft);
   color: var(--rt-danger-text);
+}
+
+/* One-tap prompts above the input */
+.rt-ai__suggestions {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.rt-ai__suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.rt-ai__suggestion {
+  flex: none;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--rt-line-strong);
+  border-radius: var(--rt-radius-full);
+  background: var(--rt-surface-wash);
+  color: var(--rt-text-1);
+  font: 500 var(--rt-type-sm) var(--rt-font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), border-color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-ai__suggestion:hover {
+  border-color: var(--rt-line-loud);
+  background: var(--rt-control-hover);
+}
+
+.rt-ai--busy .rt-ai__suggestion {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* A reply is a card: what the AI did, the values it set, and Undo. */
+.rt-ai__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 94%;
+  padding: 10px 11px;
+}
+
+.rt-ai__card-text {
+  margin: 0;
+}
+
+.rt-ai__deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rt-ai__deltas li {
+  padding: 4px 7px;
+  border-radius: var(--rt-radius-sm);
+  background: var(--rt-accent-soft);
+  color: var(--rt-accent-text);
+  font: 500 var(--rt-type-xs) / 1.2 var(--rt-font-mono);
+  white-space: nowrap;
+}
+
+.rt-ai__card--undone .rt-ai__card-text,
+.rt-ai__card--undone .rt-ai__deltas li {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.rt-ai__undo {
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--rt-radius-sm);
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
+  font: 600 var(--rt-type-sm) var(--rt-font-ui);
+  cursor: pointer;
+}
+
+.rt-ai__undo:hover {
+  background: var(--rt-line-loud);
+}
+
+.rt-ai__undone {
+  color: var(--rt-text-3);
+  font-size: var(--rt-type-xs);
 }
 
 .rt-ai__form {

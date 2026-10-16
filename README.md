@@ -166,7 +166,15 @@ segment it, then cut it out or magic-erase it in place — **depth
 bokeh** — click to focus and blur by real estimated depth — and one-click
 **denoise** for grainy photos. No server, no keys. Models run through ONNX Runtime
 Web (WebGPU with WASM fallback), download on first use, and cache in the
-browser:
+browser.
+
+Nothing downloads behind your back. Each tool opens on a card naming its model,
+its download size and where it runs ("This device · WebGPU"), and its run
+button says what it will fetch — **Download 208 MB and erase** — until the
+model is saved, after which it just says **Erase**. Select doesn't start its
+download from a click on the photo; it asks first. A run shows its steps
+(download with a progress bar, run, then add to the gallery or replace the
+photo), and the result wipes in over the photo before it lands:
 
 ```ts
 import { installMlTools } from "@retouchjs/ml";
@@ -234,9 +242,13 @@ that need their own render passes — draw/text layers — are on the roadmap.)
 
 `ctx.ui` builds pane controls that match the built-in tools — `row`, `section`,
 `slider`, `button`, `choice` (one of several options), `tiles` (preview tiles,
-like Filters) and `note` (status text, announced to screen readers) — and keeps
-them matching as the editor's design changes, so a plugin never styles anything
-itself. Sliders take an optional `track` (a CSS gradient showing what the
+like Filters), `note` (status text, announced to screen readers), and for AI
+tools `card` (what the tool does, then facts such as its model and download
+size), `steps` (a run's progress: waiting, active with a bar, done, failed) and
+`button({ variant: "ai" })` (the prism ring) — and keeps them matching as the
+editor's design changes, so a plugin never styles anything itself.
+`ctx.reveal(result)` wipes a tool's result in over the photo before you commit
+it; `@retouchjs/ml` is built on all of these. Sliders take an optional `track` (a CSS gradient showing what the
 slider does) and `parse` (reading a typed value back, the inverse of `format`).
 `ctx.preview(edits)` draws the current photo with `edits` (adjustments, filter,
 curves, color mix, stylize) laid over the current ones, as an image URL for a
@@ -320,9 +332,11 @@ A **✦ Ask AI** pill sits at the top-right of the stage — click it (or press
 **⌘K**) and it opens a vertical chat panel. Type what you want — *"moody and
 cinematic, crop to a square"*, *"rotate it upright and speed it up 2×"* — and a
 vision model maps it onto the same non-destructive edit operations the manual
-tools use, applied as a single undoable step. Each prompt and its outcome stay
-in the thread, so follow-ups ("a bit warmer", "undo the crop") read as a
-conversation. Token-gated and off by default:
+tools use, applied as a single undoable step. Each reply is a card listing what
+it set — "Contrast +15", "Warm filter", "Crop" — with an **Undo** for exactly
+that step, and suggestion chips ("Warmer light", "Black and white") get people
+started. Prompts and replies stay in the thread, so follow-ups ("a bit warmer",
+"undo the crop") read as a conversation. Token-gated and off by default:
 
 ```ts
 new Retouch({
@@ -491,7 +505,8 @@ Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `ShellTheme`, `MediaEntr
 `BuiltinEditorTool`, `ImageExportOptions`, `GifExportOptions`, `GifLoopMode`, `FileRejectionReason`, `AiOptions`, `AiRequest`,
 `AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolGroup`, `ToolPaneHandle`, `PreviewEdits`,
 `ToolUi`, `UiSlider`, `UiSliderOptions`, `UiButton`, `UiButtonOptions`, `UiChoice`,
-`UiChoiceOptions`, `UiTiles`, `UiTilesOptions`, `UiTileOption`, `UiNote`.
+`UiChoiceOptions`, `UiTiles`, `UiTilesOptions`, `UiTileOption`, `UiNote`, `UiCard`,
+`UiCardOptions`, `UiSteps`, `UiStepsOptions`, `UiStep`, `UiStepState`.
 
 <br />
 

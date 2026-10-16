@@ -2,6 +2,7 @@ import type { AiContext } from "../src/ai/interpreter";
 import { buildSchema, buildSystem, interpretCommand, validateAiOps } from "../src/ai/interpreter";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../src/constants";
 import type { AiRequest } from "../src/types";
+import type { AiReply } from "../src/ui/editor/ai-chat";
 import { createAiChat } from "../src/ui/editor/ai-chat";
 
 const IMAGE_CTX: AiContext = {
@@ -173,6 +174,8 @@ describe("interpretCommand with a custom transport", () => {
   });
 });
 
+const reply = (explanation: string, changes: string[] = []): AiReply => ({ explanation, changes });
+
 describe("AI chat panel", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -180,10 +183,11 @@ describe("AI chat panel", () => {
   });
 
   function makeChat(
-    onSubmit = vi.fn(async () => "ok"),
+    onSubmit: (prompt: string) => Promise<AiReply> = vi.fn(async () => reply("ok")),
     ai: import("../src/types").AiOptions = { apiKey: "sk-test" },
+    suggestions?: string[],
   ) {
-    const chat = createAiChat({ ai, onSubmit });
+    const chat = createAiChat({ ai, onSubmit, suggestions });
     document.body.appendChild(chat.root);
     return { chat, onSubmit };
   }
@@ -207,9 +211,9 @@ describe("AI chat panel", () => {
 
   it("appends a user + assistant message per prompt and keeps the thread open", async () => {
     const onSubmit = vi
-      .fn<(prompt: string) => Promise<string>>()
-      .mockResolvedValueOnce("Made it moody")
-      .mockResolvedValueOnce("Cropped to a square");
+      .fn<(prompt: string) => Promise<AiReply>>()
+      .mockResolvedValueOnce(reply("Made it moody"))
+      .mockResolvedValueOnce(reply("Cropped to a square"));
     const { chat } = makeChat(onSubmit);
     chat.open();
     const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
@@ -278,7 +282,7 @@ describe("AI chat panel", () => {
   });
 
   it("opens the key popover instead of submitting when allowUserKey has no stored key", () => {
-    const onSubmit = vi.fn(async () => "ok");
+    const onSubmit = vi.fn(async () => reply("ok"));
     const { chat } = makeChat(onSubmit, { allowUserKey: true });
     chat.open();
     const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
@@ -292,6 +296,61 @@ describe("AI chat panel", () => {
     (chat.root.querySelector(".rt-ai__save") as HTMLElement).click();
     expect(localStorage.getItem("rt-ai-key")).toBe("sk-ant-test");
     expect(chat.root.querySelector(".rt-ai__popover")).toBeNull();
+    chat.destroy();
+  });
+
+  it("shows what changed on a card whose Undo takes it back once", async () => {
+    let undone = false;
+    const onSubmit = vi.fn(
+      async (): Promise<AiReply> => ({
+        explanation: "Warmed it up",
+        changes: ["Temperature +25", "Vibrance +10"],
+        undo: () => {
+          if (undone) return false;
+          undone = true;
+          return true;
+        },
+      }),
+    );
+    const { chat } = makeChat(onSubmit);
+    chat.open();
+    const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
+    input.value = "warmer";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await vi.waitFor(() => expect(chat.root.querySelector(".rt-ai__card")).not.toBeNull());
+    const card = chat.root.querySelector(".rt-ai__card") as HTMLElement;
+    expect([...card.querySelectorAll(".rt-ai__deltas li")].map((li) => li.textContent)).toEqual([
+      "Temperature +25",
+      "Vibrance +10",
+    ]);
+    (card.querySelector(".rt-ai__undo") as HTMLButtonElement).click();
+    expect(undone).toBe(true);
+    expect(card.classList.contains("rt-ai__card--undone")).toBe(true);
+    expect(card.querySelector(".rt-ai__undo")).toBeNull();
+    chat.destroy();
+  });
+
+  it("explains when later edits block a card's Undo", async () => {
+    const { chat } = makeChat(async () => ({ ...reply("Cropped"), undo: () => false }));
+    chat.open();
+    const input = chat.root.querySelector(".rt-ai__input") as HTMLInputElement;
+    input.value = "crop";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await vi.waitFor(() => expect(chat.root.querySelector(".rt-ai__undo")).not.toBeNull());
+    (chat.root.querySelector(".rt-ai__undo") as HTMLButtonElement).click();
+    expect(chat.root.querySelector(".rt-ai__undone")?.textContent).toMatch(
+      /Other edits came after/,
+    );
+    chat.destroy();
+  });
+
+  it("sends a suggestion with one tap", async () => {
+    const onSubmit = vi.fn(async () => reply("Done"));
+    const { chat } = makeChat(onSubmit, { apiKey: "sk-test" }, ["Warmer light", "Black and white"]);
+    const chips = [...chat.root.querySelectorAll<HTMLButtonElement>(".rt-ai__suggestion")];
+    expect(chips.map((c) => c.textContent)).toEqual(["Warmer light", "Black and white"]);
+    chips[1].click();
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith("Black and white"));
     chat.destroy();
   });
 });
