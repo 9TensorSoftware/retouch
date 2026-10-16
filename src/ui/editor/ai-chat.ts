@@ -138,7 +138,8 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
 
   function open(): void {
     root.classList.add("rt-ai--open");
-    input.focus();
+    // Without preventScroll, focusing scrolls the stage (it clips, but can scroll).
+    input.focus({ preventScroll: true });
     messages.scrollTop = messages.scrollHeight;
   }
 
@@ -260,12 +261,12 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
         }
         popover.remove();
         addMessage("assistant", "Key saved — ask away.");
-        input.focus();
+        input.focus({ preventScroll: true });
       },
       { signal },
     );
     panel.insertBefore(popover, form);
-    keyInput.focus();
+    keyInput.focus({ preventScroll: true });
   }
 
   // ── Change cards: what the AI did, and a way back ──

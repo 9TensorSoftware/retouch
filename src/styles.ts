@@ -1330,11 +1330,20 @@ const CSS = /* css */ `
   position: fixed;
   inset: 0;
   z-index: 9999;
+  box-sizing: border-box;
+  /* The visible height: on phones, 100vh can run under the browser's toolbar. */
+  height: 100vh;
+  height: 100dvh;
   background: var(--rt-surface);
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px;
+  /* Clear of notches and the home indicator, when the host page lets us reach them. */
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
   animation: rt-overlay-in var(--rt-dur-3) var(--rt-ease-decel);
 }
 
@@ -1549,6 +1558,8 @@ const CSS = /* css */ `
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
   border: none;
   border-radius: var(--rt-radius-sm);
   background: transparent;
@@ -1563,6 +1574,12 @@ const CSS = /* css */ `
 .rt-editor__text-btn:hover {
   background: var(--rt-control);
   color: var(--rt-text-1);
+}
+
+.rt-editor__text-btn svg {
+  display: none;
+  width: 18px;
+  height: 18px;
 }
 
 .rt-editor__icon-btn.rt-editor__icon-btn--active {
@@ -1641,8 +1658,20 @@ const CSS = /* css */ `
   gap: 8px;
 }
 
-/* Tool rail: grouped icon buttons; names and shortcuts live in a tooltip. */
+/* Tool rail: grouped icon buttons; names and shortcuts live in a tooltip.
+   The panel holds a scroller (the tools) and, beside it, the tooltip and the
+   AI menu, so the scroller's edge fade never clips them. */
 .rt-toolbar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+.rt-toolbar__scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1651,10 +1680,9 @@ const CSS = /* css */ `
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
-  flex-shrink: 0;
 }
 
-.rt-toolbar::-webkit-scrollbar {
+.rt-toolbar__scroll::-webkit-scrollbar {
   display: none;
 }
 
@@ -1767,22 +1795,22 @@ const CSS = /* css */ `
 }
 
 /* A rail taller than the screen scrolls; the end with more fades out. */
-.rt-toolbar--more-after {
+.rt-toolbar--more-after .rt-toolbar__scroll {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
 }
 
-.rt-toolbar--more-before {
+.rt-toolbar--more-before .rt-toolbar__scroll {
   mask-image: linear-gradient(to top, #000 calc(100% - 36px), transparent);
 }
 
-.rt-toolbar--more-before.rt-toolbar--more-after {
+.rt-toolbar--more-before.rt-toolbar--more-after .rt-toolbar__scroll {
   mask-image: linear-gradient(to bottom, transparent, #000 36px, #000 calc(100% - 36px), transparent);
 }
 
 /* Short screens (a 768 px laptop): a denser rail keeps every tool in view.
-   Column rails only — phones keep their full-size touch targets. */
-@media (max-height: 820px) and (min-width: 761px) and (orientation: landscape),
-  (max-height: 820px) and (min-width: 1025px) {
+   Column rails with a mouse or trackpad only: touch keeps 44 px targets. */
+@media (max-height: 820px) and (min-width: 761px) and (orientation: landscape) and (pointer: fine),
+  (max-height: 820px) and (min-width: 1025px) and (pointer: fine) {
   .rt-toolbar__btn {
     height: 40px;
   }
@@ -1835,11 +1863,15 @@ const CSS = /* css */ `
 }
 
 /* Expanded: a wider rail with names, group titles and keys — only while
-   the rail is a column (the stacked phone and tablet layouts keep the
-   compact row). */
-@media (min-width: 761px) and (orientation: landscape), (min-width: 1025px) {
+   the rail is a column on a screen with room for it (the stacked phone and
+   tablet layouts keep the compact row, and a phone on its side the icons). */
+@media (min-width: 761px) and (orientation: landscape) and (min-height: 501px),
+  (min-width: 1025px) and (min-height: 501px) {
   .rt-toolbar--expanded {
     width: 212px;
+  }
+
+  .rt-toolbar--expanded .rt-toolbar__scroll {
     align-items: stretch;
     padding: 8px;
   }
@@ -1944,8 +1976,8 @@ const CSS = /* css */ `
   }
 }
 
-@media (max-height: 820px) and (min-width: 761px) and (orientation: landscape),
-  (max-height: 820px) and (min-width: 1025px) {
+@media (max-height: 820px) and (min-width: 761px) and (orientation: landscape) and (pointer: fine),
+  (max-height: 820px) and (min-width: 1025px) and (pointer: fine) {
   .rt-toolbar--expanded .rt-toolbar__btn,
   .rt-toolbar--expanded .rt-toolbar__toggle {
     height: 34px;
@@ -5074,14 +5106,41 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
 
 /* ── Narrow screens ────────────────────────── */
 
+/* The sheet's grab bar only appears in the stacked layout, and the
+   header's Ask AI on phones. */
+.rt-sheet__grab,
+.rt-inspector__ask {
+  display: none;
+}
+
+/* Hints for a keyboard, and their touch wording; a screen without hover
+   gets the second. */
+.rt-touch {
+  display: none;
+}
+
+@media (hover: none) {
+  .rt-keys {
+    display: none;
+  }
+  .rt-touch {
+    display: inline;
+  }
+}
+
 /* Narrow windows and upright tablets (where three columns would leave the
    stage a sliver): the panels stack. The stage (and video transport) on
-   top, the inspector beneath it, and the tool rail as a row along the
-   bottom edge, within thumb reach. */
-@media (max-width: 760px), (max-width: 1024px) and (orientation: portrait) {
+   top, the controls beneath it as a bottom sheet, and the tool rail as a
+   row along the bottom edge, within thumb reach. A phone on its side keeps
+   the three columns. The query is repeated in editor/layout.ts. */
+@media (max-width: 760px) and (min-height: 501px), (max-width: 1024px) and (orientation: portrait) {
   .rt-editor-overlay {
     gap: 6px;
-    padding: 6px;
+    padding:
+      max(6px, env(safe-area-inset-top))
+      max(6px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom))
+      max(6px, env(safe-area-inset-left));
   }
   .rt-editor__body {
     flex-direction: column;
@@ -5089,20 +5148,86 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   }
   .rt-editor__center {
     flex: 1 1 auto;
-    min-height: 200px;
+    min-height: 0;
     gap: 6px;
   }
+  /* The controls as a bottom sheet. sheet.ts sets its height (just the
+     header, about half, or most of the screen); this is the start. */
   .rt-editor__inspector {
     order: 1;
     width: auto;
-    max-height: 42vh;
+    height: min(40%, 340px);
+    border-radius: 22px 22px var(--rt-radius-lg) var(--rt-radius-lg);
+    transition: height var(--rt-dur-3) var(--rt-ease-decel);
+  }
+  .rt-sheet--dragging,
+  .rt-sheet--instant {
+    transition: none;
+  }
+  .rt-sheet--dragging,
+  .rt-sheet--dragging * {
+    cursor: grabbing;
+  }
+  .rt-sheet__grab {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 100%;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 22px 22px 0 0;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+  }
+  .rt-sheet__grab::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 40px;
+    height: 5px;
+    margin-left: -20px;
+    border-radius: 3px;
+    background: var(--rt-line-loud);
+    transition: background-color var(--rt-dur-1) var(--rt-ease), width var(--rt-dur-2) var(--rt-ease), margin var(--rt-dur-2) var(--rt-ease);
+  }
+  .rt-sheet__grab:hover::before,
+  .rt-sheet--dragging .rt-sheet__grab::before {
+    width: 52px;
+    margin-left: -26px;
+    background: var(--rt-text-3);
+  }
+  .rt-sheet__grab:focus-visible {
+    outline-offset: -3px;
+  }
+  /* The header drags the sheet too. */
+  .rt-editor__inspector .rt-inspector__head {
+    padding-top: 0;
+    touch-action: none;
+  }
+  /* Folded: only the header shows, and the rest is out of reach of Tab. */
+  .rt-editor__inspector[data-sheet="peek"] .rt-inspector__body,
+  .rt-editor__inspector[data-sheet="peek"] .rt-inspector__hist {
+    visibility: hidden;
   }
   .rt-toolbar {
     order: 2;
     flex-direction: row;
+  }
+  /* A row of tools to swipe through, settling on whole buttons. */
+  .rt-toolbar__scroll {
+    flex-direction: row;
     padding: 6px;
     overflow-x: auto;
     overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 6px;
+  }
+  .rt-toolbar__btn {
+    scroll-snap-align: start;
   }
   .rt-toolbar__sep {
     width: 1px;
@@ -5119,13 +5244,13 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   .rt-toolbar__toggle {
     display: none;
   }
-  .rt-toolbar--more-after {
+  .rt-toolbar--more-after .rt-toolbar__scroll {
     mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
   }
-  .rt-toolbar--more-before {
+  .rt-toolbar--more-before .rt-toolbar__scroll {
     mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
   }
-  .rt-toolbar--more-before.rt-toolbar--more-after {
+  .rt-toolbar--more-before.rt-toolbar--more-after .rt-toolbar__scroll {
     mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
   }
   .rt-toolbar__btn--active::before {
@@ -5138,6 +5263,46 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   }
   .rt-editor__canvas-area {
     padding: 12px 12px 56px;
+  }
+}
+
+/* A phone on its side: the three columns, made compact. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .rt-editor-overlay {
+    gap: 6px;
+    padding:
+      max(6px, env(safe-area-inset-top))
+      max(6px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom))
+      max(6px, env(safe-area-inset-left));
+  }
+  .rt-editor__body,
+  .rt-editor__center {
+    gap: 6px;
+  }
+  .rt-editor__topbar {
+    height: 44px;
+  }
+  .rt-editor__topbar-title {
+    display: none;
+  }
+  .rt-editor__text-btn span {
+    display: none;
+  }
+  .rt-editor__text-btn svg {
+    display: block;
+  }
+  .rt-editor__inspector {
+    width: 272px;
+  }
+  .rt-inspector__hist {
+    display: none;
+  }
+  .rt-toolbar__toggle {
+    display: none;
+  }
+  .rt-editor__canvas-area {
+    padding: 8px 8px 52px;
   }
 }
 
@@ -5171,17 +5336,240 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
     padding: 0 10px;
   }
   .rt-editor__compare-btn,
-  .rt-editor__btn-capture {
+  .rt-editor__btn-capture,
+  .rt-editor__text-btn {
     padding: 0 9px;
   }
   .rt-editor__compare-btn span,
-  .rt-editor__btn-capture span {
+  .rt-editor__btn-capture span,
+  .rt-editor__text-btn span {
     display: none;
+  }
+  .rt-editor__text-btn svg {
+    display: block;
   }
   .rt-editor__btn-done {
     padding: 0 16px;
   }
   .rt-editor__topbar-end .rt-editor__divider {
+    display: none;
+  }
+  /* The histogram costs a phone's sheet too much room. */
+  .rt-inspector__hist {
+    display: none;
+  }
+  /* The AI tools menu spans the screen above the rail. */
+  .rt-flyout {
+    width: calc(100vw - 16px);
+  }
+  /* Curves goes wide rather than square, so the whole graph fits the sheet. */
+  .rt-curves__canvas {
+    aspect-ratio: 4 / 3;
+  }
+  .rt-editor__canvas-area {
+    padding: 10px 10px 52px;
+  }
+  /* Video: the filmstrip takes a row of its own, the full width, so the
+     trim handles have room; the buttons go under it. */
+  .rt-video-bar {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 8px;
+  }
+  .rt-filmstrip {
+    order: -1;
+    flex: 1 1 100%;
+  }
+  .rt-video-bar__time {
+    margin-right: auto;
+  }
+  /* Ask AI moves from the stage's corner (where crop handles go) to the
+     sheet's header; open, the chat pins under the top bar at full width,
+     clear of the on-screen keyboard. */
+  .rt-ai__trigger {
+    display: none;
+  }
+  .rt-inspector__ask {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    margin: -6px -4px 0 0;
+    padding: 0;
+    border: 1.5px solid transparent;
+    border-radius: 50%;
+    background:
+      linear-gradient(var(--rt-surface-overlay), var(--rt-surface-overlay)) padding-box,
+      var(--rt-prism) border-box;
+    color: var(--rt-text-1);
+    cursor: pointer;
+  }
+  .rt-inspector__ask svg {
+    width: 17px;
+    height: 17px;
+  }
+  .rt-ai.rt-ai--open {
+    position: fixed;
+    top: calc(max(6px, env(safe-area-inset-top)) + 62px);
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: max(8px, env(safe-area-inset-left));
+    z-index: 30;
+  }
+  .rt-ai__panel {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: min(420px, 52dvh);
+    min-height: 0;
+    resize: none;
+  }
+  .rt-ai__header {
+    cursor: default;
+  }
+}
+
+/* Touch: every target a fingertip wide (44 px), the zoom controls only
+   once the photo is zoomed (pinching gets you there; Fit gets you back),
+   and handles on the photo with room around them to land a finger. */
+@media (pointer: coarse) {
+  .rt-editor__btn-cancel,
+  .rt-editor__text-btn,
+  .rt-editor__btn-capture,
+  .rt-editor__compare-btn,
+  .rt-editor__btn-done {
+    height: 44px;
+  }
+  .rt-editor__icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .rt-editor__canvas-area:not(.rt-stage--zoomed) .rt-zoom {
+    display: none;
+  }
+  .rt-editor__canvas-area {
+    padding-bottom: 12px;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+  .rt-zoom button {
+    height: 40px;
+    min-width: 40px;
+  }
+  .rt-inspector__reset {
+    height: 36px;
+    padding: 0 14px;
+  }
+  .rt-section--collapsible > .rt-section__head {
+    min-height: 44px;
+  }
+  .rt-segmented__btn {
+    height: 40px;
+  }
+  .rt-dock__icon-btn,
+  .rt-transform-btns .rt-dock__icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .rt-dock__chip {
+    height: 40px;
+    padding: 0 16px;
+  }
+  .rt-masks__add-btn,
+  .rt-masklist__select {
+    height: 44px;
+  }
+  .rt-masklist__icon {
+    width: 44px;
+    height: 44px;
+  }
+  input.rt-dock__slider-value {
+    width: 64px;
+    height: 40px;
+  }
+  /* Color mix's eight swatches share one row; each catches touches into the gaps. */
+  .rt-swatch::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+  }
+  /* iOS zooms the page in on any field set under 16 px. */
+  .rt-editor-overlay input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+  .rt-editor-overlay textarea {
+    font-size: 16px;
+  }
+  /* Sliders: a bigger thumb, on a taller strip that's easier to catch. */
+  .rt-dock__slider input[type="range"] {
+    height: 32px;
+  }
+  .rt-dock__slider input[type="range"]::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+    margin-top: calc((var(--rt-range-h) - 24px) / 2);
+  }
+  .rt-dock__slider input[type="range"]::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  .rt-crop__handle {
+    --rt-handle-offset: calc(-8 * var(--rt-px, 1px));
+    width: calc(16 * var(--rt-px, 1px));
+    height: calc(16 * var(--rt-px, 1px));
+  }
+  .rt-crop__handle::before {
+    content: '';
+    position: absolute;
+    inset: calc(-14 * var(--rt-px, 1px));
+  }
+  .rt-mask-overlay__handle {
+    r: calc(12 * var(--rt-px, 1px));
+  }
+  .rt-split__line {
+    width: calc(44 * var(--rt-px, 1px));
+    margin-left: calc(-22 * var(--rt-px, 1px));
+  }
+  .rt-split__grip {
+    width: calc(44 * var(--rt-px, 1px));
+    height: calc(44 * var(--rt-px, 1px));
+  }
+  .rt-video-bar__btn {
+    width: 44px;
+    height: 44px;
+  }
+  .rt-video-bar__speed {
+    height: 44px;
+    min-width: 52px;
+  }
+  .rt-video-bar__speed-option {
+    padding: 11px 22px;
+    font-size: 13px;
+  }
+  .rt-filmstrip__handle {
+    width: 22px;
+  }
+  .rt-flyout__item {
+    min-height: 52px;
+  }
+  .rt-flyout__pin {
+    width: 44px;
+    height: 44px;
+  }
+  .rt-ai__trigger {
+    height: 44px;
+  }
+  .rt-ai__send,
+  .rt-ai__close {
+    width: 44px;
+    height: 44px;
+  }
+  .rt-ai__suggestion {
+    min-height: 40px;
+  }
+  .rt-ai__kbd {
     display: none;
   }
 }

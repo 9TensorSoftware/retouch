@@ -66,3 +66,52 @@ describe("editor crop commit", () => {
     expect(entry.edits.crop).toEqual({ x: 0, y: 0, width: 1, height: 1 });
   });
 });
+
+describe("editor crop on touch", () => {
+  let restoreLayout: () => void;
+  let editor: ViewHandle;
+  let entry: ImageEntry;
+
+  beforeEach(() => {
+    restoreLayout = stubLayout(800, 600);
+    entry = makeImageEntry();
+    editor = createEditor({ entry, onDone: vi.fn(), onCancel: vi.fn() });
+    document.body.appendChild(editor.root);
+    button(".rt-aspect", "Square").click();
+  });
+
+  afterEach(() => {
+    editor.destroy();
+    document.body.innerHTML = "";
+    restoreLayout();
+  });
+
+  /** jsdom has no PointerEvent: a MouseEvent carrying the pointer's id. */
+  function pointer(el: EventTarget, type: string, id: number, x: number, y: number): void {
+    el.dispatchEvent(
+      Object.assign(
+        new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+        {
+          pointerId: id,
+          pointerType: "touch",
+        },
+      ),
+    );
+  }
+
+  it("moves the frame with the finger that took it, not with another", () => {
+    const frame = document.querySelector(".rt-crop__selection") as HTMLElement;
+    const before = frame.style.left;
+    pointer(frame, "pointerdown", 1, 300, 300);
+    pointer(document, "pointermove", 2, 380, 300); // another finger
+    expect(frame.style.left).toBe(before);
+    pointer(document, "pointermove", 1, 240, 300);
+    expect(frame.style.left).not.toBe(before);
+    pointer(document, "pointerup", 2, 380, 300); // the other finger lifting doesn't end it
+    pointer(document, "pointermove", 1, 200, 300);
+    const moved = frame.style.left;
+    pointer(document, "pointercancel", 1, 200, 300);
+    pointer(document, "pointermove", 1, 100, 300);
+    expect(frame.style.left).toBe(moved);
+  });
+});

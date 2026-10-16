@@ -18,6 +18,31 @@ const MAX_MAGNIFICATION = 8;
 const STEP = 1.25;
 /** Quiet time before re-rendering sharp at the new zoom. */
 const SETTLE_MS = 160;
+/** Double-tap zooms in by this much (and a double-tap when zoomed fits). */
+const TAP_ZOOM = 2.5;
+/** Two taps this close in time (ms) and space (px) make a double-tap. */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_PX = 30;
+
+/** Touches on these zoom and pan the photo; everything else on the stage has its own gestures. */
+const BACKGROUND =
+  ".rt-editor__canvas-area, .rt-editor__canvas-pane, .rt-editor__pane-content, .rt-editor__canvas-container, .canvas-container, .lower-canvas, .upper-canvas";
+
+/**
+ * Zoom and pan for a pinch: the zoom scales with the spread of the two
+ * fingers, and the photo point that started under their midpoint stays
+ * under it as they move. Points are offsets from the stage center.
+ */
+export function pinchView(
+  start: { zoom: number; pan: Point; mid: Point; distance: number },
+  mid: Point,
+  distance: number,
+  maxZoom: number,
+): { zoom: number; pan: Point } {
+  const zoom = Math.min(maxZoom, Math.max(1, (start.zoom * distance) / start.distance));
+  const at = zoomAround(start.pan, start.mid, start.zoom, zoom);
+  return { zoom, pan: { x: at.x + mid.x - start.mid.x, y: at.y + mid.y - start.mid.y } };
+}
 
 /**
  * The pan that keeps the point under `cursor` still while zoom goes from
@@ -76,7 +101,8 @@ export interface StageView {
  * new size once input settles; past the preview's own resolution the CSS
  * scale simply stays. Pan with the wheel or trackpad, middle-drag, or
  * Space-drag; zoom with ⌘/Ctrl + wheel (trackpad pinch), the keys, or the
- * controls.
+ * controls. On touch: pinch to zoom, two fingers to pan, one finger on the
+ * photo to pan once zoomed in, and double-tap to zoom in or back to fit.
  */
 export function createStageView(options: StageViewOptions): StageView {
   const { area, target, renderer, signal } = options;
@@ -256,6 +282,108 @@ export function createStageView(options: StageViewOptions): StageView {
   };
   area.addEventListener("pointerup", endDrag, { signal });
   area.addEventListener("pointercancel", endDrag, { signal });
+
+  // ── Touch: pinch, two-finger pan, one-finger pan when zoomed, double-tap ──
+
+  /** Touch points down on the stage, by pointer id. */
+  const touches = new Map<number, Point>();
+  /** Fingers that took part in a pinch: nothing else hears them until they lift. */
+  const held = new Set<number>();
+  let pinch: { zoom: number; pan: Point; mid: Point; distance: number } | null = null;
+  let touchPan: { id: number; x: number; y: number; from: Point; moved: boolean } | null = null;
+  let press: { id: number; t: number; x: number; y: number; background: boolean } | null = null;
+  let lastTap: { t: number; x: number; y: number } | null = null;
+
+  function spread(): { mid: Point; distance: number } {
+    const [a, b] = [...touches.values()];
+    return {
+      mid: offsetOf({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }),
+      distance: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+    };
+  }
+
+  area.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.pointerType !== "touch" || !enabled) return;
+      if ((e.target as Element).closest(".rt-ai, .rt-zoom")) return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size >= 2) {
+        // Another finger: a pinch. Tools never hear this finger, and stop hearing the first.
+        e.preventDefault();
+        e.stopPropagation();
+        for (const id of touches.keys()) held.add(id);
+        touchPan = null;
+        press = null;
+        if (touches.size === 2) pinch = { zoom, pan: { ...pan }, ...spread() };
+        return;
+      }
+      const background = (e.target as Element).matches(BACKGROUND);
+      press = { id: e.pointerId, t: e.timeStamp, x: e.clientX, y: e.clientY, background };
+      if (background && zoom > 1) {
+        touchPan = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { ...pan }, moved: false };
+      }
+    },
+    { capture: true, signal },
+  );
+
+  // On the window, in the capture phase: a pinch has to outrank the tools'
+  // own move handlers, wherever the fingers wander.
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!touches.has(e.pointerId)) return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && touches.size >= 2) {
+        e.stopPropagation();
+        const { mid, distance } = spread();
+        ({ zoom, pan } = pinchView(pinch, mid, distance, maxZoom()));
+        apply();
+        settle();
+      } else if (held.has(e.pointerId)) {
+        e.stopPropagation();
+      } else if (touchPan && e.pointerId === touchPan.id) {
+        const dx = e.clientX - touchPan.x;
+        const dy = e.clientY - touchPan.y;
+        if (!touchPan.moved && Math.hypot(dx, dy) < 6) return;
+        touchPan.moved = true;
+        e.stopPropagation();
+        pan = { x: touchPan.from.x + dx, y: touchPan.from.y + dy };
+        apply();
+      }
+    },
+    { capture: true, signal },
+  );
+
+  const lift = (e: PointerEvent): void => {
+    if (!touches.has(e.pointerId)) return;
+    touches.delete(e.pointerId);
+    held.delete(e.pointerId);
+    if (touches.size < 2) pinch = null;
+    if (touchPan?.id === e.pointerId) touchPan = null;
+    // A quick, still tap on the photo; two in a row zoom in, or back to fit.
+    const tap =
+      press?.id === e.pointerId &&
+      press.background &&
+      e.type === "pointerup" &&
+      e.timeStamp - press.t < DOUBLE_TAP_MS &&
+      Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10;
+    if (press?.id === e.pointerId) press = null;
+    if (!tap) return;
+    if (
+      lastTap &&
+      e.timeStamp - lastTap.t < DOUBLE_TAP_MS &&
+      Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX
+    ) {
+      lastTap = null;
+      if (zoom > 1) fitToScreen();
+      else setZoom(zoom * TAP_ZOOM, offsetOf(e));
+    } else {
+      lastTap = { t: e.timeStamp, x: e.clientX, y: e.clientY };
+    }
+  };
+  window.addEventListener("pointerup", lift, { capture: true, signal });
+  window.addEventListener("pointercancel", lift, { capture: true, signal });
 
   if (options.spacePan) {
     const typing = (t: EventTarget | null): boolean =>

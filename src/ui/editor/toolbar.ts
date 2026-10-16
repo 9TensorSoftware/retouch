@@ -17,6 +17,8 @@ export interface ToolbarOptions {
   tools: EditorTool[];
   activeTool: EditorTool;
   onToolChange: (tool: EditorTool) => void;
+  /** The active tool was picked again (on phones, that folds or opens its controls). */
+  onToolReselect?: (tool: EditorTool) => void;
   /** The starting layout. Without `pinned`, the first three AI tools are pinned. */
   layout?: Partial<RailLayout>;
   /** The user pinned or unpinned a tool, or toggled names: remember it. */
@@ -81,6 +83,9 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     def.shortcut && shortcuts.get(def.shortcut) === def.id ? def.shortcut : undefined;
 
   const root = h("div", { class: "rt-toolbar", role: "group", "aria-label": "Tools" });
+  // The tools scroll (and fade at an end with more) inside the panel; the
+  // tooltip and the AI menu sit beside the scroller so its fade can't clip them.
+  const scroller = h("div", { class: "rt-toolbar__scroll" });
   const groups = h("div", { class: "rt-toolbar__groups" });
 
   // ── Tooltip (compact rail only: expanded rows show their names) ──
@@ -135,7 +140,10 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
   }
 
   function select(id: EditorTool): void {
-    if (active === id) return;
+    if (active === id) {
+      options.onToolReselect?.(id);
+      return;
+    }
     setActive(id);
     options.onToolChange(id);
   }
@@ -182,10 +190,14 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     menu.hidden = false;
     launcher.setAttribute("aria-expanded", "true");
     const r = launcher.getBoundingClientRect();
-    const m = menu.getBoundingClientRect();
+    // Layout size, not the rect: the menu's entrance animation scales it.
+    const m = { width: menu.offsetWidth, height: menu.offsetHeight };
+    const viewport = document.documentElement.clientWidth || innerWidth;
     if (isHorizontal()) {
-      menu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - m.width - 8))}px`;
-      menu.style.top = `${Math.max(8, r.top - m.height - 8)}px`;
+      // Above the rail, inside the screen; on a phone that's its full width.
+      const rail = root.getBoundingClientRect();
+      menu.style.left = `${Math.max(8, Math.min(r.left, viewport - m.width - 8))}px`;
+      menu.style.top = `${Math.max(8, rail.top - m.height - 8)}px`;
     } else {
       menu.style.left = `${root.getBoundingClientRect().right + 8}px`;
       menu.style.top = `${Math.max(8, Math.min(r.top - 8, innerHeight - m.height - 8))}px`;
@@ -407,6 +419,8 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
       if (id === tool) btn.setAttribute("aria-current", "true");
       else btn.removeAttribute("aria-current");
     }
+    const shown = railButtons.get(tool) ?? launcher;
+    if (shown) reveal(shown);
     for (const [id, row] of menuRows) {
       row.item.classList.toggle("rt-flyout__item--active", id === tool);
       if (id === tool) row.item.setAttribute("aria-current", "true");
@@ -437,25 +451,53 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     options.onLayoutChange?.(layout());
   }
 
-  root.append(groups, toggle, tip);
+  /**
+   * Scroll the rail just enough to show a tool (a phone's row of tools, or a
+   * column taller than the screen). Done by hand: scrollIntoView could also
+   * scroll the host page.
+   */
+  function reveal(btn: HTMLElement): void {
+    const margin = 28;
+    // The scroller is positioned, so offsets are in its (unscrolled) content box.
+    if (isHorizontal()) {
+      const left = btn.offsetLeft;
+      if (left - margin < scroller.scrollLeft) scroller.scrollLeft = Math.max(0, left - margin);
+      else if (left + btn.offsetWidth + margin > scroller.scrollLeft + scroller.clientWidth) {
+        scroller.scrollLeft = left + btn.offsetWidth + margin - scroller.clientWidth;
+      }
+    } else {
+      const top = btn.offsetTop;
+      if (top - margin < scroller.scrollTop) scroller.scrollTop = Math.max(0, top - margin);
+      else if (top + btn.offsetHeight + margin > scroller.scrollTop + scroller.clientHeight) {
+        scroller.scrollTop = top + btn.offsetHeight + margin - scroller.clientHeight;
+      }
+    }
+  }
+
+  scroller.append(groups, toggle);
+  root.append(scroller, tip);
   if (menu) root.append(menu);
   paintToggle();
   renderRail();
 
-  // When the rail is taller than the screen it scrolls; fade whichever end
+  // When the rail is longer than the screen it scrolls; fade whichever end
   // has more, so tools never silently hide past the edge.
   function paintOverflow(): void {
     const horizontal = isHorizontal();
-    const start = horizontal ? root.scrollLeft : root.scrollTop;
-    const size = horizontal ? root.clientWidth : root.clientHeight;
-    const total = horizontal ? root.scrollWidth : root.scrollHeight;
+    const start = horizontal ? scroller.scrollLeft : scroller.scrollTop;
+    const size = horizontal ? scroller.clientWidth : scroller.clientHeight;
+    const total = horizontal ? scroller.scrollWidth : scroller.scrollHeight;
     root.classList.toggle("rt-toolbar--more-before", start > 1);
     root.classList.toggle("rt-toolbar--more-after", start + size < total - 1);
   }
-  root.addEventListener("scroll", paintOverflow, { signal, passive: true });
+  scroller.addEventListener("scroll", paintOverflow, { signal, passive: true });
   if (typeof ResizeObserver !== "undefined") {
-    const observer = new ResizeObserver(paintOverflow);
-    observer.observe(root);
+    const observer = new ResizeObserver(() => {
+      paintOverflow();
+      const shown = railButtons.get(active) ?? launcher;
+      if (shown) reveal(shown);
+    });
+    observer.observe(scroller);
     observer.observe(groups);
     signal.addEventListener("abort", () => observer.disconnect());
   }
