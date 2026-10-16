@@ -43,6 +43,19 @@ describe("Retouch", () => {
     expect(editor.state).toBe("destroyed");
   });
 
+  it("themes the shell light by default, from the option, and via setTheme()", () => {
+    const root = () => container.querySelector<HTMLElement>(".rt-root");
+    const plain = new Retouch({ target: container });
+    expect(root()?.dataset.rtTheme).toBe("light");
+    plain.destroy();
+
+    const themed = new Retouch({ target: container, theme: "dark" });
+    expect(root()?.dataset.rtTheme).toBe("dark");
+    themed.setTheme("auto");
+    expect(root()?.dataset.rtTheme).toBe("auto");
+    themed.destroy();
+  });
+
   it("is idempotent on double destroy", () => {
     const editor = new Retouch({ target: container });
     editor.destroy();

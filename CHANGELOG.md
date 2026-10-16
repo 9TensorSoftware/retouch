@@ -4,6 +4,32 @@ All notable changes to `@retouchjs/core` and `@retouchjs/ml` are documented here
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); both packages use
 [Semantic Versioning](https://semver.org/) and share a version number.
 
+## Unreleased
+
+### Added
+
+- `theme: "light" | "dark" | "auto"` and `setTheme()` for the drop zone and gallery. Dark uses the
+  editor's darkroom tokens; auto follows the OS setting.
+- `ctx.ui` for custom tools: `row`, `section`, `slider`, `button`, `choice` and `note` build pane
+  controls that match the built-in tools (types exported as `ToolUi`, `UiSlider`, and so on).
+- Tokens for the coming redesign: type families and scale (`--rt-font-*`, `--rt-type-*`),
+  `--rt-shadow-float`, `--rt-highlight`, `--rt-prism`, `--rt-radius-full`, `--rt-dur-4`, and a
+  spring easing, `--rt-ease-spring`.
+
+### Changed
+
+- Branding takes one variable: the accent's hover, washes, text color and the focus ring derive
+  from `--rt-accent` (and `--rt-danger-soft` from `--rt-danger`). The default palette renders the
+  same.
+
+### Fixed
+
+- Theme overrides apply whatever order stylesheets load in. Tokens now live in the
+  `retouch-tokens` cascade layer, declared first; before, Rétouch's injected stylesheet came last
+  and won ties against a host's `.rt-root { --rt-accent: … }`. Component rules stay unlayered, so
+  host resets still can't restyle them.
+- Setting only `--rt-accent` no longer leaves terracotta-tinted washes behind.
+
 ## [0.1.0] — 2026-09-19
 
 The first release since 0.0.2 turns a crop/brightness prototype into a full image *and video*

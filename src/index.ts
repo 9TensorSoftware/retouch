@@ -23,6 +23,7 @@ export type {
   Orientation,
   RetouchEventMap,
   RetouchOptions,
+  ShellTheme,
   TrimRange,
   VideoEdits,
   VideoEntry,
@@ -32,5 +33,15 @@ export type {
   ToolContext,
   ToolPaneHandle,
 } from "./ui/editor/tool-registry";
+export type {
+  ToolUi,
+  UiButton,
+  UiButtonOptions,
+  UiChoice,
+  UiChoiceOptions,
+  UiNote,
+  UiSlider,
+  UiSliderOptions,
+} from "./ui/editor/tool-ui";
 export { refreshRangeFill } from "./ui/range-fill";
 export { isImageEntry, isVideoEntry } from "./utils/video";

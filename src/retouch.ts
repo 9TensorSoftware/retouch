@@ -10,6 +10,7 @@ import type {
   MediaEntry,
   RetouchEventMap,
   RetouchOptions,
+  ShellTheme,
   VideoEntry,
   ViewHandle,
 } from "./types";
@@ -102,7 +103,7 @@ export class Retouch {
 
     injectStyles();
 
-    this.root = h("div", { class: "rt-root" });
+    this.root = h("div", { class: "rt-root", "data-rt-theme": options.theme ?? "light" });
     this.container.appendChild(this.root);
 
     // Default feedback for rejected files and failed exports.
@@ -124,6 +125,11 @@ export class Retouch {
 
   get state(): AppState {
     return this.sm.state;
+  }
+
+  /** Switch the drop zone and gallery between "light", "dark" and "auto" (follow the OS). */
+  setTheme(theme: ShellTheme): void {
+    this.root.dataset.rtTheme = theme;
   }
 
   on<K extends keyof RetouchEventMap>(

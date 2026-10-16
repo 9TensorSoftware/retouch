@@ -1,115 +1,174 @@
 const STYLE_ID = "rt-styles";
+const TOKENS_ID = "rt-tokens";
 
-const CSS = /* css */ `
+/* The dark ("darkroom") token set. The editor, export progress and toasts
+   always use it; the drop zone and gallery use it under `theme: "dark"`, or
+   under `theme: "auto"` when the OS asks for dark. Written once, applied in
+   both places below. */
+const DARK_TOKENS = /* css */ `
+    --rt-surface: #141414;
+    --rt-surface-raised: #1D1D1D;
+    --rt-surface-overlay: #262626;
+    --rt-surface-subtle: #101010;
+    --rt-surface-wash: rgba(255, 255, 255, 0.04);
+    --rt-surface-glass: rgba(22, 22, 22, 0.9);
+    --rt-control: rgba(255, 255, 255, 0.07);
+    --rt-control-hover: rgba(255, 255, 255, 0.13);
+    --rt-text-1: rgba(255, 255, 255, 0.93);
+    --rt-text-2: rgba(255, 255, 255, 0.7);
+    --rt-text-3: rgba(255, 255, 255, 0.54);
+    --rt-text-disabled: rgba(255, 255, 255, 0.35);
+    --rt-line: rgba(255, 255, 255, 0.07);
+    --rt-line-strong: rgba(255, 255, 255, 0.16);
+    --rt-line-loud: rgba(255, 255, 255, 0.32);
+    --rt-accent: #E8703C;
+    --rt-accent-hover: color-mix(in oklab, var(--rt-accent) 88.5%, white);
+    --rt-accent-soft: color-mix(in srgb, var(--rt-accent) 12%, transparent);
+    --rt-accent-glow: color-mix(in srgb, var(--rt-accent) 18%, transparent);
+    --rt-accent-text: var(--rt-accent);
+    --rt-success: #3DCB77;
+    --rt-danger: #E5533D;
+    --rt-danger-soft: color-mix(in srgb, var(--rt-danger) 14%, transparent);
+    --rt-danger-text: #F08E7D;
+    --rt-focus: var(--rt-accent);
+    --rt-track: rgba(255, 255, 255, 0.14);
+    --rt-track-fill: rgba(255, 255, 255, 0.5);
+    --rt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --rt-shadow-md: 0 8px 28px rgba(0, 0, 0, 0.45);
+    --rt-shadow-lg: 0 16px 56px rgba(0, 0, 0, 0.55);
+    --rt-shadow-float: 0 1px 3px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.5);
+    --rt-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+`;
+
+const TOKENS = /* css */ `
 /* ═══════════════════════════════════════════════════════════════════════
    Design tokens — "Warm Atelier / Neutral Darkroom".
-   The shell (drop zone + gallery) is warm gallery-paper; the editor,
-   export progress, and toasts invert to a true-neutral darkroom so the
-   chrome never color-casts the image being judged. One terracotta accent
-   spans both worlds. Embedders theme by overriding these custom
-   properties: light values on .rt-root, dark values on the three
-   body-attached overlay roots below.
+   The shell (drop zone + gallery) is warm gallery-paper by default; the
+   editor, export progress, and toasts invert to a true-neutral darkroom so
+   the chrome never color-casts the image being judged. One terracotta
+   accent spans both worlds.
+
+   They live in the retouch-tokens cascade layer, which is declared first:
+   any host rule outside it (or in a later layer) wins regardless of
+   specificity or stylesheet order. Only custom properties live here —
+   component rules stay unlayered, so a host's global resets can't restyle
+   them. The accent ramp derives from --rt-accent, so branding takes one
+   variable (override any derived step to tune it).
    ═══════════════════════════════════════════════════════════════════════ */
 
-.rt-root, .rt-editor-overlay, .rt-export-overlay, .rt-toasts {
-  /* Surfaces */
-  --rt-surface: #F7F5F2;
-  --rt-surface-raised: #FFFFFF;
-  --rt-surface-overlay: #FFFFFF;
-  --rt-surface-subtle: #EFEBE5;
-  --rt-surface-wash: rgba(28, 25, 23, 0.03);
-  --rt-surface-glass: rgba(255, 255, 255, 0.85);
-  --rt-control: rgba(28, 25, 23, 0.05);
-  --rt-control-hover: rgba(28, 25, 23, 0.1);
-  /* Text */
-  --rt-text-1: #1C1917;
-  --rt-text-2: #57514A;
-  --rt-text-3: #756E64;
-  --rt-text-disabled: rgba(28, 25, 23, 0.35);
-  /* Lines */
-  --rt-line: #E7E2DA;
-  --rt-line-strong: #CFC8BC;
-  --rt-line-loud: #A9A195;
-  /* Accent (terracotta — deep on paper, luminous in the dark) */
-  --rt-accent: #D4572A;
-  --rt-accent-hover: #BF4D25;
-  --rt-accent-soft: rgba(212, 87, 42, 0.08);
-  --rt-accent-glow: rgba(212, 87, 42, 0.14);
-  --rt-accent-text: #B84A20;
-  --rt-on-accent: #221008;
-  /* Status */
-  --rt-success: #1FA355;
-  --rt-danger: #C64830;
-  --rt-danger-soft: rgba(198, 72, 48, 0.12);
-  --rt-danger-text: #B03A25;
-  --rt-focus: #D4572A;
-  /* Sliders */
-  --rt-track: rgba(28, 25, 23, 0.12);
-  --rt-track-fill: rgba(28, 25, 23, 0.45);
-  /* UI over image pixels — theme-independent */
-  --rt-on-media: #FFFFFF;
-  --rt-on-media-dim: rgba(255, 255, 255, 0.72);
-  --rt-on-media-faint: rgba(255, 255, 255, 0.25);
-  --rt-scrim: rgba(12, 10, 9, 0.6);
-  --rt-scrim-heavy: rgba(10, 9, 8, 0.72);
-  --rt-glass: rgba(255, 255, 255, 0.16);
-  --rt-glass-hover: rgba(255, 255, 255, 0.32);
-  /* Elevation */
-  --rt-shadow-sm: 0 1px 3px rgba(26, 24, 21, 0.07);
-  --rt-shadow-md: 0 4px 16px rgba(26, 24, 21, 0.08);
-  --rt-shadow-lg: 0 16px 48px rgba(26, 24, 21, 0.14);
-  /* Radii */
-  --rt-radius-sm: 6px;
-  --rt-radius-md: 10px;
-  --rt-radius-lg: 16px;
-  --rt-radius-xl: 24px;
-  /* Motion */
-  --rt-dur-1: 120ms;
-  --rt-dur-2: 200ms;
-  --rt-dur-3: 320ms;
-  --rt-ease: cubic-bezier(0.2, 0, 0, 1);
-  --rt-ease-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
-  /* Layout */
-  --rt-dock-h: 128px;
+@layer retouch-tokens {
+  .rt-root, .rt-editor-overlay, .rt-export-overlay, .rt-toasts {
+    /* Surfaces */
+    --rt-surface: #F7F5F2;
+    --rt-surface-raised: #FFFFFF;
+    --rt-surface-overlay: #FFFFFF;
+    --rt-surface-subtle: #EFEBE5;
+    --rt-surface-wash: rgba(28, 25, 23, 0.03);
+    --rt-surface-glass: rgba(255, 255, 255, 0.85);
+    --rt-control: rgba(28, 25, 23, 0.05);
+    --rt-control-hover: rgba(28, 25, 23, 0.1);
+    /* Text */
+    --rt-text-1: #1C1917;
+    --rt-text-2: #57514A;
+    --rt-text-3: #756E64;
+    --rt-text-disabled: rgba(28, 25, 23, 0.35);
+    /* Lines */
+    --rt-line: #E7E2DA;
+    --rt-line-strong: #CFC8BC;
+    --rt-line-loud: #A9A195;
+    /* Accent (terracotta — deep on paper, luminous in the dark). Derived
+       steps were fitted to the original hand-picked values. */
+    --rt-accent: #D4572A;
+    --rt-accent-hover: color-mix(in oklab, var(--rt-accent) 92.5%, black);
+    --rt-accent-soft: color-mix(in srgb, var(--rt-accent) 8%, transparent);
+    --rt-accent-glow: color-mix(in srgb, var(--rt-accent) 14%, transparent);
+    --rt-accent-text: color-mix(in oklab, var(--rt-accent) 90%, black);
+    --rt-on-accent: #221008;
+    /* Status */
+    --rt-success: #1FA355;
+    --rt-danger: #C64830;
+    --rt-danger-soft: color-mix(in srgb, var(--rt-danger) 12%, transparent);
+    --rt-danger-text: #B03A25;
+    --rt-focus: var(--rt-accent);
+    /* Sliders */
+    --rt-track: rgba(28, 25, 23, 0.12);
+    --rt-track-fill: rgba(28, 25, 23, 0.45);
+    /* UI over image pixels — theme-independent */
+    --rt-on-media: #FFFFFF;
+    --rt-on-media-dim: rgba(255, 255, 255, 0.72);
+    --rt-on-media-faint: rgba(255, 255, 255, 0.25);
+    --rt-scrim: rgba(12, 10, 9, 0.6);
+    --rt-scrim-heavy: rgba(10, 9, 8, 0.72);
+    --rt-glass: rgba(255, 255, 255, 0.16);
+    --rt-glass-hover: rgba(255, 255, 255, 0.32);
+    /* Marks on-device AI: light through a prism */
+    --rt-prism: conic-gradient(from 210deg, #FF6B47, #FFC457, #8CE99A, #5CC8FF, #A58BFF, #FF6B47);
+    /* Elevation */
+    --rt-shadow-sm: 0 1px 3px rgba(26, 24, 21, 0.07);
+    --rt-shadow-md: 0 4px 16px rgba(26, 24, 21, 0.08);
+    --rt-shadow-lg: 0 16px 48px rgba(26, 24, 21, 0.14);
+    --rt-shadow-float: 0 1px 3px rgba(26, 24, 21, 0.08), 0 12px 32px rgba(26, 24, 21, 0.12);
+    --rt-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    /* Type */
+    --rt-font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --rt-font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+    --rt-font-display: var(--rt-font-ui);
+    --rt-type-xs: 11px;
+    --rt-type-sm: 12px;
+    --rt-type-md: 13px;
+    --rt-type-lg: 15px;
+    --rt-type-xl: 18px;
+    /* Radii */
+    --rt-radius-sm: 6px;
+    --rt-radius-md: 10px;
+    --rt-radius-lg: 16px;
+    --rt-radius-xl: 24px;
+    --rt-radius-full: 999px;
+    /* Motion */
+    --rt-dur-1: 120ms;
+    --rt-dur-2: 200ms;
+    --rt-dur-3: 320ms;
+    --rt-dur-4: 480ms;
+    --rt-ease: cubic-bezier(0.2, 0, 0, 1);
+    --rt-ease-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+    --rt-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    /* Layout */
+    --rt-dock-h: 128px;
+  }
 
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Darkroom — the editor and its body-attached siblings (every descendant
+     inherits), plus the shell when it's themed dark. */
+  .rt-editor-overlay, .rt-export-overlay, .rt-toasts,
+  .rt-root[data-rt-theme="dark"] {${DARK_TOKENS}  }
+
+  @media (prefers-color-scheme: dark) {
+    .rt-root[data-rt-theme="auto"] {${DARK_TOKENS}    }
+  }
+
+  /* A real spring where linear() easing exists; the cubic above otherwise. */
+  @supports (transition-timing-function: linear(0, 1)) {
+    .rt-root, .rt-editor-overlay, .rt-export-overlay, .rt-toasts {
+      --rt-ease-spring: linear(0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%, 0.937 38.1%, 0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001 85.9%, 1);
+    }
+  }
+}
+`;
+
+const CSS = /* css */ `
+.rt-root, .rt-editor-overlay, .rt-export-overlay, .rt-toasts {
+  font-family: var(--rt-font-ui);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Darkroom overrides — the editor and its body-attached siblings. Every
-   descendant (menus, AI panel, compare panes, tool overlays) inherits. */
-.rt-editor-overlay, .rt-export-overlay, .rt-toasts {
-  --rt-surface: #141414;
-  --rt-surface-raised: #1D1D1D;
-  --rt-surface-overlay: #262626;
-  --rt-surface-subtle: #101010;
-  --rt-surface-wash: rgba(255, 255, 255, 0.04);
-  --rt-surface-glass: rgba(22, 22, 22, 0.9);
-  --rt-control: rgba(255, 255, 255, 0.07);
-  --rt-control-hover: rgba(255, 255, 255, 0.13);
-  --rt-text-1: rgba(255, 255, 255, 0.93);
-  --rt-text-2: rgba(255, 255, 255, 0.7);
-  --rt-text-3: rgba(255, 255, 255, 0.54);
-  --rt-text-disabled: rgba(255, 255, 255, 0.35);
-  --rt-line: rgba(255, 255, 255, 0.07);
-  --rt-line-strong: rgba(255, 255, 255, 0.16);
-  --rt-line-loud: rgba(255, 255, 255, 0.32);
-  --rt-accent: #E8703C;
-  --rt-accent-hover: #F0824F;
-  --rt-accent-soft: rgba(232, 112, 60, 0.12);
-  --rt-accent-glow: rgba(232, 112, 60, 0.18);
-  --rt-accent-text: #E8703C;
-  --rt-success: #3DCB77;
-  --rt-danger: #E5533D;
-  --rt-danger-soft: rgba(229, 83, 61, 0.14);
-  --rt-danger-text: #F08E7D;
-  --rt-focus: #E8703C;
-  --rt-track: rgba(255, 255, 255, 0.14);
-  --rt-track-fill: rgba(255, 255, 255, 0.5);
-  --rt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --rt-shadow-md: 0 8px 28px rgba(0, 0, 0, 0.45);
-  --rt-shadow-lg: 0 16px 56px rgba(0, 0, 0, 0.55);
+.rt-root[data-rt-theme="dark"] {
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .rt-root[data-rt-theme="auto"] {
+    color-scheme: dark;
+  }
 }
 
 .rt-root {
@@ -2182,7 +2241,7 @@ body:has(> .rt-editor-overlay) .rt-toasts {
   background: var(--rt-surface-overlay);
   border: 1px solid var(--rt-line-strong);
   color: var(--rt-text-1);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--rt-font-ui);
   font-size: 13px;
   font-weight: 500;
   line-height: 1.4;
@@ -2659,13 +2718,21 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
 let injected = false;
 
 export function injectStyles(): void {
-  if (injected || document.getElementById(STYLE_ID)) {
-    injected = true;
-    return;
+  if (injected) return;
+  // Tokens go first in <head> so their layer ranks below any layer the host
+  // declares. Component rules stay appended after the host's stylesheets,
+  // as they always were, so host resets can't win ties against them.
+  if (!document.getElementById(TOKENS_ID)) {
+    const tokens = document.createElement("style");
+    tokens.id = TOKENS_ID;
+    tokens.textContent = TOKENS;
+    document.head.prepend(tokens);
   }
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
-  style.textContent = CSS;
-  document.head.appendChild(style);
+  if (!document.getElementById(STYLE_ID)) {
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = CSS;
+    document.head.appendChild(style);
+  }
   injected = true;
 }

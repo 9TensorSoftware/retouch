@@ -187,19 +187,31 @@ Retouch.registerTool({
   icon: "<svg …></svg>",
   // kinds: ["image"],            // optionally restrict by media kind
   mount(ctx) {
-    const root = document.createElement("div");
-    root.className = "rt-dock__row";
-    const chip = document.createElement("button");
-    chip.className = "rt-dock__chip";
-    chip.textContent = "Golden hour";
-    chip.onclick = () => {
-      ctx.edits.filter = "warm";                       // shared edit model
-      ctx.edits.adjustments.temperature = 35;
-      ctx.render();                                    // live preview
-      ctx.record();                                    // undoable step
+    const golden = ctx.ui.button({
+      label: "Golden hour",
+      onClick: () => {
+        ctx.edits.filter = "warm";                     // shared edit model
+        ctx.edits.adjustments.temperature = 35;
+        ctx.render();                                  // live preview
+        ctx.record();                                  // undoable step
+        warmth.set(35);
+      },
+    });
+    const warmth = ctx.ui.slider({
+      label: "Warmth",
+      min: -100,
+      max: 100,
+      value: ctx.edits.adjustments.temperature,
+      onInput: (v) => {
+        ctx.edits.adjustments.temperature = v;
+        ctx.render();
+      },
+      onChange: () => ctx.record(),                    // one undo step per drag
+    });
+    return {
+      root: ctx.ui.row(golden.root, warmth.root),
+      sync: () => warmth.set(ctx.edits.adjustments.temperature), // after undo/redo/AI
     };
-    root.appendChild(chip);
-    return { root };
   },
 });
 
@@ -213,36 +225,46 @@ Custom tools write through the same non-destructive edit model as the
 built-ins, so previews, undo/redo, AI ops, and export work unchanged. (Tools
 that need their own render passes — draw/text layers — are on the roadmap.)
 
-A slider in a custom pane gets the built-in filled-track treatment by calling
-`refreshRangeFill(input)` (exported from `@retouchjs/core`) after creating it,
-from its `input` listener, and wherever you set `input.value` programmatically.
+`ctx.ui` builds pane controls that match the built-in tools — `row`, `section`,
+`slider`, `button`, `choice` (one of several options) and `note` (status text,
+announced to screen readers) — and keeps them matching as the editor's design
+changes, so a plugin never styles anything itself. Panes built by hand still
+work: the `rt-dock__*` classes stay styled, and a hand-built slider gets the
+filled track by calling `refreshRangeFill(input)` (exported from
+`@retouchjs/core`) after creating it, from its `input` listener, and wherever
+you set `input.value` programmatically.
 
 ### Theming
 
 All chrome resolves through CSS custom properties, so restyling is a matter of
-overriding tokens — no class overrides, no rebuild. Rétouch is two worlds:
-the shell (drop zone + gallery) reads its tokens from `.rt-root`, while the
-editor, export progress, and toasts attach to `<body>` and read a dark set
-from `.rt-editor-overlay, .rt-export-overlay, .rt-toasts`. Override whichever
-world you want to change:
+overriding tokens — no class overrides, no rebuild. The defaults live in the
+`retouch-tokens` cascade layer, so your overrides win however your stylesheets
+are ordered and whatever their specificity. Rétouch is two worlds: the shell
+(drop zone + gallery) reads its tokens from `.rt-root`, while the editor,
+export progress, and toasts attach to `<body>` and read a dark set from
+`.rt-editor-overlay, .rt-export-overlay, .rt-toasts`. Override whichever world
+you want to change:
 
 ```css
-/* Brand the accent (shell + gallery) */
+/* Brand the accent (shell + gallery) — the rest of the ramp derives from it */
 .rt-root {
   --rt-accent: #2563EB;
-  --rt-accent-hover: #1D4ED8;
-  --rt-accent-text: #1D4ED8;      /* accent used as text — keep ≥4.5:1 */
-  --rt-focus: #2563EB;
 }
 
 /* And the editor's darkroom chrome */
 .rt-editor-overlay, .rt-export-overlay, .rt-toasts {
   --rt-accent: #60A5FA;
-  --rt-accent-hover: #93C5FD;
-  --rt-accent-text: #60A5FA;
-  --rt-focus: #60A5FA;
 }
 ```
+
+The hover shade, the soft and glow washes, the focus ring, and accent-as-text
+all derive from `--rt-accent`; set any of them to tune it. For a light brand
+color, set `--rt-accent-text` to a darker shade that keeps 4.5:1 against the
+surface, and `--rt-on-accent` for text on filled buttons.
+
+The shell follows the `theme` option: `"light"` (default), `"dark"`, or
+`"auto"` to track the OS setting; `setTheme()` switches it at runtime. Dark
+uses the editor's darkroom set. The editor itself is always dark.
 
 The main tokens (each defined per world):
 
@@ -255,8 +277,12 @@ The main tokens (each defined per world):
 | `--rt-accent`, `--rt-accent-hover`, `--rt-accent-soft`, `--rt-accent-glow`, `--rt-accent-text`, `--rt-on-accent` | The accent ramp: fills, washes, accent-as-text, text-on-accent |
 | `--rt-success`, `--rt-danger`, `--rt-danger-soft` | Status colors |
 | `--rt-focus` | The `:focus-visible` ring |
-| `--rt-radius-sm/md/lg/xl` | 6 / 10 / 16 / 24 px |
-| `--rt-dur-1/2/3`, `--rt-ease`, `--rt-ease-decel` | Motion (respects `prefers-reduced-motion`) |
+| `--rt-font-ui`, `--rt-font-mono`, `--rt-font-display` | Type families (display defaults to the UI face) |
+| `--rt-type-xs/sm/md/lg/xl` | 11 / 12 / 13 / 15 / 18 px |
+| `--rt-shadow-sm/md/lg/float`, `--rt-highlight` | Elevation; `float` for panels over the stage, `highlight` for their top edge |
+| `--rt-prism` | The spectral gradient that marks on-device AI |
+| `--rt-radius-sm/md/lg/xl/full` | 6 / 10 / 16 / 24 / 999 px |
+| `--rt-dur-1/2/3/4`, `--rt-ease`, `--rt-ease-decel`, `--rt-ease-spring` | Motion (respects `prefers-reduced-motion`; the spring uses `linear()` where supported) |
 
 Colors drawn onto canvases (the curves editor, ML overlays) can't read CSS
 variables and keep matching constants in TypeScript.
@@ -344,6 +370,7 @@ new Retouch(options: RetouchOptions)
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `target` | `string \| HTMLElement` | — | CSS selector or element to mount into (throws if the selector matches nothing) |
+| `theme` | `"light" \| "dark" \| "auto"` | `"light"` | Drop zone and gallery color scheme; `"auto"` follows the OS — see [Theming](#theming) |
 | `maxFiles` | `number` | `Infinity` | Cap on the number of entries; extra files are rejected with reason `"count"` |
 | `acceptedTypes` | `string[]` | `["image/jpeg", "image/png", "image/webp"]` | Accepted image MIME types |
 | `acceptedVideoTypes` | `string[]` | `["video/mp4", "video/webm", "video/quicktime"]` | Accepted video MIME types; `[]` disables video |
@@ -362,6 +389,7 @@ const retouch = new Retouch({ target: "#editor" });
 
 retouch.state;                       // "dropzone" | "gallery" | "editor" | "destroyed"
 retouch.on("images:add", (e) => …);  // subscribe; returns an unsubscribe function
+retouch.setTheme("auto");            // shell color scheme: "light" | "dark" | "auto"
 
 await retouch.addFiles(files);       // validate + ingest File objects (drop zone / gallery do this for you)
 retouch.getMedia();                  // every entry, in insertion order (ImageEntry | VideoEntry)
@@ -411,11 +439,12 @@ const off = retouch.on("export:progress", ({ id, progress }) => …);
 
 Values: `Retouch`, `refreshRangeFill`, `isImageEntry`, `isVideoEntry`, `ACCEPTED_TYPES`,
 `ACCEPTED_VIDEO_TYPES`, `VERSION`.
-Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `MediaEntry`, `ImageEntry`, `VideoEntry`,
-`MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `TrimRange`, `EditMask`,
-`FilterPreset`, `AspectRatioPreset`, `Orientation`, `GalleryViewMode`, `EditorTool`,
+Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `ShellTheme`, `MediaEntry`, `ImageEntry`,
+`VideoEntry`, `MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `TrimRange`,
+`EditMask`, `FilterPreset`, `AspectRatioPreset`, `Orientation`, `GalleryViewMode`, `EditorTool`,
 `BuiltinEditorTool`, `ImageExportOptions`, `GifExportOptions`, `GifLoopMode`, `FileRejectionReason`, `AiOptions`, `AiRequest`,
-`AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolPaneHandle`.
+`AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolPaneHandle`, `ToolUi`, `UiSlider`,
+`UiSliderOptions`, `UiButton`, `UiButtonOptions`, `UiChoice`, `UiChoiceOptions`, `UiNote`.
 
 <br />
 
@@ -424,6 +453,7 @@ Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `MediaEntry`, `ImageEntr
 ```bash
 pnpm install          # Install dependencies (workspace: core + packages/ml)
 pnpm dev              # Dev server with the live demo at http://localhost:5173/retouch.js/
+                      # (and every token and plugin control at /retouch.js/kitchen.html)
 pnpm test             # Run the test suite (core + ml)
 pnpm test:watch       # …in watch mode
 pnpm test:coverage    # …with coverage
