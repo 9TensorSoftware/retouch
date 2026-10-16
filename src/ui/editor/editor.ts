@@ -63,6 +63,7 @@ import { createMasksTool } from "./masks-tool";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools } from "./tool-registry";
+import { createToolUi } from "./tool-ui";
 import { createToolbar } from "./toolbar";
 import type { TransportBarHandle } from "./transport-bar";
 import { createTransportBar } from "./transport-bar";
@@ -706,6 +707,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
     render: () => syncToolsFromEdits(),
     record: recordEdit,
     canvasArea,
+    ui: createToolUi(signal),
   };
   const customHandles = new Map<EditorTool, ToolPaneHandle>();
   const customPanes: Array<{ id: EditorTool; root: HTMLElement }> = [];

@@ -33,21 +33,21 @@ Retouch.registerTool({
   label: "Looks",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3z"/></svg>',
   mount(ctx: ToolContext) {
-    const root = document.createElement("div");
-    root.className = "rt-dock__row";
-    for (const look of LOOKS) {
-      const chip = document.createElement("button");
-      chip.className = "rt-dock__chip";
-      chip.textContent = look.name;
-      chip.addEventListener("click", () => {
-        ctx.edits.filter = look.filter;
-        ctx.edits.adjustments = { ...ctx.edits.adjustments, ...look.adjustments };
-        ctx.render();
-        ctx.record();
-      });
-      root.appendChild(chip);
-    }
-    return { root };
+    // ctx.ui builds controls that match the built-in tools, so the plugin
+    // never styles anything itself.
+    const buttons = LOOKS.map(
+      (look) =>
+        ctx.ui.button({
+          label: look.name,
+          onClick: () => {
+            ctx.edits.filter = look.filter;
+            ctx.edits.adjustments = { ...ctx.edits.adjustments, ...look.adjustments };
+            ctx.render();
+            ctx.record();
+          },
+        }).root,
+    );
+    return { root: ctx.ui.row(...buttons) };
   },
 });
 

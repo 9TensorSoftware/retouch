@@ -12,6 +12,7 @@ import {
   ICON_TOOL_TRANSFORM,
   ICON_TOOL_TRIM,
 } from "../icons";
+import type { ToolUi } from "./tool-ui";
 
 /** What a custom tool gets to work with. Mutate `edits`, then render + record. */
 export interface ToolContext {
@@ -26,6 +27,8 @@ export interface ToolContext {
   record(): void;
   /** The element hosting the canvas, for overlays. */
   canvasArea: HTMLElement;
+  /** Builders for pane controls that match the built-in tools. */
+  ui: ToolUi;
 }
 
 /** The dock pane a custom tool mounts into the editor. */

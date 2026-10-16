@@ -119,9 +119,20 @@ export interface ImageExportOptions {
   maxDimension?: number;
 }
 
+/**
+ * Color scheme for the drop zone and gallery. The editor, export progress
+ * and toasts are always dark so the chrome never color-casts the image.
+ */
+export type ShellTheme = "light" | "dark" | "auto";
+
 export interface RetouchOptions {
   /** Target DOM element or CSS selector to mount into. */
   target: string | HTMLElement;
+  /**
+   * Drop zone and gallery color scheme: "light" (default), "dark", or
+   * "auto" to follow the OS setting. Switch later with `setTheme()`.
+   */
+  theme?: ShellTheme;
   /** Maximum number of files. Defaults to Infinity. */
   maxFiles?: number;
   /** Accepted image MIME types. Defaults to common image types. */

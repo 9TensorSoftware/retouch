@@ -1,37 +1,6 @@
-import { DEFAULT_EDITS } from "../src/constants";
 import type { ImageEntry, ViewHandle } from "../src/types";
 import { createEditor } from "../src/ui/editor/editor";
-
-// jsdom has no layout, and the crop marquee is sized against the rendered
-// image rect, so give every element a plausible box for these tests.
-function stubLayout(width: number, height: number): () => void {
-  const proto = HTMLElement.prototype;
-  const saved = (["clientWidth", "clientHeight"] as const).map(
-    (key) => [key, Object.getOwnPropertyDescriptor(proto, key)] as const,
-  );
-  Object.defineProperty(proto, "clientWidth", { configurable: true, get: () => width });
-  Object.defineProperty(proto, "clientHeight", { configurable: true, get: () => height });
-  return () => {
-    for (const [key, descriptor] of saved) {
-      if (descriptor) Object.defineProperty(proto, key, descriptor);
-      else Reflect.deleteProperty(proto, key);
-    }
-  };
-}
-
-function makeEntry(): ImageEntry {
-  const image = new Image();
-  Object.defineProperty(image, "naturalWidth", { value: 1600 });
-  Object.defineProperty(image, "naturalHeight", { value: 900 });
-  return {
-    id: "fjord",
-    kind: "image",
-    file: new File(["x"], "fjord.jpg", { type: "image/jpeg" }),
-    image,
-    edits: structuredClone(DEFAULT_EDITS),
-    edited: false,
-  } as unknown as ImageEntry;
-}
+import { makeImageEntry, stubLayout } from "./editor-helpers";
 
 /** The 1:1 marquee centered on a 16:9 frame. */
 const SQUARE_ON_16_9 = { x: 0.21875, y: 0, width: 0.5625, height: 1 };
@@ -53,7 +22,7 @@ describe("editor crop commit", () => {
 
   beforeEach(() => {
     restoreLayout = stubLayout(800, 600);
-    entry = makeEntry();
+    entry = makeImageEntry();
     onDone = vi.fn();
     onCancel = vi.fn();
     editor = createEditor({ entry, onDone, onCancel });
