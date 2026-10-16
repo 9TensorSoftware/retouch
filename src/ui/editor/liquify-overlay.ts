@@ -53,8 +53,10 @@ export function createLiquifyOverlay(options: LiquifyOverlayOptions): LiquifyOve
   }
 
   function toLocal(e: PointerEvent): { x: number; y: number } {
+    // Screen px back to layout px: the stage may be magnifying the canvas.
     const bounds = root.getBoundingClientRect();
-    return { x: e.clientX - bounds.left, y: e.clientY - bounds.top };
+    const zoom = renderer.getScreenScale();
+    return { x: (e.clientX - bounds.left) / zoom, y: (e.clientY - bounds.top) / zoom };
   }
 
   function updateCursor(x: number, y: number): void {

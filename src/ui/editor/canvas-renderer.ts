@@ -97,6 +97,15 @@ export class CanvasRenderer {
   private cropApplied = true;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
   private looping = false;
+  /** Zoom on top of fit-to-stage (1 = fit); see setViewZoom(). */
+  private viewZoom = 1;
+  /** Source px → CSS px: the stage fit, and the scale the canvas is drawn at. */
+  private fitScale = 1;
+  private drawScale = 1;
+  /** CSS magnification the stage adds on top of the drawn canvas. */
+  private screenScale = 1;
+  private renderListener: (() => void) | null = null;
+  private paintListener: (() => void) | null = null;
 
   constructor(container: HTMLElement, source: RenderSource, edits: ImageEdits) {
     this.container = container;
@@ -186,6 +195,7 @@ export class CanvasRenderer {
       if (this.adjustments.vignette > 0) {
         drawVignette(renderCtx, el.width, el.height, this.adjustments.vignette);
       }
+      this.paintListener?.();
     });
 
     if (this.video) {
@@ -341,6 +351,25 @@ export class CanvasRenderer {
     return { ...this.imageRect };
   }
 
+  /** Zoom relative to fitting the stage (1 = fit). The next render() applies it. */
+  setViewZoom(zoom: number): void {
+    this.viewZoom = Math.max(1, zoom);
+  }
+
+  /** From the last render: the stage-fit scale and the scale the canvas is actually drawn at. */
+  getViewScales(): { fit: number; draw: number } {
+    return { fit: this.fitScale, draw: this.drawScale };
+  }
+
+  /** The stage's CSS magnification on top of the canvas, so overlays can map pointer moves. */
+  setScreenScale(scale: number): void {
+    this.screenScale = scale;
+  }
+
+  getScreenScale(): number {
+    return this.screenScale;
+  }
+
   getCanvasElement(): HTMLCanvasElement {
     return this.fabricCanvas.getElement();
   }
@@ -358,7 +387,14 @@ export class CanvasRenderer {
     if (sourceW === 0 || sourceH === 0) return;
 
     // Fit the oriented source within the available area, with a small margin.
-    const scale = Math.min((availWidth * 0.9) / sourceW, (availHeight * 0.9) / sourceH, 1);
+    const stageFit = Math.min((availWidth * 0.9) / sourceW, (availHeight * 0.9) / sourceH, 1);
+    // Zoom draws a larger canvas, but only up to the frame's own resolution:
+    // past that there's no more detail to show, so the stage magnifies with
+    // CSS instead (which also keeps canvases inside browser size limits).
+    const detail = this.frameCanvas.width / sourceW;
+    const scale = Math.min(stageFit * this.viewZoom, Math.max(stageFit, detail));
+    this.fitScale = stageFit;
+    this.drawScale = scale;
 
     const drawW = Math.round(sourceW * scale);
     const drawH = Math.round(sourceH * scale);
@@ -382,6 +418,17 @@ export class CanvasRenderer {
     this.imageRect = { x: 0, y: 0, width: drawW, height: drawH };
 
     this.fabricCanvas.requestRenderAll();
+    this.renderListener?.();
+  }
+
+  /** Called after every render() — the stage re-applies its zoom transform. */
+  onRender(listener: (() => void) | null): void {
+    this.renderListener = listener;
+  }
+
+  /** Called once fabric has actually painted the canvas (renders paint on the next frame). */
+  onPaint(listener: (() => void) | null): void {
+    this.paintListener = listener;
   }
 
   /** Redraw the current frame (and re-filter it when filters are active). */

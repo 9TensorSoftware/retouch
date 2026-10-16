@@ -121,7 +121,7 @@ when `onDone` is configured) to export everything.
 
 ### 3. Editor
 
-Opens as a modal overlay: a true-neutral dark stage that keeps focus — and color judgment — on the image, an icon rail of feature-group tabs down the left edge, and a contextual control strip beneath the canvas (aspect chips, one-slider adjustments, a filter filmstrip). Tabs are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
+Opens as a modal overlay: a neutral graphite stage that keeps focus — and color judgment — on the image, with floating panels around it. The tool rail down the left edge groups tools by job (frame, tone, looks, then plugins), with the AI tools gathered behind one ✦ launcher; the inspector on the right holds the active tool's controls and a live RGB histogram. Zoom up to 800% and pan around the stage. On narrow windows and upright tablets the panels stack: stage on top, inspector beneath, rail along the bottom edge. Tools are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
 
 <br />
 
@@ -176,15 +176,17 @@ installMlTools(retouch); // Cutout, Upscale, Erase, Select, Detect, Depth, Denoi
 
 ### Plugin feature groups
 
-The editor's tabs are registry-driven. Register your own feature group — a
-tab plus a contextual pane under the canvas — or deploy only the built-ins
-you want:
+The editor's tools are registry-driven. Register your own feature group — a
+rail button plus a pane in the inspector — or deploy only the built-ins you
+want:
 
 ```ts
 Retouch.registerTool({
   id: "looks",
   label: "Looks",
   icon: "<svg …></svg>",
+  group: "looks",                 // rail group: "frame" | "tone" | "looks" | "plugins" (default) | "ai"
+  shortcut: "o",                  // single-key shortcut; ignored if the editor already uses the key
   // kinds: ["image"],            // optionally restrict by media kind
   mount(ctx) {
     const golden = ctx.ui.button({
@@ -217,9 +219,14 @@ Retouch.registerTool({
 
 new Retouch({
   target: "#editor",
-  tools: ["crop", "filters", "looks"],  // deploy a subset, in tab order
+  tools: ["crop", "filters", "looks"],  // deploy a subset; the rail orders them by group
 });
 ```
+
+Tools in the `"ai"` group share one launcher on the rail when there are two or
+more; each opens from a menu that shows its `description` and `badge` (a short
+tag such as a model's download size). `@retouchjs/ml` registers its tools
+this way.
 
 Custom tools write through the same non-destructive edit model as the
 built-ins, so previews, undo/redo, AI ops, and export work unchanged. (Tools
@@ -270,7 +277,7 @@ The main tokens (each defined per world):
 
 | Token | Role |
 |---|---|
-| `--rt-surface`, `--rt-surface-raised`, `--rt-surface-overlay`, `--rt-surface-subtle` | Stage, tray/cards, menus/toasts, inset wells |
+| `--rt-surface`, `--rt-surface-raised`, `--rt-surface-overlay`, `--rt-surface-subtle` | Stage, panels/cards, menus/toasts, inset wells |
 | `--rt-control`, `--rt-control-hover` | Idle/hover washes on chips and buttons |
 | `--rt-text-1/2/3`, `--rt-text-disabled` | Text hierarchy |
 | `--rt-line`, `--rt-line-strong`, `--rt-line-loud` | Hairlines → emphasized borders |
@@ -325,8 +332,17 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | `Cmd/Ctrl+Z` · `Cmd/Ctrl+Shift+Z` / `Cmd/Ctrl+Y` | Undo · redo (also toolbar buttons) |
 | `Esc` · `Cmd/Ctrl+Enter` | Cancel · Done |
 | `Cmd/Ctrl+K` | Open the AI panel |
-| `1`–`9` | Switch tool, in tab order |
+| `C` `T` `L` · `A` `V` `H` `M` · `S` `F` (`R` on video) | Crop, Transform, Liquify · Adjust, Curves, Color mix, Masks · Stylize, Filters (Trim) |
+| `I` | Open the AI tools menu (arrow keys to move, `Esc` to close) |
+| `1`–`9` | Switch tool, in rail order |
+| `+` / `-` · `0` | Zoom in / out · fit to screen |
+| `Cmd/Ctrl` + scroll or pinch · scroll · `Space`+drag (images) or middle-drag | Zoom at the pointer · pan when zoomed · pan |
 | `Enter` (Crop tab) · `Space` (video) | Apply crop · play/pause |
+
+Hover a rail button for its name and key. Past the preview's own resolution
+the stage magnifies (crop handles and mask gizmos keep their size), and the
+zoom controls at the foot of the stage show the scale, with **Fit** and
+**1:1** (one image pixel per CSS pixel).
 
 Plus a **side-by-side compare view** — the labeled Compare button splits the
 canvas into bordered "Original" and "Edited" panels (the original comes from
@@ -377,7 +393,7 @@ new Retouch(options: RetouchOptions)
 | `maxFileSize` | `number` | `Infinity` | Per-file size cap in bytes (reason `"size"`) |
 | `maxVideoDuration` | `number` | `Infinity` | Video length cap in seconds (reason `"duration"`) |
 | `commitMode` | `"bake" \| "keep-edits"` | `"bake"` | What Done does to an image's edits — see [Editing UX](#editing-ux) |
-| `tools` | `EditorTool[]` | all | Feature groups to mount, in tab order (built-ins and registered plugins) |
+| `tools` | `EditorTool[]` | all | Feature groups to mount (built-ins and registered plugins); the rail orders them by group |
 | `export` | `ImageExportOptions` | `{ format: "png", quality: 0.92 }` | Image output format/quality/`maxDimension`; videos always export MP4/WebM |
 | `ai` | `AiOptions` | off | Enables the AI panel — see [AI edits](#ai-edits) |
 | `onDone` | `(blobs: Blob[]) => void` | — | Receives every entry exported with its edits; also shows the gallery's Done button |
@@ -443,7 +459,7 @@ Types: `RetouchOptions`, `RetouchEventMap`, `AppState`, `ShellTheme`, `MediaEntr
 `VideoEntry`, `MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `TrimRange`,
 `EditMask`, `FilterPreset`, `AspectRatioPreset`, `Orientation`, `GalleryViewMode`, `EditorTool`,
 `BuiltinEditorTool`, `ImageExportOptions`, `GifExportOptions`, `GifLoopMode`, `FileRejectionReason`, `AiOptions`, `AiRequest`,
-`AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolPaneHandle`, `ToolUi`, `UiSlider`,
+`AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolGroup`, `ToolPaneHandle`, `ToolUi`, `UiSlider`,
 `UiSliderOptions`, `UiButton`, `UiButtonOptions`, `UiChoice`, `UiChoiceOptions`, `UiNote`.
 
 <br />

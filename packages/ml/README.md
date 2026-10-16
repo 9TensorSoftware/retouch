@@ -23,7 +23,7 @@ through the plugin API and ride its edit model.
 
 - **Cutout (background removal)** — MODNet (Apache-2.0, ~25 MB) by default;
   point `modelUrl` at any BiRefNet ONNX export for higher fidelity. Registers
-  a "Cutout" tab in the editor; the result is added to the gallery as a new
+  a "Cutout" tool in the editor; the result is added to the gallery as a new
   transparent PNG.
 - **Upscale (4× super-resolution)** — Real-ESRGAN x4plus (BSD-3-Clause,
   ~67 MB), run tile-by-tile with overlap so seams never show. WebGPU when the
@@ -32,7 +32,7 @@ through the plugin API and ride its edit model.
 - **Detect (faces + objects)** — UltraFace (MIT, ~1.2 MB) for faces and
   YOLOX-nano (Apache-2.0, ~3.5 MB) for 80 COCO object classes with labeled
   boxes. Either feeds three one-click actions: add a radial mask per box
-  (tune it in the Masks tab), **pixelate** for privacy (replaces the image
+  (tune it in the Masks tool), **pixelate** for privacy (replaces the image
   in place), or **crop to the detected boxes**. Mask/crop actions ride the
   non-destructive edit model, so they undo like any other edit.
 - **Select (click-to-segment)** — SlimSAM-77 (Apache-2.0, ~38 MB in two
@@ -108,7 +108,9 @@ installMlTools(retouch, {
 });
 ```
 
-Any of the seven keys can be `false` to leave that tab out. Every option
+Any of the seven keys can be `false` to leave that tool out. The tools share
+one AI launcher on the editor's rail, and its menu lists each with a line on
+what it does and its download size. Every option
 group also accepts the runtime options below (`wasmPaths`,
 `executionProviders`, `externalDataUrl`, `onDownloadProgress`).
 `openResults` (default `true`) opens results that land in the gallery — Cutout,

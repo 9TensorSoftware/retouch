@@ -121,8 +121,15 @@ describe("toolbar tool list", () => {
       onToolChange: vi.fn(),
     });
     const btns = [...tb.root.querySelectorAll(".rt-toolbar__btn")];
-    expect(btns.map((b) => b.getAttribute("title"))).toEqual(["Trim", "Crop", "Adjust", "Filters"]);
-    expect(tb.root.querySelector(".rt-toolbar__btn--active")?.getAttribute("title")).toBe("Trim");
+    expect(btns.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Trim",
+      "Crop",
+      "Adjust",
+      "Filters",
+    ]);
+    expect(tb.root.querySelector(".rt-toolbar__btn--active")?.getAttribute("aria-label")).toBe(
+      "Trim",
+    );
     tb.destroy();
   });
 
@@ -154,7 +161,7 @@ describe("tool registry (plugin feature groups)", () => {
       onToolChange: vi.fn(),
     });
     const titles = [...tb.root.querySelectorAll(".rt-toolbar__btn")].map((b) =>
-      b.getAttribute("title"),
+      b.getAttribute("aria-label"),
     );
     expect(titles).toEqual(["Crop", "Watermark"]);
     tb.destroy();

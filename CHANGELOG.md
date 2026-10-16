@@ -15,12 +15,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - Tokens for the coming redesign: type families and scale (`--rt-font-*`, `--rt-type-*`),
   `--rt-shadow-float`, `--rt-highlight`, `--rt-prism`, `--rt-radius-full`, `--rt-dur-4`, and a
   spring easing, `--rt-ease-spring`.
+- Zoom and pan in the editor: zoom controls at the foot of the stage (−, +, Fit, 1:1), ⌘/Ctrl +
+  wheel or trackpad pinch to zoom at the pointer, `+` `-` `0` keys, and wheel, Space-drag (images)
+  or middle-drag to pan. Up to 800%; the canvas redraws sharp up to the preview's resolution and
+  magnifies past it, with crop handles and mask gizmos keeping their size.
+- A live RGB histogram heads the inspector for the tone and look tools.
+- Letter shortcuts for tools (C, T, L, A, V, H, M, S, F; R for Trim) with hover tooltips naming
+  each tool and its key. `I` opens the AI tools menu.
+- Plugin tools take `group` (`"frame" | "tone" | "looks" | "plugins" | "ai"`, type `ToolGroup`),
+  `shortcut`, and, for the AI menu, `description` and `badge`. `@retouchjs/ml` tools use them.
 
 ### Changed
 
 - Branding takes one variable: the accent's hover, washes, text color and the focus ring derive
   from `--rt-accent` (and `--rt-danger-soft` from `--rt-danger`). The default palette renders the
   same.
+- The editor's frame is redesigned. Floating panels sit on a graphite stage; the control strip
+  under the canvas became an inspector on the right, and the tool rail groups tools (frame, tone,
+  looks, then plugins), with the AI tools gathered behind one launcher when there are two or
+  more. The rail orders tools by group: the `tools` option picks which appear and their order
+  within a group, and the number keys follow the rail.
+- Dark tokens (the editor and the shell's dark theme) move to graphite neutrals and a brighter
+  accent, `#F5753F`.
+- On narrow windows (760 px and below) and upright tablets, the editor stacks: stage, then the
+  inspector, then the rail along the bottom edge.
 
 ### Fixed
 
@@ -29,6 +47,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   and won ties against a host's `.rt-root { --rt-accent: … }`. Component rules stay unlayered, so
   host resets still can't restyle them.
 - Setting only `--rt-accent` no longer leaves terracotta-tinted washes behind.
+- Side-by-side compare showed the original larger than the edited image; both now fit the same.
 
 ## [0.1.0] — 2026-09-19
 

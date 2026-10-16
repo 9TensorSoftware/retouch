@@ -12,7 +12,7 @@ license audit behind the ML and advanced-feature rows is in
 | Status | P | Feature |
 |--------|---|---------|
 | ✅ | — | Undo/redo history (Cmd/Ctrl+Z / ⇧Z / Y) over the edits object |
-| ✅ | — | Keyboard: Esc=cancel, Cmd/Ctrl+Enter=done, Cmd/Ctrl+K=AI, 1–9 tool hotkeys, Enter=apply crop, Space=play, arrow-nudge trim handles |
+| ✅ | — | Keyboard: Esc=cancel, Cmd/Ctrl+Enter=done, Cmd/Ctrl+K=AI, letter + 1–9 tool hotkeys, I=AI tools menu, +/−/0 zoom, Enter=apply crop, Space=play, arrow-nudge trim handles |
 | ✅ | — | Focus trap + `role="dialog"` + ARIA in editor; full keyboard operability; `:focus-visible` rings |
 | ✅ | — | Error feedback: toast on rejected files (type/size/duration/count) + `file:rejected` event |
 | ✅ | — | Side-by-side compare view (images) · hold-to-compare (video) · Reset-all |
@@ -23,8 +23,9 @@ license audit behind the ML and advanced-feature rows is in
 | ✅ | — | Rotate 90° + flip H/V buttons (crop-tracking transforms) |
 | ✅ | — | Curves editor with live histogram · per-color HSL mixer · white-balance eyedropper |
 | ✅ | — | Design system: semantic tokens, neutral darkroom editor, unified icon set, motion + reduced-motion, filled slider tracks |
-| ⬜ | P1 | Zoom & pan canvas (wheel/pinch, fit/100%) |
-| ⬜ | P1 | Mobile: responsive editor (rail + dock → bottom sheet), touch-size hit targets |
+| ✅ | — | Editor frame: grouped tool rail with an AI tools menu, right-hand inspector with a live RGB histogram, floating panels |
+| ✅ | — | Zoom & pan canvas (Cmd/Ctrl+wheel and trackpad pinch, wheel/Space/middle-drag pan, fit/1:1, sharp re-render up to the preview's resolution) |
+| ⬜ | P1 | Mobile: touch pinch-zoom, bottom-sheet inspector, touch-size hit targets (the panels already stack on narrow screens) |
 | ⬜ | P3 | Highlights/shadows recovery · custom LUT import · auto-enhance |
 | ⬜ | P3 | Straighten-with-grid overlay · loading skeletons · pixel-size readout on crop |
 

@@ -42,9 +42,17 @@ export interface ToolPaneHandle {
 }
 
 /**
- * A pluggable editor feature group: a tab in the toolbar plus a contextual
- * pane in the dock. Custom tools drive the same non-destructive edit model
- * the built-ins use, so their changes preview, undo, and export for free.
+ * Where a tool sits in the rail. Groups appear in this order, separated;
+ * "ai" tools collapse into one launcher when there are two or more.
+ */
+export type ToolGroup = "frame" | "tone" | "looks" | "plugins" | "ai";
+
+export const TOOL_GROUP_ORDER: readonly ToolGroup[] = ["frame", "tone", "looks", "plugins", "ai"];
+
+/**
+ * A pluggable editor feature group: a tab in the rail plus a pane in the
+ * inspector. Custom tools drive the same non-destructive edit model the
+ * built-ins use, so their changes preview, undo, and export for free.
  */
 export interface EditorToolPlugin {
   /** Unique id; also usable in the `tools` option. */
@@ -54,6 +62,17 @@ export interface EditorToolPlugin {
   icon: string;
   /** Media kinds the tool applies to. Defaults to both. */
   kinds?: Array<"image" | "video">;
+  /** Rail group. Defaults to "plugins". */
+  group?: ToolGroup;
+  /**
+   * Single-key shortcut: a letter not taken by a built-in tool or the editor
+   * (I opens the AI menu). A taken key is ignored, so the tool has none.
+   */
+  shortcut?: string;
+  /** One line on what the tool does, shown in the AI tools menu. */
+  description?: string;
+  /** A short tag shown beside it in that menu, e.g. a model's download size. */
+  badge?: string;
   mount(ctx: ToolContext): ToolPaneHandle;
 }
 
@@ -61,20 +80,51 @@ export interface ToolDef {
   id: string;
   label: string;
   icon: string;
+  group: ToolGroup;
+  shortcut?: string;
+  description?: string;
+  badge?: string;
 }
 
 export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
-  trim: { id: "trim", label: "Trim", icon: ICON_TOOL_TRIM },
-  crop: { id: "crop", label: "Crop", icon: ICON_TOOL_CROP },
-  transform: { id: "transform", label: "Transform", icon: ICON_TOOL_TRANSFORM },
-  liquify: { id: "liquify", label: "Liquify", icon: ICON_TOOL_LIQUIFY },
-  curves: { id: "curves", label: "Curves", icon: ICON_TOOL_CURVES },
-  hsl: { id: "hsl", label: "Color mix", icon: ICON_TOOL_HSL },
-  masks: { id: "masks", label: "Masks", icon: ICON_TOOL_MASKS },
-  stylize: { id: "stylize", label: "Stylize", icon: ICON_TOOL_STYLIZE },
-  adjust: { id: "adjust", label: "Adjust", icon: ICON_TOOL_ADJUST },
-  filters: { id: "filters", label: "Filters", icon: ICON_TOOL_FILTERS },
+  trim: { id: "trim", label: "Trim", icon: ICON_TOOL_TRIM, group: "frame", shortcut: "r" },
+  crop: { id: "crop", label: "Crop", icon: ICON_TOOL_CROP, group: "frame", shortcut: "c" },
+  transform: {
+    id: "transform",
+    label: "Transform",
+    icon: ICON_TOOL_TRANSFORM,
+    group: "frame",
+    shortcut: "t",
+  },
+  liquify: {
+    id: "liquify",
+    label: "Liquify",
+    icon: ICON_TOOL_LIQUIFY,
+    group: "frame",
+    shortcut: "l",
+  },
+  curves: { id: "curves", label: "Curves", icon: ICON_TOOL_CURVES, group: "tone", shortcut: "v" },
+  hsl: { id: "hsl", label: "Color mix", icon: ICON_TOOL_HSL, group: "tone", shortcut: "h" },
+  masks: { id: "masks", label: "Masks", icon: ICON_TOOL_MASKS, group: "tone", shortcut: "m" },
+  stylize: {
+    id: "stylize",
+    label: "Stylize",
+    icon: ICON_TOOL_STYLIZE,
+    group: "looks",
+    shortcut: "s",
+  },
+  adjust: { id: "adjust", label: "Adjust", icon: ICON_TOOL_ADJUST, group: "tone", shortcut: "a" },
+  filters: {
+    id: "filters",
+    label: "Filters",
+    icon: ICON_TOOL_FILTERS,
+    group: "looks",
+    shortcut: "f",
+  },
 };
+
+/** Keys the editor itself uses (AI menu, zoom, Space-pan); plugin shortcuts can't take them. */
+const RESERVED_KEYS = new Set(["i", " ", "+", "-", "_", "="]);
 
 const FALLBACK_ICON = ICON_TOOL_FALLBACK;
 
@@ -96,6 +146,25 @@ export function getCustomTools(): readonly EditorToolPlugin[] {
 export function resolveToolDef(id: string): ToolDef {
   if (id in BUILTIN_TOOL_DEFS) return BUILTIN_TOOL_DEFS[id as BuiltinEditorTool];
   const custom = customTools.find((t) => t.id === id);
-  if (custom) return { id: custom.id, label: custom.label, icon: custom.icon };
-  return { id, label: id, icon: FALLBACK_ICON };
+  if (custom) {
+    return {
+      id: custom.id,
+      label: custom.label,
+      icon: custom.icon,
+      group: custom.group ?? "plugins",
+      shortcut: pluginShortcut(custom.shortcut),
+      description: custom.description,
+      badge: custom.badge,
+    };
+  }
+  return { id, label: id, icon: FALLBACK_ICON, group: "plugins" };
+}
+
+/** A plugin's shortcut, unless it collides with the editor's or a built-in tool's key. */
+function pluginShortcut(key: string | undefined): string | undefined {
+  const k = key?.toLowerCase();
+  // Digits pick tools by rail position (0 fits the view).
+  if (!k || k.length !== 1 || RESERVED_KEYS.has(k) || /\d/.test(k)) return undefined;
+  const builtins = Object.values(BUILTIN_TOOL_DEFS);
+  return builtins.some((d) => d.shortcut === k) ? undefined : k;
 }

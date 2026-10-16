@@ -143,8 +143,10 @@ export function createMasksOverlay(options: MasksOverlayOptions): MasksOverlayHa
       if (!mask) return;
       const r = rect();
       if (r.width === 0 || r.height === 0) return;
-      const dx = (e.clientX - drag.startX) / r.width;
-      const dy = (e.clientY - drag.startY) / r.height;
+      // Pointer deltas are screen px; the stage may be magnifying the canvas.
+      const zoom = renderer.getScreenScale();
+      const dx = (e.clientX - drag.startX) / (r.width * zoom);
+      const dy = (e.clientY - drag.startY) / (r.height * zoom);
       const s = drag.snapshot;
       if (drag.role === "move") {
         mask.x0 = clamp(s.x0 + dx, 0, 1);

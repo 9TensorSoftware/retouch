@@ -31,6 +31,8 @@ const LOOKS: Look[] = [
 Retouch.registerTool({
   id: "looks",
   label: "Looks",
+  group: "looks",
+  shortcut: "o",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3z"/></svg>',
   mount(ctx: ToolContext) {
     // ctx.ui builds controls that match the built-in tools, so the plugin
