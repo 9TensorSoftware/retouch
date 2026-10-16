@@ -103,6 +103,15 @@ export const ICON_CLOSE = icon('<path d="M6 6l12 12M18 6L6 18"/>');
 export const ICON_PLUS = icon('<path d="M12 6v12M6 12h12"/>');
 export const ICON_MINUS = icon('<path d="M6 12h12"/>');
 export const ICON_CHEVRON_DOWN = icon('<path d="M6 9l6 6 6-6"/>');
+/** Pin a tool to the rail: a pushpin. */
+export const ICON_PIN = icon('<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>');
+/** The rail's names toggle: a sidebar, opening or closing. */
+export const ICON_RAIL_EXPAND = icon(
+  '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9 4.5v15M13 10l2.5 2-2.5 2"/>',
+);
+export const ICON_RAIL_COLLAPSE = icon(
+  '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9 4.5v15M15.5 10L13 12l2.5 2"/>',
+);
 export const ICON_RESET = icon('<path d="M4 4v6h6"/><path d="M5.6 15A8 8 0 1 0 6.3 6.3L4 10"/>');
 export const ICON_TRASH = icon(
   '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/>',

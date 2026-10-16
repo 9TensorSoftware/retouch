@@ -1,19 +1,32 @@
 import type { EditorTool, ViewHandle } from "../../types";
 import { h } from "../h";
-import { ICON_SPARKLE } from "../icons";
+import { ICON_PIN, ICON_RAIL_COLLAPSE, ICON_RAIL_EXPAND, ICON_SPARKLE } from "../icons";
 import type { ToolDef, ToolGroup } from "./tool-registry";
 import { resolveToolDef, TOOL_GROUP_ORDER } from "./tool-registry";
+
+/** How the rail is laid out: what's on it, and whether names show. */
+export interface RailLayout {
+  /** AI tools that sit on the rail itself; the rest wait in the AI menu. */
+  pinned: EditorTool[];
+  /** Tool names shown beside the icons. */
+  expanded: boolean;
+}
 
 export interface ToolbarOptions {
   /** Tool ids to show (built-in or registered); kept in this order within each rail group. */
   tools: EditorTool[];
   activeTool: EditorTool;
   onToolChange: (tool: EditorTool) => void;
+  /** The starting layout. Without `pinned`, the first three AI tools are pinned. */
+  layout?: Partial<RailLayout>;
+  /** The user pinned or unpinned a tool, or toggled names: remember it. */
+  onLayoutChange?: (layout: RailLayout) => void;
 }
 
 export interface ToolbarHandle extends ViewHandle {
-  /** Tools in rail order, AI-menu tools last: what the 1–9 keys select. */
+  /** Tools in rail order, menu-only AI tools last: what the 1–9 keys select. */
   readonly order: readonly EditorTool[];
+  readonly layout: RailLayout;
   setActiveTool(tool: EditorTool): void;
   /** Show/hide the accent dot marking a feature group with active edits. */
   setTouched(tool: EditorTool, touched: boolean): void;
@@ -21,29 +34,56 @@ export interface ToolbarHandle extends ViewHandle {
   toolForKey(key: string): EditorTool | undefined;
   /** Open the AI tools menu; false when the rail has none. */
   openAiMenu(): boolean;
+  /** Put an AI tool on the rail, or back in the AI menu. */
+  setPinned(tool: EditorTool, pinned: boolean): void;
+  /** Show or hide tool names beside the icons. */
+  setExpanded(expanded: boolean): void;
 }
 
+/** AI tools on the rail before anyone chooses: the first few, by registration. */
+export const DEFAULT_PINNED_AI = 3;
+
+const GROUP_LABELS: Record<ToolGroup, string> = {
+  frame: "Frame",
+  tone: "Tone",
+  looks: "Looks",
+  plugins: "Plugins",
+  ai: "AI · on this device",
+};
+
 /**
- * The tool rail: groups of icon buttons (frame, tone, looks, plugins), with
- * the AI tools gathered behind one launcher when there are several. Labels
- * and shortcuts show in a tooltip, positioned fixed so the scrolling rail
- * never clips it.
+ * The tool rail: groups of icon buttons (frame, tone, looks, plugins, AI).
+ * AI tools sit on the rail when pinned and otherwise wait behind the AI
+ * menu, which lists them all with a pin each. The rail shows icons with
+ * tooltips, or — expanded — names, group titles and keys.
  */
 export function createToolbar(options: ToolbarOptions): ToolbarHandle {
   const abort = new AbortController();
   const signal = abort.signal;
   let active = options.activeTool;
 
-  /** The element that represents each tool: a rail button or an AI menu item. */
-  const buttons = new Map<EditorTool, HTMLElement>();
+  const defs = options.tools.map((id) => resolveToolDef(id));
+  const aiDefs = defs.filter((d) => d.group === "ai");
+  // A lone AI tool just sits on the rail; a menu needs at least two.
+  const hasMenu = aiDefs.length > 1;
+  const isAi = (id: EditorTool): boolean => aiDefs.some((d) => d.id === id);
+  const pinned = new Set<EditorTool>(
+    (options.layout?.pinned ?? aiDefs.slice(0, DEFAULT_PINNED_AI).map((d) => d.id)).filter(isAi),
+  );
+  let expanded = options.layout?.expanded ?? false;
+  const touched = new Set<EditorTool>();
+
   const shortcuts = new Map<string, EditorTool>();
-  const railOrder: EditorTool[] = [];
-  const menuOrder: EditorTool[] = [];
-  const menuTools = new Set<EditorTool>();
+  for (const def of defs) {
+    if (def.shortcut && !shortcuts.has(def.shortcut)) shortcuts.set(def.shortcut, def.id);
+  }
+  const keyOf = (def: ToolDef): string | undefined =>
+    def.shortcut && shortcuts.get(def.shortcut) === def.id ? def.shortcut : undefined;
 
   const root = h("div", { class: "rt-toolbar", role: "group", "aria-label": "Tools" });
+  const groups = h("div", { class: "rt-toolbar__groups" });
 
-  // ── Tooltip ──
+  // ── Tooltip (compact rail only: expanded rows show their names) ──
 
   const tip = h("div", { class: "rt-tooltip", role: "tooltip" });
   tip.hidden = true;
@@ -54,6 +94,7 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
   }
 
   function showTip(anchor: HTMLElement, label: string, key?: string): void {
+    if (expanded && !isHorizontal()) return;
     tip.textContent = label;
     if (key) tip.appendChild(h("kbd", null, key.toUpperCase()));
     tip.hidden = false;
@@ -99,32 +140,40 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     options.onToolChange(id);
   }
 
-  function register(def: ToolDef, el: HTMLElement): void {
-    buttons.set(def.id, el);
-    if (def.shortcut && !shortcuts.has(def.shortcut)) {
-      shortcuts.set(def.shortcut, def.id);
-      el.setAttribute("aria-keyshortcuts", def.shortcut.toUpperCase());
+  /**
+   * Icon, then what shows when the rail is expanded: the name (with a line
+   * on what it does, for AI tools) and the key.
+   */
+  function buttonContent(
+    btn: HTMLElement,
+    icon: string,
+    label: string,
+    key?: string,
+    description?: string,
+  ): void {
+    btn.innerHTML = icon;
+    const text = h(
+      "span",
+      { class: "rt-toolbar__text", "aria-hidden": "true" },
+      h("span", { class: "rt-toolbar__label" }, label),
+    );
+    if (description) text.appendChild(h("span", { class: "rt-toolbar__desc" }, description));
+    btn.appendChild(text);
+    if (key) {
+      btn.appendChild(
+        h("kbd", { class: "rt-toolbar__key", "aria-hidden": "true" }, key.toUpperCase()),
+      );
     }
   }
 
-  function railButton(def: ToolDef): HTMLElement {
-    const btn = h("button", { type: "button", class: "rt-toolbar__btn", "aria-label": def.label });
-    btn.innerHTML = def.icon;
-    btn.appendChild(h("span", { class: "rt-toolbar__label" }, def.label));
-    btn.addEventListener("click", () => select(def.id), { signal });
-    withTooltip(btn, def.label, def.shortcut);
-    register(def, btn);
-    railOrder.push(def.id);
-    return btn;
-  }
+  // ── AI tools menu: every AI tool, each with a pin ──
 
-  // ── AI tools menu ──
-
-  let launcher: HTMLElement | null = null;
   let menu: HTMLElement | null = null;
+  let launcher: HTMLButtonElement | null = null;
+  const menuRows = new Map<EditorTool, { item: HTMLButtonElement; pin: HTMLButtonElement }>();
 
-  function menuItems(): HTMLElement[] {
-    return menu ? [...menu.querySelectorAll<HTMLElement>(".rt-flyout__item")] : [];
+  function menuItems(): HTMLButtonElement[] {
+    return [...menuRows.values()].map((row) => row.item);
   }
 
   function openMenu(): void {
@@ -141,8 +190,7 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
       menu.style.left = `${root.getBoundingClientRect().right + 8}px`;
       menu.style.top = `${Math.max(8, Math.min(r.top - 8, innerHeight - m.height - 8))}px`;
     }
-    const current = menuItems().find((item) => item.dataset.tool === active);
-    (current ?? menuItems()[0])?.focus();
+    (menuRows.get(active)?.item ?? menuItems()[0])?.focus();
   }
 
   function closeMenu(refocus = false): void {
@@ -152,24 +200,23 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     if (refocus) launcher?.focus();
   }
 
-  function aiLauncher(defs: ToolDef[]): HTMLElement {
-    const btn = h("button", {
-      type: "button",
-      class: "rt-toolbar__btn rt-toolbar__btn--ai",
-      "aria-label": "AI tools",
-      "aria-haspopup": "menu",
-      "aria-expanded": "false",
-      "aria-keyshortcuts": "I",
-    });
-    btn.innerHTML = ICON_SPARKLE;
-    btn.appendChild(h("span", { class: "rt-toolbar__label" }, "AI"));
-    btn.addEventListener("click", () => (menu?.hidden ? openMenu() : closeMenu()), { signal });
-    withTooltip(btn, "AI tools · on this device", "i");
+  function paintPins(): void {
+    for (const [id, row] of menuRows) {
+      const on = pinned.has(id);
+      const name = resolveToolDef(id).label;
+      row.pin.setAttribute("aria-pressed", String(on));
+      row.pin.setAttribute(
+        "aria-label",
+        on ? `Take ${name} off the rail` : `Keep ${name} on the rail`,
+      );
+      row.pin.title = on ? "On the rail — click to take it off" : "Keep it on the rail";
+    }
+  }
 
-    const list = h("div", { class: "rt-flyout", role: "menu", "aria-label": "AI tools" });
-    list.hidden = true;
-    for (const def of defs) {
-      const item = h("button", { type: "button", class: "rt-flyout__item", role: "menuitem" });
+  if (hasMenu) {
+    const list = h("div", { class: "rt-flyout__list" });
+    for (const def of aiDefs) {
+      const item = h("button", { type: "button", class: "rt-flyout__item" });
       item.dataset.tool = def.id;
       const icon = h("span", { class: "rt-flyout__icon", "aria-hidden": "true" });
       icon.innerHTML = def.icon;
@@ -178,10 +225,13 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
         { class: "rt-flyout__text" },
         h("span", { class: "rt-flyout__name" }, def.label),
       );
-      if (def.description)
+      if (def.description) {
         text.appendChild(h("span", { class: "rt-flyout__desc" }, def.description));
+      }
       item.append(icon, text);
       if (def.badge) item.appendChild(h("span", { class: "rt-flyout__badge" }, def.badge));
+      const key = keyOf(def);
+      if (key) item.setAttribute("aria-keyshortcuts", key.toUpperCase());
       item.addEventListener(
         "click",
         () => {
@@ -190,16 +240,34 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
         },
         { signal },
       );
-      register(def, item);
-      menuTools.add(def.id);
-      menuOrder.push(def.id);
-      list.appendChild(item);
+      const pin = h("button", { type: "button", class: "rt-flyout__pin" });
+      pin.innerHTML = ICON_PIN;
+      pin.addEventListener("click", () => setPinned(def.id, !pinned.has(def.id)), { signal });
+      menuRows.set(def.id, { item, pin });
+      list.appendChild(h("div", { class: "rt-flyout__row" }, item, pin));
     }
-    list.addEventListener(
+    menu = h(
+      "div",
+      { class: "rt-flyout", role: "dialog", "aria-label": "AI tools" },
+      h(
+        "div",
+        { class: "rt-flyout__head" },
+        h("span", { class: "rt-flyout__title" }, "AI tools"),
+        h("span", { class: "rt-flyout__subtitle" }, "Run on this device"),
+      ),
+      list,
+      h("p", { class: "rt-flyout__foot" }, "Pin the ones you use to keep them on the rail."),
+    );
+    menu.hidden = true;
+    paintPins();
+
+    menu.addEventListener(
       "keydown",
       (e) => {
         const items = menuItems();
-        const i = items.indexOf(document.activeElement as HTMLElement);
+        const focused = document.activeElement as HTMLElement | null;
+        const row = [...menuRows.values()].find((r) => r.item === focused || r.pin === focused);
+        const i = row ? items.indexOf(row.item) : -1;
         const step: Record<string, number> = { ArrowDown: 1, ArrowUp: -1 };
         if (e.key in step) {
           e.preventDefault();
@@ -207,69 +275,204 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
         } else if (e.key === "Home" || e.key === "End") {
           e.preventDefault();
           items[e.key === "Home" ? 0 : items.length - 1]?.focus();
-        } else if (e.key === "Escape" || e.key === "Tab") {
+        } else if (e.key === "ArrowRight" && row && focused === row.item) {
+          e.preventDefault();
+          row.pin.focus();
+        } else if (e.key === "ArrowLeft" && row && focused === row.pin) {
+          e.preventDefault();
+          row.item.focus();
+        } else if (e.key === "Escape") {
           // Escape closes the menu, not the editor.
-          if (e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-          closeMenu(e.key === "Escape");
+          e.preventDefault();
+          e.stopPropagation();
+          closeMenu(true);
         }
       },
       { signal },
     );
-    launcher = btn;
-    menu = list;
-    return btn;
+    // Tabbing (or clicking) away closes it.
+    menu.addEventListener(
+      "focusout",
+      (e) => {
+        const next = e.relatedTarget as Node | null;
+        if (next && !menu?.contains(next) && next !== launcher) closeMenu();
+      },
+      { signal },
+    );
   }
 
   document.addEventListener(
     "pointerdown",
     (e) => {
       const target = e.target as Node;
-      if (menu && !menu.hidden && !menu.contains(target) && !launcher?.contains(target))
+      if (menu && !menu.hidden && !menu.contains(target) && !launcher?.contains(target)) {
         closeMenu();
+      }
     },
     { signal },
   );
 
-  // ── Rail ──
+  // ── The rail ──
 
-  const byGroup = new Map<ToolGroup, ToolDef[]>();
-  for (const id of options.tools) {
-    const def = resolveToolDef(id);
-    const list = byGroup.get(def.group) ?? [];
-    list.push(def);
-    byGroup.set(def.group, list);
+  const railButtons = new Map<EditorTool, HTMLButtonElement>();
+  let order: EditorTool[] = [];
+
+  function railButton(def: ToolDef): HTMLButtonElement {
+    const key = keyOf(def);
+    const btn = h("button", { type: "button", class: "rt-toolbar__btn", "aria-label": def.label });
+    buttonContent(btn, def.icon, def.label, key, def.group === "ai" ? def.description : undefined);
+    if (def.group === "ai" && def.description)
+      btn.setAttribute("aria-description", def.description);
+    if (key) btn.setAttribute("aria-keyshortcuts", key.toUpperCase());
+    if (def.group === "ai") {
+      btn.classList.add("rt-toolbar__btn--ai-tool");
+      btn.appendChild(h("span", { class: "rt-toolbar__spark", "aria-hidden": "true" }));
+    }
+    btn.addEventListener("click", () => select(def.id), { signal });
+    withTooltip(btn, def.label, key);
+    railButtons.set(def.id, btn);
+    return btn;
   }
-  for (const group of TOOL_GROUP_ORDER) {
-    const defs = byGroup.get(group);
-    if (!defs?.length) continue;
-    if (root.childElementCount > 0) root.appendChild(h("div", { class: "rt-toolbar__sep" }));
-    if (group === "ai" && defs.length > 1) root.appendChild(aiLauncher(defs));
-    else for (const def of defs) root.appendChild(railButton(def));
+
+  function launcherButton(): HTMLButtonElement {
+    const btn = h("button", {
+      type: "button",
+      class: "rt-toolbar__btn rt-toolbar__btn--ai",
+      "aria-label": "All AI tools",
+      "aria-haspopup": "dialog",
+      "aria-expanded": "false",
+      "aria-keyshortcuts": "I",
+    });
+    buttonContent(btn, ICON_SPARKLE, "All AI tools", "i");
+    btn.addEventListener("click", () => (menu?.hidden ? openMenu() : closeMenu()), { signal });
+    withTooltip(btn, "All AI tools · pin your favorites", "i");
+    return btn;
   }
-  root.append(tip);
-  if (menu) root.append(menu);
+
+  function renderRail(): void {
+    const hadFocus = root.contains(document.activeElement) ? document.activeElement : null;
+    const focusedTool = [...railButtons].find(([, b]) => b === hadFocus)?.[0];
+    groups.replaceChildren();
+    railButtons.clear();
+    launcher = null;
+    const railOrder: EditorTool[] = [];
+    for (const group of TOOL_GROUP_ORDER) {
+      const list = defs.filter((d) => d.group === group);
+      if (list.length === 0) continue;
+      const onRail = group === "ai" && hasMenu ? list.filter((d) => pinned.has(d.id)) : list;
+      const box = h(
+        "div",
+        {
+          class: `rt-toolbar__group rt-toolbar__group--${group}`,
+          role: "group",
+          "aria-label": GROUP_LABELS[group],
+        },
+        h("span", { class: "rt-toolbar__group-label", "aria-hidden": "true" }, GROUP_LABELS[group]),
+      );
+      for (const def of onRail) {
+        box.appendChild(railButton(def));
+        railOrder.push(def.id);
+      }
+      if (group === "ai" && hasMenu) {
+        launcher = launcherButton();
+        box.appendChild(launcher);
+      }
+      if (groups.childElementCount > 0) groups.appendChild(h("div", { class: "rt-toolbar__sep" }));
+      groups.appendChild(box);
+    }
+    order = [...railOrder, ...aiDefs.map((d) => d.id).filter((id) => !railOrder.includes(id))];
+    setActive(active);
+    for (const id of touched) railButtons.get(id)?.classList.add("rt-toolbar__btn--touched");
+    // Keep keyboard focus on the tool it was on, if that's still on the rail.
+    if (focusedTool) railButtons.get(focusedTool)?.focus();
+  }
+
+  // ── Names toggle, at the foot of the rail ──
+
+  const toggle = h("button", { type: "button", class: "rt-toolbar__toggle" });
+  function paintToggle(): void {
+    root.classList.toggle("rt-toolbar--expanded", expanded);
+    toggle.setAttribute("aria-pressed", String(expanded));
+    const label = expanded ? "Hide tool names" : "Show tool names";
+    toggle.setAttribute("aria-label", label);
+    buttonContent(toggle, expanded ? ICON_RAIL_COLLAPSE : ICON_RAIL_EXPAND, label);
+  }
+  toggle.addEventListener("click", () => setExpanded(!expanded), { signal });
+  withTooltip(toggle, "Show tool names");
 
   function setActive(tool: EditorTool): void {
-    const previous = buttons.get(active);
-    previous?.classList.remove("rt-toolbar__btn--active", "rt-flyout__item--active");
-    previous?.removeAttribute("aria-current");
     active = tool;
-    const el = buttons.get(tool);
-    el?.classList.add(menuTools.has(tool) ? "rt-flyout__item--active" : "rt-toolbar__btn--active");
-    el?.setAttribute("aria-current", "true");
-    launcher?.classList.toggle("rt-toolbar__btn--active", menuTools.has(tool));
+    for (const [id, btn] of railButtons) {
+      btn.classList.toggle("rt-toolbar__btn--active", id === tool);
+      if (id === tool) btn.setAttribute("aria-current", "true");
+      else btn.removeAttribute("aria-current");
+    }
+    for (const [id, row] of menuRows) {
+      row.item.classList.toggle("rt-flyout__item--active", id === tool);
+      if (id === tool) row.item.setAttribute("aria-current", "true");
+      else row.item.removeAttribute("aria-current");
+    }
+    launcher?.classList.toggle("rt-toolbar__btn--active", isAi(tool) && !railButtons.has(tool));
   }
-  setActive(active);
+
+  const layout = (): RailLayout => ({
+    pinned: aiDefs.map((d) => d.id).filter((id) => pinned.has(id)),
+    expanded,
+  });
+
+  function setPinned(tool: EditorTool, on: boolean): void {
+    if (!hasMenu || !isAi(tool) || pinned.has(tool) === on) return;
+    if (on) pinned.add(tool);
+    else pinned.delete(tool);
+    paintPins();
+    renderRail();
+    options.onLayoutChange?.(layout());
+  }
+
+  function setExpanded(on: boolean): void {
+    if (on === expanded) return;
+    expanded = on;
+    hideTip();
+    paintToggle();
+    options.onLayoutChange?.(layout());
+  }
+
+  root.append(groups, toggle, tip);
+  if (menu) root.append(menu);
+  paintToggle();
+  renderRail();
+
+  // When the rail is taller than the screen it scrolls; fade whichever end
+  // has more, so tools never silently hide past the edge.
+  function paintOverflow(): void {
+    const horizontal = isHorizontal();
+    const start = horizontal ? root.scrollLeft : root.scrollTop;
+    const size = horizontal ? root.clientWidth : root.clientHeight;
+    const total = horizontal ? root.scrollWidth : root.scrollHeight;
+    root.classList.toggle("rt-toolbar--more-before", start > 1);
+    root.classList.toggle("rt-toolbar--more-after", start + size < total - 1);
+  }
+  root.addEventListener("scroll", paintOverflow, { signal, passive: true });
+  if (typeof ResizeObserver !== "undefined") {
+    const observer = new ResizeObserver(paintOverflow);
+    observer.observe(root);
+    observer.observe(groups);
+    signal.addEventListener("abort", () => observer.disconnect());
+  }
 
   return {
     root,
-    order: [...railOrder, ...menuOrder],
+    get order() {
+      return order;
+    },
+    get layout() {
+      return layout();
+    },
     setActiveTool: setActive,
-    setTouched(tool, touched) {
-      buttons.get(tool)?.classList.toggle("rt-toolbar__btn--touched", touched);
+    setTouched(tool, on) {
+      if (on) touched.add(tool);
+      else touched.delete(tool);
+      railButtons.get(tool)?.classList.toggle("rt-toolbar__btn--touched", on);
     },
     toolForKey: (key) => shortcuts.get(key.toLowerCase()),
     openAiMenu() {
@@ -277,6 +480,8 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
       openMenu();
       return true;
     },
+    setPinned,
+    setExpanded,
     destroy() {
       abort.abort();
       root.remove();

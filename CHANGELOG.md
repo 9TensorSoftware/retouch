@@ -48,6 +48,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   `ariaLabel` and `fillFrom`, and `ctx.reveal(result)` to wipe a result in before committing it (types `UiCard`,
   `UiCardOptions`, `UiSteps`, `UiStepsOptions`, `UiStep`, `UiStepState`).
 - `@retouchjs/ml`: `isModelCached(urls)`.
+- AI tools get their own section on the rail, lit by the prism. The first three sit on the rail
+  from the start; the AI menu (now "All AI tools") lists every one with a pin, so people keep the
+  ones they use on the rail. A toggle at the rail's foot shows tool names, keys and, for AI tools,
+  a line on what each does. Both choices persist per browser; hosts set the starting layout with
+  `rail: { pinned, expanded }` (type `RailOptions`).
+- A rail taller than the screen fades at the end with more to scroll; short screens get a denser
+  rail.
 - Transparent pixels show as a checkerboard in the editor.
 
 ### Changed
