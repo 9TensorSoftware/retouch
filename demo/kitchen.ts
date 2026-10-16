@@ -5,7 +5,8 @@ import type { ShellTheme } from "../src/index";
 import { Retouch } from "../src/index";
 import { injectStyles } from "../src/styles";
 import { createToolUi } from "../src/ui/editor/tool-ui";
-import { createToastHost } from "../src/ui/toast";
+import { createExportOverlay } from "../src/ui/export-overlay";
+import { createToastHost, type ToastKind, type ToastOptions } from "../src/ui/toast";
 import { paintScene, samplePhotos } from "./samples";
 
 injectStyles();
@@ -215,20 +216,62 @@ for (const theme of WORLDS) {
 
 const toasts = createToastHost();
 const actions = document.getElementById("actions");
-const messages: Array<["error" | "info" | "success", string]> = [
-  ["error", "notes.txt — unsupported file type"],
-  ["info", "Downloading the model · 12 of 25 MB"],
-  ["success", "Cutout added to your gallery"],
+const messages: Array<[ToastKind, string, ToastOptions]> = [
+  ["error", '"notes.txt" is an unsupported file type', { detail: "Use JPG, PNG, WebP or MP4." }],
+  ["info", "Removed 2 items", { action: { label: "Undo", onClick: () => {} } }],
+  [
+    "success",
+    "Cutout added to your gallery",
+    { detail: "The original is unchanged.", action: { label: "View", onClick: () => {} } },
+  ],
 ];
-for (const [kind, message] of messages) {
+for (const [kind, message, options] of messages) {
   actions?.append(
     el("button", {
       type: "button",
       textContent: `Show ${kind}`,
-      onclick: () => toasts.show(message, kind),
+      onclick: () => toasts.show(message, kind, options),
     }),
   );
 }
+
+// The export sheet, run on a timer over the light shell's photos: one fails.
+actions?.append(
+  el("button", {
+    type: "button",
+    textContent: "Show export sheet",
+    onclick: () => {
+      const media = shells[0]?.getMedia() ?? [];
+      let timer = 0;
+      const sheet = createExportOverlay({
+        items: media.map((e) => ({ id: e.id, name: e.file.name, thumbnail: e.thumbnailUrl })),
+        onCancel: () => {
+          clearInterval(timer);
+          sheet.destroy();
+        },
+      });
+      sheet.attach();
+      let index = 0;
+      let progress = 0;
+      timer = window.setInterval(() => {
+        const entry = media[index];
+        if (!entry) {
+          clearInterval(timer);
+          sheet.finish();
+          return;
+        }
+        progress += 0.25;
+        if (index === 2) sheet.setError(entry.id);
+        else if (progress < 1) sheet.setProgress(entry.id, progress);
+        else sheet.setComplete(entry.id);
+        if (progress >= 1 || index === 2) {
+          index++;
+          progress = 0;
+        }
+      }, 250);
+    },
+  }),
+);
 
 const track = world("light", "padding: 10px; width: 220px; border-radius: 999px; display: block;");
 const dot = el("div");

@@ -117,7 +117,21 @@ export interface RailOptions {
   expanded?: boolean;
 }
 
-export type GalleryViewMode = "cols-2" | "cols-3" | "cols-4" | "width-fit" | "height-fit" | "list";
+/**
+ * Gallery layouts: "rows" (justified, at true aspect ratios; the default),
+ * "grid" (square crops), "height-fit" (a filmstrip of tall frames) and
+ * "list". The 0.1 layouts still resolve: "cols-2", "cols-3" and "cols-4"
+ * open the grid, "width-fit" the rows.
+ */
+export type GalleryViewMode =
+  | "rows"
+  | "grid"
+  | "height-fit"
+  | "list"
+  | "cols-2"
+  | "cols-3"
+  | "cols-4"
+  | "width-fit";
 
 export type AspectRatioPreset = "free" | "16:9" | "4:3" | "1:1" | "3:2" | "9:16";
 

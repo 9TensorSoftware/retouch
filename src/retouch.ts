@@ -6,6 +6,8 @@ import { StateMachine } from "./state-machine";
 import { injectStyles } from "./styles";
 import type {
   AppState,
+  FileRejectionReason,
+  GalleryViewMode,
   ImageEntry,
   MediaEntry,
   RetouchEventMap,
@@ -20,11 +22,14 @@ import type { EditorToolPlugin } from "./ui/editor/tool-registry";
 import { registerEditorTool } from "./ui/editor/tool-registry";
 import type { ExportOverlayHandle } from "./ui/export-overlay";
 import { createExportOverlay } from "./ui/export-overlay";
-import { createGallery } from "./ui/gallery";
+import { createGallery, loadGalleryView, saveGalleryView } from "./ui/gallery";
 import { h } from "./ui/h";
-import type { ToastHost } from "./ui/toast";
-import { createToastHost, rejectionMessage } from "./ui/toast";
+import { isTouchFirst, shortcutLabel } from "./ui/platform";
+import type { RejectionLimits, Toast, ToastHost } from "./ui/toast";
+import { createToastHost, rejectionDetail, rejectionMessage, rejectionSummary } from "./ui/toast";
+import { filesFromPaste, readClipboardFiles } from "./utils/clipboard";
 import { framingIsNeutral, imageEditsAreNeutral } from "./utils/edits";
+import { formatNames } from "./utils/formats";
 import {
   createThumbnailUrl,
   exportImage,
@@ -34,6 +39,17 @@ import {
   revokeThumbnailUrl,
 } from "./utils/image";
 import { captureFrame, frameFileName, isImageEntry, releaseVideo } from "./utils/video";
+
+/** Image-only exports get the progress sheet once they've run this long (ms). */
+const EXPORT_SHEET_DELAY = 400;
+
+/** True when an event lands in something that takes text, such as a host page field. */
+function isEditable(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || !!target.closest("input, textarea, select, [contenteditable]"))
+  );
+}
 
 const STATE_TRANSITIONS: Record<AppState, AppState[]> = {
   idle: ["dropzone"],
@@ -77,6 +93,13 @@ export class Retouch {
   private readonly baking = new Map<string, Promise<void>>();
   private exportAbort: AbortController | null = null;
   private readonly toasts: ToastHost;
+  /** The gallery's layout, kept across re-renders (and remembered in this browser). */
+  private galleryView: GalleryViewMode = loadGalleryView() ?? "rows";
+  /** Selected gallery items, kept here so a selection survives a re-render. */
+  private readonly selection = new Set<string>();
+  /** The last removal from the gallery, while its Undo is on offer. */
+  private trash: { entry: MediaEntry; index: number }[] | null = null;
+  private trashToast: Toast | null = null;
 
   constructor(options: RetouchOptions) {
     if (typeof options.target === "string") {
@@ -108,14 +131,10 @@ export class Retouch {
     this.root = h("div", { class: "rt-root", "data-rt-theme": options.theme ?? "light" });
     this.container.appendChild(this.root);
 
-    // Default feedback for rejected files and failed exports.
+    // Feedback for rejected files, failed exports and undoable removals.
     this.toasts = createToastHost();
-    this.emitter.on("file:rejected", ({ file, reason }) => {
-      this.toasts.show(rejectionMessage(file.name, reason), "error");
-    });
-    this.emitter.on("export:error", ({ error }) => {
-      this.toasts.show(error.message.replace("[Retouch] ", ""), "error");
-    });
+    // Paste adds files while the drop zone or gallery is up.
+    document.addEventListener("paste", this.onPaste);
 
     this.sm = new StateMachine<AppState>("idle", STATE_TRANSITIONS);
     this.sm.onChange(({ to }) => {
@@ -143,10 +162,16 @@ export class Retouch {
 
   async addFiles(files: File[]): Promise<void> {
     const remaining = this.options.maxFiles - this.media.size;
-    for (const file of files.slice(Math.max(0, remaining))) {
-      this.emitter.emit("file:rejected", { file, reason: "count" });
+    const overflow = files
+      .slice(Math.max(0, remaining))
+      .map((file) => ({ file, reason: "count" as const }));
+    for (const rejection of overflow) {
+      this.emitter.emit("file:rejected", rejection);
     }
-    if (remaining <= 0) return;
+    if (remaining <= 0) {
+      this.toastRejections(overflow);
+      return;
+    }
 
     const sliced = files.slice(0, remaining);
     const { entries, rejected } = await processFiles(sliced, {
@@ -159,6 +184,7 @@ export class Retouch {
     for (const rejection of rejected) {
       this.emitter.emit("file:rejected", rejection);
     }
+    this.toastRejections([...rejected, ...overflow]);
     if (entries.length === 0) return;
 
     for (const entry of entries) {
@@ -170,25 +196,174 @@ export class Retouch {
     if (this.sm.state === "dropzone") {
       this.sm.transition("gallery");
     } else if (this.sm.state === "gallery") {
-      this.unmountCurrentView();
-      this.mountGallery();
+      this.remountGallery();
     }
   }
 
   removeImage(id: string): void {
     const entry = this.media.get(id);
     if (!entry) return;
-    revokeThumbnailUrl(entry.thumbnailUrl);
-    if (entry.kind === "video") {
-      releaseVideo(entry.video);
-      URL.revokeObjectURL(entry.videoUrl);
-    }
+    this.releaseEntry(entry);
     this.media.delete(id);
+    this.selection.delete(id);
     this.emitter.emit("images:remove", { id });
 
     if (this.media.size === 0 && this.sm.state === "gallery") {
       this.sm.transition("dropzone");
     }
+  }
+
+  /** Free what an entry holds: its thumbnail URL, and a video's element and URL. */
+  private releaseEntry(entry: MediaEntry): void {
+    revokeThumbnailUrl(entry.thumbnailUrl);
+    if (entry.kind === "video") {
+      releaseVideo(entry.video);
+      URL.revokeObjectURL(entry.videoUrl);
+    }
+  }
+
+  /**
+   * Remove entries from the gallery with an Undo on offer: they leave
+   * straight away (images:remove fires), and come back where they were if
+   * Undo is pressed (images:add fires). Once the toast is gone, so are they.
+   */
+  private removeFromGallery(ids: string[]): void {
+    // A new removal ends the last one's chance of coming back.
+    this.trashToast?.dismiss();
+    this.emptyTrash();
+    const order = [...this.media.keys()];
+    const removed = ids.flatMap((id) => {
+      const entry = this.media.get(id);
+      return entry ? [{ entry, index: order.indexOf(id) }] : [];
+    });
+    if (removed.length === 0) return;
+    for (const { entry } of removed) {
+      this.media.delete(entry.id);
+      this.selection.delete(entry.id);
+      this.emitter.emit("images:remove", { id: entry.id });
+    }
+    this.trash = removed;
+    this.trashToast = this.toasts.show(
+      removed.length === 1
+        ? `Removed "${removed[0].entry.file.name}"`
+        : `Removed ${removed.length} items`,
+      "info",
+      {
+        action: { label: "Undo", onClick: () => this.undoRemove(removed) },
+        onDismiss: () => {
+          if (this.trash === removed) this.emptyTrash();
+        },
+      },
+    );
+    if (this.media.size === 0 && this.sm.state === "gallery") {
+      this.sm.transition("dropzone");
+    }
+  }
+
+  /** Put the last removal back, in its old places. */
+  private undoRemove(removed: { entry: MediaEntry; index: number }[]): void {
+    if (this.trash !== removed || this.sm.state === "destroyed") return;
+    this.trash = null;
+    if (this.media.size + removed.length > this.options.maxFiles) {
+      this.toasts.show("There's no room to put them back", "error", {
+        detail: rejectionDetail("count", this.limits()),
+      });
+      for (const { entry } of removed) this.releaseEntry(entry);
+      return;
+    }
+    const entries = [...this.media.values()];
+    for (const { entry, index } of [...removed].sort((a, b) => a.index - b.index)) {
+      entries.splice(Math.min(index, entries.length), 0, entry);
+    }
+    this.media.clear();
+    for (const entry of entries) this.media.set(entry.id, entry);
+    this.emitter.emit("images:add", { entries: removed.map((r) => r.entry) });
+    if (this.sm.state === "dropzone") {
+      this.sm.transition("gallery");
+    } else if (this.sm.state === "gallery") {
+      this.remountGallery();
+    }
+  }
+
+  /** Let go of the last removal for good. */
+  private emptyTrash(): void {
+    if (!this.trash) return;
+    for (const { entry } of this.trash) this.releaseEntry(entry);
+    this.trash = null;
+  }
+
+  /** The limits a rejected file is measured against, for its toast. */
+  private limits(): RejectionLimits {
+    return {
+      types: [...this.options.acceptedTypes, ...this.options.acceptedVideoTypes],
+      maxFileSize: this.options.maxFileSize,
+      maxVideoDuration: this.options.maxVideoDuration,
+      maxFiles: this.options.maxFiles,
+    };
+  }
+
+  /** One toast per batch: the file and what would have worked, or a tally. */
+  private toastRejections(rejected: { file: File; reason: FileRejectionReason }[]): void {
+    if (rejected.length === 0 || this.sm.state === "destroyed") return;
+    if (rejected.length === 1) {
+      const [{ file, reason }] = rejected;
+      this.toasts.show(rejectionMessage(file.name, reason), "error", {
+        detail: rejectionDetail(reason, this.limits()),
+      });
+      return;
+    }
+    const { message, detail } = rejectionSummary(rejected.map((r) => r.reason));
+    this.toasts.show(message, "error", { detail });
+  }
+
+  /** One toast for the files whose export failed (their originals went out instead). */
+  private toastExportFailures(names: string[]): void {
+    if (names.length === 0 || this.sm.state === "destroyed") return;
+    this.toasts.show(
+      names.length === 1
+        ? `"${names[0]}" couldn't be exported`
+        : `${names.length} files couldn't be exported`,
+      "error",
+      {
+        detail:
+          names.length === 1
+            ? "The original file went out instead."
+            : "Their original files went out instead.",
+      },
+    );
+  }
+
+  /** ⌘V / Ctrl+V: files on the clipboard join the gallery. */
+  private readonly onPaste = (event: ClipboardEvent): void => {
+    if (this.sm.state !== "dropzone" && this.sm.state !== "gallery") return;
+    if (event.defaultPrevented || isEditable(event.target)) return;
+    // Only when nothing else on the host page has focus, or when it's ours.
+    const active = document.activeElement;
+    if (active && active !== document.body && !this.root.contains(active)) return;
+    const files = filesFromPaste(event);
+    if (files.length === 0) return;
+    event.preventDefault();
+    void this.addFiles(files);
+  };
+
+  /** The Paste button: read the clipboard (the browser asks first). */
+  private async pasteFromClipboard(): Promise<void> {
+    let files: File[];
+    try {
+      files = await readClipboardFiles();
+    } catch {
+      this.toasts.show("Couldn't read the clipboard", "info", {
+        detail: `Press ${shortcutLabel("V")} to paste instead.`,
+      });
+      return;
+    }
+    if (files.length === 0) {
+      this.toasts.show("There's no photo on the clipboard", "info", {
+        detail: "Copy one, then paste it here.",
+      });
+      return;
+    }
+    await this.addFiles(files);
   }
 
   /**
@@ -229,10 +404,7 @@ export class Retouch {
       entry.edits = structuredClone(DEFAULT_EDITS);
       await this.refreshThumbnail(entry);
       this.emitter.emit("image:commit", { id: entry.id });
-      if (this.sm.state === "gallery") {
-        this.unmountCurrentView();
-        this.mountGallery();
-      }
+      if (this.sm.state === "gallery") this.remountGallery();
     } catch (error) {
       // Baking failed — the entry simply stays non-destructive.
       console.error("[Retouch] Failed to commit edits into the image", error);
@@ -262,8 +434,7 @@ export class Retouch {
       this.unmountCurrentView();
       this.mountEditor();
     } else if (this.sm.state === "gallery") {
-      this.unmountCurrentView();
-      this.mountGallery();
+      this.remountGallery();
     }
   }
 
@@ -289,8 +460,7 @@ export class Retouch {
       this.unmountCurrentView();
       this.mountEditor();
     } else if (this.sm.state === "gallery") {
-      this.unmountCurrentView();
-      this.mountGallery();
+      this.remountGallery();
     }
   }
 
@@ -352,21 +522,34 @@ export class Retouch {
     const abort = new AbortController();
     this.exportAbort = abort;
     const blobs: Blob[] = [];
+    const failed: string[] = [];
+    const media = this.getMedia();
 
-    // Videos take a while — show a progress card for the run.
-    const hasVideo = this.getMedia().some((entry) => entry.kind === "video");
-    const overlay = hasVideo
-      ? createExportOverlay({
-          items: this.getMedia().map((entry) => ({ id: entry.id, name: entry.file.name })),
-          onCancel: () => this.cancelExport(),
-        })
-      : null;
-    if (overlay) document.body.appendChild(overlay.root);
+    // The export sheet: thumbnails with a ring each. Straight away when
+    // there's video (it takes a while); for images, only once the run has
+    // gone on long enough to wonder about.
+    const overlay =
+      media.length > 0
+        ? createExportOverlay({
+            items: media.map((entry) => ({
+              id: entry.id,
+              name: entry.file.name,
+              thumbnail: entry.thumbnailUrl,
+            })),
+            onCancel: () => this.cancelExport(),
+          })
+        : null;
+    let reveal: ReturnType<typeof setTimeout> | undefined;
+    if (overlay && media.some((entry) => entry.kind === "video")) overlay.attach();
+    else if (overlay) reveal = setTimeout(() => overlay.attach(), EXPORT_SHEET_DELAY);
 
+    let finished = false;
     try {
-      for (const entry of this.media.values()) {
+      for (const entry of media) {
         if (abort.signal.aborted) throw new Error("[Retouch] Export canceled");
+        if (!this.media.has(entry.id)) continue;
         this.emitter.emit("export:start", { id: entry.id, kind: entry.kind });
+        overlay?.setActive(entry.id);
         try {
           const blob =
             entry.kind === "image"
@@ -380,14 +563,19 @@ export class Retouch {
           if (abort.signal.aborted) throw err;
           const error = err instanceof Error ? err : new Error(String(err));
           overlay?.setError(entry.id);
+          failed.push(entry.file.name);
           this.emitter.emit("export:error", { id: entry.id, error });
           // Degrade gracefully: deliver the unedited original for this entry.
           blobs.push(entry.file);
         }
       }
+      finished = true;
     } finally {
-      overlay?.destroy();
+      clearTimeout(reveal);
+      if (finished) overlay?.finish();
+      else overlay?.destroy();
       if (this.exportAbort === abort) this.exportAbort = null;
+      if (!abort.signal.aborted) this.toastExportFailures(failed);
     }
     return blobs;
   }
@@ -428,15 +616,12 @@ export class Retouch {
     if (this.sm.state === "destroyed") return;
     this.cancelExport();
     this.unmountCurrentView();
+    document.removeEventListener("paste", this.onPaste);
 
-    for (const entry of this.media.values()) {
-      revokeThumbnailUrl(entry.thumbnailUrl);
-      if (entry.kind === "video") {
-        releaseVideo(entry.video);
-        URL.revokeObjectURL(entry.videoUrl);
-      }
-    }
+    this.emptyTrash();
+    for (const entry of this.media.values()) this.releaseEntry(entry);
     this.media.clear();
+    this.selection.clear();
 
     this.toasts.destroy();
     this.root.remove();
@@ -475,12 +660,14 @@ export class Retouch {
   }
 
   private mountDropZone(): void {
-    const videoEnabled = this.options.acceptedVideoTypes.length > 0;
+    const what = this.options.acceptedVideoTypes.length > 0 ? "photos and videos" : "photos";
     const view = createDropZone({
       onFiles: (files) => this.addFiles(files),
+      onPaste: () => void this.pasteFromClipboard(),
       accept: this.acceptAttribute(),
-      label: videoEnabled ? "Drop files here or " : "Drop images here or ",
-      hint: videoEnabled ? "PNG, JPG, WebP, MP4, WebM" : "PNG, JPG, WebP",
+      // Phones can't drop; they add.
+      title: `${isTouchFirst() ? "Add" : "Drop"} ${what}`,
+      formats: formatNames([...this.options.acceptedTypes, ...this.options.acceptedVideoTypes]),
     });
     this.root.appendChild(view.root);
     this.currentView = view;
@@ -493,20 +680,22 @@ export class Retouch {
     const stem = entry.file.name.replace(/\.[^.]+$/, "");
     let blob: Blob;
     let filename: string;
-    if (entry.kind === "image") {
-      blob = await exportImage(entry.image, entry.edits, this.options.export);
-      const format = this.options.export?.format ?? "png";
-      filename = `${stem}.${format === "jpeg" ? "jpg" : format}`;
-    } else {
-      try {
+    try {
+      if (entry.kind === "image") {
+        blob = await exportImage(entry.image, entry.edits, this.options.export);
+        const format = this.options.export?.format ?? "png";
+        filename = `${stem}.${format === "jpeg" ? "jpg" : format}`;
+      } else {
         blob = await this.exportVideoEntry(entry, new AbortController().signal);
         filename = `${stem}.${extensionForBlob(blob)}`;
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        this.emitter.emit("export:error", { id: entry.id, error });
-        blob = entry.file;
-        filename = entry.file.name;
       }
+    } catch (err) {
+      // Degrade gracefully, as exportAll does: the original goes out instead.
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.emitter.emit("export:error", { id: entry.id, error });
+      this.toastExportFailures([entry.file.name]);
+      blob = entry.file;
+      filename = entry.file.name;
     }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -574,10 +763,7 @@ export class Retouch {
       });
       revokeThumbnailUrl(entry.thumbnailUrl);
       entry.thumbnailUrl = URL.createObjectURL(blob);
-      if (this.sm.state === "gallery") {
-        this.unmountCurrentView();
-        this.mountGallery();
-      }
+      if (this.sm.state === "gallery") this.remountGallery();
     } catch {
       // Keep the original thumbnail if the preview render fails.
     }
@@ -588,13 +774,27 @@ export class Retouch {
       images: this.getMedia(),
       accept: this.acceptAttribute(),
       onEdit: (id) => this.openEditor(id),
-      onRemove: (id) => this.removeImage(id),
+      onRemove: (ids) => this.removeFromGallery(ids),
       onAddMore: (files) => this.addFiles(files),
       onDownload: (id) => this.downloadImage(id),
       onDone: this.options.onDone ? () => this.done() : undefined,
+      view: this.galleryView,
+      onViewChange: (mode) => {
+        this.galleryView = mode;
+        saveGalleryView(mode);
+      },
+      selection: this.selection,
     });
     this.root.appendChild(view.root);
     this.currentView = view;
+  }
+
+  /** Re-render the gallery in place, keeping its scroll position. */
+  private remountGallery(): void {
+    const top = this.currentView?.root.scrollTop ?? 0;
+    this.unmountCurrentView();
+    this.mountGallery();
+    if (this.currentView && top > 0) this.currentView.root.scrollTop = top;
   }
 
   private mountEditor(): void {
@@ -650,6 +850,7 @@ export class Retouch {
 
     if (this.media.size >= this.options.maxFiles) {
       this.emitter.emit("file:rejected", { file, reason: "count" });
+      this.toastRejections([{ file, reason: "count" }]);
       return;
     }
 

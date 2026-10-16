@@ -99,25 +99,36 @@ Rétouch lives in **three states**. No complex routing, no page transitions — 
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐      ┌──────┐
 │  Drop Zone  │ ───→ │   Gallery   │ ───→ │   Editor    │ ───→ │ Done │
 │             │      │             │      │             │      │      │
-│ Drag & drop │      │ 6 view modes│      │ Crop, adjust│      │ Blob │
-│ or browse   │      │ add, manage │      │ filter, trim│      │ each │
+│ Drop, pick  │      │ Contact     │      │ Crop, adjust│      │ Blob │
+│ or paste    │      │ sheet       │      │ filter, trim│      │ each │
 └─────────────┘      └─────────────┘      └─────────────┘      └──────┘
 ```
 
 ### 1. Drop Zone
 
-The initial state. Accepts drag & drop and file browse. Minimal and inviting — transitions to the gallery the moment files land.
+The initial state: a small stack of prints that fans out as files are dragged
+over, the formats that work, and two ways in besides dropping — **Choose files**
+and **Paste** (or ⌘/Ctrl+V anywhere on the page while nothing else has focus;
+the button asks the browser to read the clipboard). It hands over to the
+gallery the moment files land.
 
 > PNG, JPG, WebP by default, plus MP4, WebM and MOV when video is enabled (it is unless you pass
 > `acceptedVideoTypes: []`). Files are unlimited in size and count unless you set `maxFileSize` /
-> `maxFiles`; rejections surface as a toast and a `file:rejected` event.
+> `maxFiles`. Rejections surface as one toast per batch, saying what would have worked ("Use JPG,
+> PNG, WebP, MP4, WebM or MOV."), and a `file:rejected` event per file.
 
 ### 2. Gallery
 
-Once files are loaded they appear in one of six view modes — 2/3/4 columns, width-fit, height-fit,
-or a list. Each thumbnail reveals edit, download and remove actions on hover; a green dot marks
-entries that have already been edited. Drop or browse to add more anytime, and press **Done** (shown
-when `onDone` is configured) to export everything.
+A contact sheet: frames at their true aspect ratios in justified rows, numbered
+along the edge, with an **Edited** badge on what's been worked on and the length
+on videos. Switch to a square **grid**, a **filmstrip** or a **list**; the choice is
+remembered in the browser. Click a frame to edit it. Select frames with the
+circle (or ⌘/Ctrl-click, Shift to extend, ⌘/Ctrl+A for all, Esc to clear) to
+download or remove them together; on touch screens the circles stay up and
+every target is 44 px. Removing offers **Undo** in a toast. Drop, pick or paste to
+add more anytime, and press **Done** (shown when `onDone` is configured) to
+export everything: long runs show an export sheet with every file's thumbnail,
+a ring filling as it exports, and the time left.
 
 ### 3. Editor
 
@@ -397,8 +408,9 @@ same way, so the two sides line up even when zoomed. Once edits have been
 committed, the before is the pristine original; if a committed crop or turn
 means it can't line up, Compare shows "Original" and "Edited" side by side
 instead. Videos keep the momentary hold-to-compare gesture. **Toasts**
-announce rejected files (the `file:rejected` event still fires for custom
-handling).
+announce rejected files and failed exports (the `file:rejected` and
+`export:error` events still fire for custom handling), each with a line on
+what to do about it.
 
 **Done commits the edits.** Pressing Done on an image bakes the edits into
 the image itself — the entry's file and pixels become the edited version, and
@@ -489,7 +501,7 @@ const off = retouch.on("export:progress", ({ id, progress }) => …);
 |-------|---------|------|
 | `state:change` | `{ from, to }` | The component moves between drop zone, gallery, editor |
 | `images:add` | `{ entries }` | Files were accepted (images and videos) |
-| `images:remove` | `{ id }` | An entry was removed |
+| `images:remove` | `{ id }` | An entry was removed (removing from the gallery offers Undo, which fires `images:add` for the entries it puts back) |
 | `file:rejected` | `{ file, reason }` | A file failed validation — `"type" \| "size" \| "duration" \| "count" \| "load-error"` |
 | `editor:open` | `{ id }` | The editor opened an entry |
 | `editor:done` | `{ id, edits }` | Done was pressed in the editor |
