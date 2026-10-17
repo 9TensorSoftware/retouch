@@ -19,12 +19,12 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@9tensor/retouch"><img src="https://img.shields.io/npm/v/@9tensor/retouch?color=D4572A&label=npm" alt="npm version" /></a>
-  <a href="https://github.com/9TensorSoftware/retouch/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch?color=1A1815" alt="license" /></a>
+  <a href="https://github.com/9tensorsoftware/retouch.js/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch?color=1A1815" alt="license" /></a>
   <a href="https://www.npmjs.com/package/@9tensor/retouch"><img src="https://img.shields.io/npm/dm/@9tensor/retouch?color=6B6560" alt="downloads" /></a>
 </p>
 
 <p align="center">
-  <a href="https://9TensorSoftware.github.io/retouch.js/">Live Demo</a> &nbsp;·&nbsp;
+  <a href="https://retouch.9tensor.com">Live Demo</a> &nbsp;·&nbsp;
   <a href="#install">Install</a> &nbsp;·&nbsp;
   <a href="#quick-start">Quick Start</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How It Works</a> &nbsp;·&nbsp;
@@ -575,4 +575,4 @@ docs/                      # ROADMAP.md, ADVANCED-FEATURES.md (research + licens
 
 ## License
 
-[MIT](LICENSE) — use it however you want.
+[MIT](LICENSE) © [9Tensor LLC](https://9tensor.com) — use it however you want.

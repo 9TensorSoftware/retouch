@@ -6,8 +6,8 @@
 # tests/version.test.ts keeps constants.ts honest).
 #
 # `pnpm publish` (not `npm publish`) is essential for @9tensor/retouch-ml: it
-# rewrites the `workspace:^` peer range to the real core version. Core goes
-# first because that range points at it.
+# rewrites the `workspace:^` peer range to the real @9tensor/retouch version.
+# @9tensor/retouch goes first because that range points at it.
 set -euo pipefail
 
 echo "── Typecheck ──"
