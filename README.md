@@ -476,6 +476,7 @@ retouch.getEditingEntry();           // the entry open in the editor, or null
 retouch.removeImage(id);
 
 retouch.openEditor(id);
+retouch.openEditor(id, { tool: "adjust" }); // open on a given tool (default: the first)
 retouch.closeEditor(commit);         // true = Done, false = Cancel
 await retouch.restoreOriginal(id);   // bring back the pristine pixels after a bake / destructive tool
 await retouch.replaceImageSource(id, file); // swap an image's pixels in place (ML tools use this)
@@ -565,7 +566,8 @@ src/
 └── utils/                 # Pure processing: filters, curves, HSL, masks, seam carving, liquify, …
 packages/ml/               # @retouchjs/ml — ONNX Runtime Web tools (cutout, upscale, erase, …)
 tests/                     # Vitest + jsdom (core); packages/ml/tests for the ML package
-demo/                      # Vite playground and the GitHub Pages site
+demo/                      # The landing page and playground (GitHub Pages); photo credits in
+                           # demo/public/photos/CREDITS.txt
 docs/                      # ROADMAP.md, ADVANCED-FEATURES.md (research + license audit)
 ```
 

@@ -176,6 +176,8 @@ export interface EditorOptions {
   onAiEvent?: (event: EditorAiEvent) => void;
   /** Feature groups to mount, in tab order (defaults to all applicable). */
   tools?: EditorTool[];
+  /** The tool to open on; the first one when unset or not among `tools`. */
+  tool?: EditorTool;
   /** The rail's starting layout; the user's own choices (remembered) win. */
   rail?: RailOptions;
   /** Video only: export the trimmed range as a GIF (downloads on resolve). */
@@ -223,7 +225,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     ? options.tools.filter((id) => allIds.includes(id))
     : allIds;
   if (tools.length === 0) tools.push(builtinIds[0]);
-  let activeTool: EditorTool = tools[0];
+  let activeTool: EditorTool =
+    options.tool && tools.includes(options.tool) ? options.tool : tools[0];
 
   // Top bar
   const filenameEl = h("span", { class: "rt-editor__filename" }, entry.file.name);

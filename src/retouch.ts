@@ -6,10 +6,12 @@ import { StateMachine } from "./state-machine";
 import { injectStyles } from "./styles";
 import type {
   AppState,
+  EditorTool,
   FileRejectionReason,
   GalleryViewMode,
   ImageEntry,
   MediaEntry,
+  OpenEditorOptions,
   RetouchEventMap,
   RetouchOptions,
   ShellTheme,
@@ -160,6 +162,8 @@ export class Retouch {
   /** Entries added since the gallery last showed: they arrive with a cascade. */
   private fresh = new Set<string>();
   private editingImageId: string | null = null;
+  /** The tool openEditor() asked for; the editor's first mount uses it up. */
+  private openTool: EditorTool | undefined;
   /** Images whose Done-commit bake is still rendering. */
   private readonly baking = new Map<string, Promise<void>>();
   private exportAbort: AbortController | null = null;
@@ -535,15 +539,16 @@ export class Retouch {
     }
   }
 
-  openEditor(id: string): void {
+  openEditor(id: string, options: OpenEditorOptions = {}): void {
     if (!this.media.has(id)) return;
     // A commit may still be baking — reopen once the pixels are final.
     const pending = this.baking.get(id);
     if (pending) {
-      void pending.then(() => this.openEditor(id));
+      void pending.then(() => this.openEditor(id, options));
       return;
     }
     this.editingImageId = id;
+    this.openTool = options.tool;
     this.emitter.emit("editor:open", { id });
     // The photo grows from its gallery frame into the editor.
     this.nextMorph = { from: this.galleryPhoto(id), to: () => this.editorPhoto() };
@@ -974,6 +979,7 @@ export class Retouch {
       onSetPoster: entry.kind === "video" ? () => this.setPosterFrame(entry) : undefined,
       ai: this.options.ai,
       tools: this.options.tools,
+      tool: this.openTool,
       rail: this.options.rail,
       onAiEvent: (event) => {
         if (event.type === "start") {
@@ -989,6 +995,8 @@ export class Retouch {
         }
       },
     });
+    // Remounts (a restored or replaced photo) open on the default tool.
+    this.openTool = undefined;
     document.body.appendChild(view.root);
     this.currentView = view;
   }

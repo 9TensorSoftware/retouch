@@ -1,0 +1,13 @@
+The photos in this folder are from Unsplash and are used under the Unsplash
+License (https://unsplash.com/license): free to use, including commercially,
+without asking permission. They are not covered by Rétouch's MIT license.
+
+pond.jpg      Adrian Eperjessy    https://unsplash.com/photos/mysUTgf61cM
+portrait.jpg  Štefan Štefančík    https://unsplash.com/photos/QXevDflbl8A
+corgi.jpg     Alvan Nee           https://unsplash.com/photos/yUSsVoQdjxQ
+beach.jpg     Michael Fischer     https://unsplash.com/photos/t48mPCg5AyQ
+road.jpg      Rachel Reinhardt    https://unsplash.com/photos/RG11_0q94c0
+
+The images in ../showcase/ were made from these photos by Rétouch's own AI
+tools: Erase (beach-erased.jpg), Select (corgi-select.webp), Cutout
+(portrait-cutout.webp) and Upscale (corgi-face-4x.jpg, from corgi-face.jpg).

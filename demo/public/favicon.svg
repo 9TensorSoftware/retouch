@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Rétouch: a photo halfway through a before/after compare. -->
+  <rect width="32" height="32" rx="8" fill="#141416"/>
+  <circle cx="16" cy="16" r="9.5" fill="#6B6C72"/>
+  <path d="M16 6.5a9.5 9.5 0 0 1 0 19z" fill="#F5753F"/>
+  <rect x="15" y="4" width="2" height="24" rx="1" fill="#FFFFFF"/>
+</svg>

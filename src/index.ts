@@ -20,6 +20,7 @@ export type {
   ImageExportOptions,
   MediaEntry,
   MediaKind,
+  OpenEditorOptions,
   Orientation,
   RailOptions,
   RetouchEventMap,

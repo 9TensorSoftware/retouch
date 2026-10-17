@@ -2,542 +2,322 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rétouch — Canvas-based image editor for the modern web</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <style>
-      *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-      :root {
-        /* Mirrors the library's atelier ramp (src/styles.ts tokens). */
-        --bg: #F7F5F2;
-        --fg: #1C1917;
-        --ink: #141414; /* darkroom surfaces — matches the editor stage */
-        --muted: #756E64;
-        --muted-strong: #57514A;
-        --accent: #D4572A;
-        --accent-hover: #BF4D25;
-        --accent-soft: rgba(212, 87, 42, 0.08);
-        --border: #E7E2DA;
-        --card: #FFFFFF;
-        --radius: 12px;
-        --font-display: 'Instrument Serif', Georgia, serif;
-        --font-body: 'DM Sans', system-ui, sans-serif;
-        --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
-      }
-
-      body {
-        font-family: var(--font-body);
-        background: var(--bg);
-        color: var(--fg);
-        line-height: 1.5;
-        -webkit-font-smoothing: antialiased;
-      }
-
-      /* ─────────────────────────────────────────
-         NAV
-         ───────────────────────────────────────── */
-      .nav {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        max-width: 1080px;
-        width: 100%;
-        margin: 0 auto;
-        padding: 20px 32px;
-      }
-
-      .nav-logo {
-        font-family: var(--font-display);
-        font-size: 1.5rem;
-        font-weight: 400;
-        letter-spacing: -0.5px;
-        color: var(--fg);
-        text-decoration: none;
-        transition: opacity 0.2s;
-      }
-      .nav-logo:hover { opacity: 0.7; }
-      .nav-logo .e { color: var(--accent); font-style: italic; }
-
-      .nav-links {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-
-      .nav-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 6px 12px;
-        font-size: 0.8rem;
-        font-weight: 500;
-        color: var(--muted-strong);
-        text-decoration: none;
-        border-radius: 8px;
-        transition: color 0.15s, background 0.15s;
-      }
-      .nav-link:hover {
-        color: var(--fg);
-        background: rgba(26, 24, 21, 0.04);
-      }
-      .nav-link svg { width: 16px; height: 16px; flex-shrink: 0; }
-
-      .nav-version {
-        display: inline-flex;
-        padding: 3px 10px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        color: var(--accent);
-        background: var(--accent-soft);
-        border-radius: 20px;
-        text-decoration: none;
-        margin-left: 4px;
-        transition: background 0.15s;
-      }
-      .nav-version:hover { background: rgba(212, 87, 42, 0.13); }
-
-      /* ─────────────────────────────────────────
-         HERO
-         ───────────────────────────────────────── */
-      .hero {
-        text-align: center;
-        max-width: 640px;
-        margin: 80px auto 0;
-        padding: 0 32px;
-        animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
-      }
-
-      .hero-title {
-        font-family: var(--font-display);
-        font-size: clamp(2.8rem, 6vw, 4.2rem);
-        font-weight: 400;
-        letter-spacing: -2px;
-        line-height: 1;
-        margin-bottom: 16px;
-      }
-      .hero-title .e { color: var(--accent); font-style: italic; }
-
-      .hero-sub {
-        font-size: 1.05rem;
-        color: var(--muted-strong);
-        font-weight: 400;
-        line-height: 1.6;
-        margin-bottom: 32px;
-      }
-
-      .hero-install {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px 18px;
-        background: var(--ink);
-        border-radius: 10px;
-        cursor: pointer;
-        transition: transform 0.15s, box-shadow 0.15s;
-      }
-      .hero-install:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 20px rgba(26, 24, 21, 0.15);
-      }
-      .hero-install .prompt {
-        color: var(--accent);
-        font-family: var(--font-mono);
-        font-size: 0.8rem;
-        user-select: none;
-      }
-      .hero-install .cmd {
-        color: #D5D0CA;
-        font-family: var(--font-mono);
-        font-size: 0.8rem;
-        user-select: all;
-      }
-      .hero-install .copy-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 24px;
-        height: 24px;
-        border-radius: 5px;
-        background: rgba(255,255,255,0.08);
-        border: none;
-        color: rgba(255,255,255,0.4);
-        cursor: pointer;
-        transition: background 0.15s, color 0.15s;
-        flex-shrink: 0;
-      }
-      .hero-install .copy-btn:hover {
-        background: rgba(255,255,255,0.14);
-        color: rgba(255,255,255,0.7);
-      }
-      .hero-install .copy-btn svg { width: 13px; height: 13px; }
-
-      /* ─────────────────────────────────────────
-         DEMO
-         ───────────────────────────────────────── */
-      .demo-section {
-        max-width: 680px;
-        width: 100%;
-        margin: 64px auto 0;
-        padding: 0 32px;
-        animation: fadeUp 0.7s 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
-      }
-
-      .demo-label {
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-        color: var(--muted);
-        text-align: center;
-        margin-bottom: 16px;
-      }
-
-      #editor {
-        width: 100%;
-      }
-
-      /* ─────────────────────────────────────────
-         FEATURES
-         ───────────────────────────────────────── */
-      .features-section {
-        max-width: 960px;
-        margin: 100px auto 0;
-        padding: 0 32px;
-        animation: fadeUp 0.7s 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
-      }
-
-      .features-header {
-        text-align: center;
-        margin-bottom: 56px;
-      }
-
-      .features-header h2 {
-        font-family: var(--font-display);
-        font-size: clamp(1.8rem, 4vw, 2.4rem);
-        font-weight: 400;
-        letter-spacing: -1px;
-        margin-bottom: 8px;
-      }
-
-      .features-header p {
-        font-size: 0.95rem;
-        color: var(--muted-strong);
-      }
-
-      .features-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
-      }
-
-      .feature-card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 28px 24px;
-        transition: border-color 0.2s, box-shadow 0.2s;
-      }
-      .feature-card:hover {
-        border-color: var(--muted);
-        box-shadow: 0 4px 24px rgba(26, 24, 21, 0.06);
-      }
-
-      .feature-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
-        background: var(--accent-soft);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 16px;
-      }
-      .feature-icon svg {
-        width: 20px;
-        height: 20px;
-        color: var(--accent);
-      }
-
-      .feature-card h3 {
-        font-size: 0.95rem;
-        font-weight: 600;
-        margin-bottom: 6px;
-      }
-
-      .feature-card p {
-        font-size: 0.85rem;
-        color: var(--muted-strong);
-        line-height: 1.6;
-      }
-
-      .feature-card code {
-        font-family: var(--font-mono);
-        font-size: 0.8em;
-        padding: 1px 5px;
-        border-radius: 4px;
-        background: var(--accent-soft);
-        color: var(--accent);
-      }
-
-      /* ─────────────────────────────────────────
-         CODE EXAMPLE
-         ───────────────────────────────────────── */
-      .code-section {
-        max-width: 640px;
-        margin: 100px auto 0;
-        padding: 0 32px;
-      }
-
-      .code-header {
-        text-align: center;
-        margin-bottom: 32px;
-      }
-
-      .code-header h2 {
-        font-family: var(--font-display);
-        font-size: clamp(1.8rem, 4vw, 2.4rem);
-        font-weight: 400;
-        letter-spacing: -1px;
-        margin-bottom: 8px;
-      }
-
-      .code-header p {
-        font-size: 0.95rem;
-        color: var(--muted-strong);
-      }
-
-      .code-block {
-        background: var(--ink);
-        border-radius: 14px;
-        padding: 24px 28px;
-        overflow-x: auto;
-      }
-
-      .code-block pre {
-        font-family: var(--font-mono);
-        font-size: 0.82rem;
-        line-height: 1.8;
-        color: #D5D0CA;
-      }
-
-      .code-block .keyword { color: #C792EA; }
-      .code-block .string { color: #C3E88D; }
-      .code-block .comment { color: #8A847D; }
-      .code-block .fn { color: #82AAFF; }
-      .code-block .prop { color: #F78C6C; }
-      .code-block .punct { color: #89DDFF; }
-
-      /* ─────────────────────────────────────────
-         FOOTER
-         ───────────────────────────────────────── */
-      .footer {
-        max-width: 1080px;
-        width: 100%;
-        margin: 100px auto 0;
-        padding: 24px 32px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-top: 1px solid var(--border);
-      }
-
-      .footer-left {
-        font-size: 0.78rem;
-        color: var(--muted);
-      }
-      .footer-left a {
-        color: var(--accent);
-        text-decoration: none;
-        font-weight: 500;
-      }
-      .footer-left a:hover { text-decoration: underline; }
-
-      .footer-links {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-      }
-      .footer-links a {
-        font-size: 0.78rem;
-        color: var(--muted-strong);
-        text-decoration: none;
-        transition: color 0.15s;
-      }
-      .footer-links a:hover { color: var(--fg); }
-
-      /* ─────────────────────────────────────────
-         ANIMATIONS
-         ───────────────────────────────────────── */
-      @keyframes fadeUp {
-        from {
-          opacity: 0;
-          transform: translateY(16px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      /* ─────────────────────────────────────────
-         RESPONSIVE
-         ───────────────────────────────────────── */
-      @media (max-width: 720px) {
-        .nav { padding: 16px 20px; }
-        .nav-link span { display: none; }
-        .hero { margin-top: 48px; padding: 0 20px; }
-        .hero-sub { font-size: 0.95rem; }
-        .demo-section { padding: 0 20px; margin-top: 48px; }
-        .features-section { padding: 0 20px; margin-top: 72px; }
-        .features-grid { grid-template-columns: 1fr; }
-        .code-section { padding: 0 20px; margin-top: 72px; }
-        .footer {
-          flex-direction: column;
-          gap: 12px;
-          padding: 20px;
-          margin-top: 72px;
-        }
-      }
-
-      @media (max-width: 480px) {
-        .hero-title { letter-spacing: -1px; }
-        .nav-version { display: none; }
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Rétouch: a photo editor that runs in your browser</title>
+    <meta name="description" content="Crop, adjust, cut out and erase, with AI that runs on your own device. Free and open source, by 9Tensor." />
+    <link rel="canonical" href="https://retouch.9tensor.com/" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#F7F5F2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0B0B0C" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Rétouch" />
+    <meta property="og:url" content="https://retouch.9tensor.com/" />
+    <meta property="og:title" content="Rétouch: a darkroom in your browser" />
+    <meta property="og:description" content="Crop, adjust, cut out and erase, with AI that runs on your own device. Free and open source." />
+    <meta property="og:image" content="https://retouch.9tensor.com/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A foggy pond photo, half before and half after an edit in Rétouch" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preload" href="/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/photos/pond.jpg" as="image" fetchpriority="high" />
+    <link rel="stylesheet" href="./landing.css" />
   </head>
   <body>
+    <a class="skip" href="#try">Skip to the editor</a>
 
-    <!-- ─── Nav ─── -->
-    <nav class="nav">
-      <a href="#" class="nav-logo">R<span class="e">é</span>touch</a>
-      <div class="nav-links">
-        <a href="https://github.com/onursavas/retouch.js" class="nav-link" target="_blank" rel="noopener">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-          <span>GitHub</span>
+    <header class="wrap top">
+      <a class="wordmark" href="./" aria-label="Rétouch, home">R<em>é</em>touch</a>
+      <nav class="top__nav" aria-label="Site">
+        <a class="top__link" href="#features">Features</a>
+        <a class="top__link" href="#developers">Developers</a>
+        <a class="top__link top__link--icon" href="https://github.com/onursavas/retouch.js" aria-label="Rétouch on GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
         </a>
-        <a href="https://www.npmjs.com/package/@retouchjs/core" class="nav-link" target="_blank" rel="noopener">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0v1.336H8.001V8.667h5.334v5.332h-2.669v-.001zm12.001 0h-1.33v-4h-1.336v4h-1.335v-4h-1.33v4h-2.671V8.667h8.002v5.331zM10.665 10H12v2.667h-1.335V10z"/></svg>
-          <span>npm</span>
+        <a class="top__version" href="https://www.npmjs.com/package/@retouchjs/core" data-version>npm</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- ─── Hero: a real edit, rendered by Rétouch in this page ─── -->
+      <section class="wrap hero" aria-labelledby="hero-title">
+        <div class="hero__head">
+          <div>
+            <p class="eyebrow">Photo and video editor · Free and open source</p>
+            <h1 class="display" id="hero-title">A darkroom in your&nbsp;browser.</h1>
+          </div>
+          <div class="hero__aside">
+            <p class="lede">Crop, adjust, cut out and erase, with AI that runs on your own device, so your photos never leave it. No install, no account, no upload.</p>
+            <div class="actions">
+              <button class="btn btn--primary" type="button" data-edit="pond">
+                Edit this photo
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </button>
+              <button class="btn btn--ghost" type="button" data-open-files>Open your photos</button>
+            </div>
+          </div>
+        </div>
+
+        <figure class="compare hero__compare" id="hero-compare" style="--focus: 50% 52%">
+          <div class="compare__frame">
+            <img class="compare__before" id="hero-before" src="/photos/pond.jpg" width="2000" height="1500" alt="Before: a small wooden house among orange bushes on a pond, in thick fog" fetchpriority="high" />
+            <img class="compare__after" id="hero-after" alt="After: the same pond with the fog lifted and the orange bushes glowing" />
+            <span class="compare__tag compare__tag--before" aria-hidden="true">Before</span>
+            <span class="compare__tag compare__tag--after" aria-hidden="true">After</span>
+            <div class="compare__divider">
+              <span class="compare__grip" role="slider" tabindex="0" aria-label="Before and after divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
+              </span>
+            </div>
+          </div>
+          <figcaption class="caption">
+            <span><span class="caption__label">Rendered by Rétouch in this page:</span> <span id="hero-recipe"></span></span>
+            <a href="https://unsplash.com/photos/mysUTgf61cM">Photo: Adrian Eperjessy</a>
+          </figcaption>
+        </figure>
+      </section>
+
+      <!-- ─── The live editor, with the sample photos already in ─── -->
+      <section class="wrap try" id="try" aria-labelledby="try-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Try it</p>
+            <h2 class="display" id="try-title">Your photos stay on your device.</h2>
+          </div>
+          <p class="section-head__text">Here are five photos to start with. Click one to edit it, or drop in your own. They stay in this tab, and nothing is uploaded.</p>
+        </div>
+        <div class="try__frame">
+          <div id="editor"></div>
+        </div>
+      </section>
+
+      <!-- ─── Light and color ─── -->
+      <section class="wrap spread" id="features" aria-labelledby="color-title">
+        <div class="spread__text" data-reveal>
+          <p class="eyebrow">Adjust · Curves · Color mix</p>
+          <h2 class="display" id="color-title">Change one color. Leave the rest alone.</h2>
+          <p>Fourteen adjustments, tone curves for each channel and an eight-band color mixer. Here the maples turn from orange to crimson; the sky and the road don't move.</p>
+          <p class="chips" id="road-recipe"></p>
+        </div>
+        <figure class="compare spread__visual" id="road-compare" style="--ratio: 3 / 2" data-reveal>
+          <div class="compare__frame">
+            <img class="compare__before" id="road-before" src="/photos/road.jpg" width="1600" height="1067" loading="lazy" alt="Before: a road between orange maples and dark pines" />
+            <img class="compare__after" id="road-after" alt="After: the same road with the maples turned crimson" />
+            <span class="compare__tag compare__tag--before" aria-hidden="true">Before</span>
+            <span class="compare__tag compare__tag--after" aria-hidden="true">After</span>
+            <div class="compare__divider">
+              <span class="compare__grip" role="slider" tabindex="0" aria-label="Before and after divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
+              </span>
+            </div>
+          </div>
+          <figcaption class="caption"><span>Color mix only, rendered live</span><a href="https://unsplash.com/photos/RG11_0q94c0">Photo: Rachel Reinhardt</a></figcaption>
+        </figure>
+      </section>
+
+      <!-- ─── Looks ─── -->
+      <section class="wrap spread spread--flip" aria-labelledby="looks-title">
+        <div class="spread__text" data-reveal>
+          <p class="eyebrow">Looks and filters</p>
+          <h2 class="display" id="looks-title">Try a look. Then take it apart.</h2>
+          <p>A look is only settings: a filter and a few sliders you can keep adjusting. Every preview is drawn from your own photo. These five come from a plugin a few dozen lines long, built on the same API you'd use.</p>
+        </div>
+        <figure class="spread__visual" data-reveal>
+          <ul class="looks" id="looks" aria-label="The same portrait in six looks">
+            <li class="looks__tile"><img src="/photos/portrait.jpg" loading="lazy" alt="Original" /><span>Original</span></li>
+          </ul>
+          <figcaption class="caption"><span>Each tile rendered live from the original</span><a href="https://unsplash.com/photos/QXevDflbl8A">Photo: Štefan Štefančík</a></figcaption>
+        </figure>
+      </section>
+
+      <!-- ─── On-device AI ─── -->
+      <section class="darkroom" aria-labelledby="ai-title">
+        <div class="wrap">
+          <div class="section-head">
+            <div data-reveal>
+              <p class="eyebrow eyebrow--prism">AI, on your device</p>
+              <h2 class="display" id="ai-title">AI that never sees a&nbsp;server.</h2>
+            </div>
+            <p class="section-head__text" data-reveal>Each model downloads once, then runs on your own graphics card or processor. Your photos stay put, and there's no account or API key to set up. These results came out of Rétouch on these photos.</p>
+          </div>
+
+          <div class="ai-grid">
+            <article class="ai-card" data-reveal>
+              <figure class="compare ai-card__visual" id="erase-compare" style="--focus: 100% 50%">
+                <div class="compare__frame">
+                  <img class="compare__before" src="/photos/beach.jpg" width="1600" height="1067" loading="lazy" alt="Before: a person stands at the edge of the sea at the end of a line of footprints" />
+                  <img class="compare__after" src="/showcase/beach-erased.jpg" width="1600" height="1067" loading="lazy" alt="After: the person is gone, and the footprints lead to the empty shore" />
+                  <span class="compare__tag compare__tag--before" aria-hidden="true">Before</span>
+                  <span class="compare__tag compare__tag--after" aria-hidden="true">Erased</span>
+                  <div class="compare__divider">
+                    <span class="compare__grip" role="slider" tabindex="0" aria-label="Before and after divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="66">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
+                    </span>
+                  </div>
+                </div>
+              </figure>
+              <div class="ai-card__body">
+                <h3>Erase</h3>
+                <p>Brush over anything and it's gone, filled in from what's around it.</p>
+                <p class="model">LaMa · 208 MB</p>
+              </div>
+            </article>
+
+            <article class="ai-card" data-reveal>
+              <div class="ai-card__visual stage-frame select" id="select" data-mode="selected">
+                <div class="stage" style="--at: 70%">
+                  <img class="select__photo" src="/photos/corgi.jpg" width="1067" height="1600" loading="lazy" alt="A corgi on stone steps in front of yellow flowers" />
+                  <img class="select__subject" src="/showcase/corgi-select.webp" width="801" height="1200" loading="lazy" alt="" />
+                  <!-- Where the three clicks went, in the photo's own coordinates. -->
+                  <span class="select__click" style="--x: 47.8%; --y: 47.5%"></span>
+                  <span class="select__click" style="--x: 50.6%; --y: 59.4%"></span>
+                  <span class="select__click" style="--x: 51.1%; --y: 71.9%"></span>
+                </div>
+              </div>
+              <div class="ai-card__body">
+                <div class="ai-card__title">
+                  <h3>Select</h3>
+                  <div class="seg" role="group" aria-label="Show">
+                    <button type="button" data-select="photo" aria-pressed="false">Photo</button>
+                    <button type="button" data-select="selected" aria-pressed="true">Selected</button>
+                    <button type="button" data-select="cutout" aria-pressed="false">Cut out</button>
+                  </div>
+                </div>
+                <p>Click what you want. Three clicks pick out the corgi, ready to cut out, mask or adjust.</p>
+                <p class="model">SlimSAM · 38 MB</p>
+              </div>
+            </article>
+
+            <article class="ai-card" data-reveal>
+              <div class="ai-card__visual stage-frame cutout" id="cutout" data-bg="studio">
+                <div class="stage" style="--at: 22%">
+                  <img class="cutout__photo" src="/photos/portrait.jpg" width="1068" height="1600" loading="lazy" alt="A woman in a striped shirt at sunset" />
+                  <img class="cutout__subject" src="/showcase/portrait-cutout.webp" width="801" height="1200" loading="lazy" alt="" />
+                </div>
+              </div>
+              <div class="ai-card__body">
+                <div class="ai-card__title">
+                  <h3>Cutout</h3>
+                  <div class="seg" role="group" aria-label="Background">
+                    <button type="button" data-bg="original" aria-pressed="false">Original</button>
+                    <button type="button" data-bg="studio" aria-pressed="true">Studio</button>
+                    <button type="button" data-bg="safelight" aria-pressed="false">Safelight</button>
+                    <button type="button" data-bg="none" aria-pressed="false">None</button>
+                  </div>
+                </div>
+                <p>One step lifts a person off the background, hair and all. Put them anywhere.</p>
+                <p class="model">MODNet · 25 MB</p>
+              </div>
+            </article>
+
+            <article class="ai-card" data-reveal>
+              <figure class="compare ai-card__visual" id="upscale-compare" style="--focus: 50% 52%">
+                <div class="compare__frame">
+                  <img class="compare__before compare__before--soft" src="/showcase/corgi-face.jpg" width="220" height="220" loading="lazy" alt="Before: a 220 pixel crop of the corgi's face, enlarged and blurry" />
+                  <img class="compare__after" src="/showcase/corgi-face-4x.jpg" width="880" height="880" loading="lazy" alt="After: the same crop upscaled four times, with sharp fur and whiskers" />
+                  <span class="compare__tag compare__tag--before" aria-hidden="true">Enlarged</span>
+                  <span class="compare__tag compare__tag--after" aria-hidden="true">Upscaled 4×</span>
+                  <div class="compare__divider">
+                    <span class="compare__grip" role="slider" tabindex="0" aria-label="Before and after divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
+                    </span>
+                  </div>
+                </div>
+              </figure>
+              <div class="ai-card__body">
+                <h3>Upscale</h3>
+                <p>Four times the pixels, with fur and whiskers instead of blur. This was a 220-pixel crop.</p>
+                <p class="model">Real-ESRGAN · 67 MB</p>
+              </div>
+            </article>
+          </div>
+
+          <p class="darkroom__more" data-reveal>Also on board: depth blur, denoise, and face and object detection. <button class="link" type="button" data-edit="corgi">Try them on the corgi</button></p>
+        </div>
+      </section>
+
+      <!-- ─── Everything else ─── -->
+      <section class="wrap rest" aria-labelledby="rest-title">
+        <div class="section-head">
+          <div data-reveal>
+            <p class="eyebrow">And the rest</p>
+            <h2 class="display" id="rest-title">Everything you'd reach for.</h2>
+          </div>
+          <p class="section-head__text" data-reveal>Every edit stays adjustable until you're done, with undo all the way back to the original.</p>
+        </div>
+        <ul class="tools">
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="crop"></span><h3>Crop and straighten</h3><p>Aspect presets, a straighten ruler, quarter turns and flips.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="transform"></span><h3>Perspective and lens</h3><p>Straighten leaning buildings and undo lens distortion.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="masks"></span><h3>Masks</h3><p>Darken a sky or warm a face with linear and radial masks.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="liquify"></span><h3>Liquify</h3><p>Push, pull and smooth with a brush.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="stylize"></span><h3>Stylize</h3><p>Tilt-shift, duotone, halftone, posterize and pixelate.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="trim"></span><h3>Video</h3><p>Trim, crop, adjust and change the speed, or save a GIF. Encoded in the browser.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="sparkle"></span><h3>Ask AI</h3><p>Press ⌘K and describe the edit you want. Bring your own Anthropic key.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="phone"></span><h3>Phones and tablets</h3><p>A bottom sheet, tools you can swipe through, and pinch to zoom.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="download"></span><h3>Batch export</h3><p>Edit a whole set, then save every photo in one go.</p></li>
+        </ul>
+      </section>
+
+      <!-- ─── For developers ─── -->
+      <section class="wrap dev" id="developers" aria-labelledby="dev-title">
+        <div class="dev__text" data-reveal>
+          <p class="eyebrow">For developers</p>
+          <h2 class="display" id="dev-title">Drop it into your own app.</h2>
+          <p>Rétouch is a TypeScript library with no framework to adopt. Mount the gallery and editor in any element, add tools with the same controls the built-in ones use, and restyle everything with CSS custom properties.</p>
+          <div class="install">
+            <code><span class="install__prompt" aria-hidden="true">$</span> npm i @retouchjs/core</code>
+            <button class="install__copy" type="button" data-copy="npm i @retouchjs/core" aria-label="Copy the install command">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg>
+            </button>
+          </div>
+          <ul class="dev__links">
+            <li><a href="https://github.com/onursavas/retouch.js#readme">Read the docs</a></li>
+            <li><a href="https://github.com/onursavas/retouch.js#plugin-feature-groups">Write a plugin</a></li>
+            <li><a href="https://github.com/onursavas/retouch.js#theming">Theme it</a></li>
+          </ul>
+        </div>
+        <div class="code" data-reveal>
+<pre><code><span class="k">import</span> { Retouch } <span class="k">from</span> <span class="s">"@retouchjs/core"</span>;
+<span class="k">import</span> { installMlTools } <span class="k">from</span> <span class="s">"@retouchjs/ml"</span>;
+
+<span class="k">const</span> retouch = <span class="k">new</span> <span class="f">Retouch</span>({
+  target: <span class="s">"#editor"</span>,
+  theme: <span class="s">"auto"</span>,
+  <span class="f">onDone</span>: (blobs) =&gt; <span class="f">upload</span>(blobs),
+});
+
+<span class="c">// Optional: cutout, erase, upscale and the rest, on-device.</span>
+<span class="f">installMlTools</span>(retouch);</code></pre>
+        </div>
+      </section>
+    </main>
+
+    <!-- ─── 9Tensor ─── -->
+    <footer class="foot">
+      <div class="wrap foot__inner">
+        <a class="foot__maker" href="https://9tensor.com">
+          <svg class="foot__mark" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="7" cy="7" r="3.3"/><circle cx="16" cy="7" r="3.3"/><circle cx="25" cy="7" r="3.3"/>
+            <circle cx="7" cy="16" r="3.3"/><circle cx="16" cy="16" r="3.3"/><circle cx="25" cy="16" r="3.3"/>
+            <circle class="foot__off" cx="7" cy="25" r="3.3"/><circle class="foot__off" cx="16" cy="25" r="3.3"/><circle class="foot__accent" cx="25" cy="25" r="3.3"/>
+          </svg>
+          <span>Rétouch is made by <b>9Tensor</b>, which builds open-source software and data.</span>
         </a>
-        <a href="https://www.npmjs.com/package/@retouchjs/core" class="nav-version" target="_blank" rel="noopener"></a>
-      </div>
-    </nav>
-
-    <!-- ─── Hero ─── -->
-    <section class="hero">
-      <h1 class="hero-title">R<span class="e">é</span>touch</h1>
-      <p class="hero-sub">A canvas-based image and video editor that drops into any web project.<br>Crop, adjust, filter, trim, run on-device ML — then ship.</p>
-      <div class="hero-install" onclick="navigator.clipboard.writeText('npm i @retouchjs/core')" title="Click to copy">
-        <span class="prompt">$</span>
-        <span class="cmd">npm i @retouchjs/core</span>
-        <button class="copy-btn" aria-label="Copy to clipboard">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        </button>
-      </div>
-    </section>
-
-    <!-- ─── Demo ─── -->
-    <section class="demo-section">
-      <p class="demo-label">Try it out</p>
-      <div id="editor"></div>
-    </section>
-
-    <!-- ─── Features ─── -->
-    <section class="features-section">
-      <div class="features-header">
-        <h2>Everything you need, nothing you don't</h2>
-        <p>Ship an image and video editor in minutes with a clean, composable API.</p>
-      </div>
-
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          </div>
-          <h3>Drag &amp; Drop</h3>
-          <p>Drop images and video straight in. Multiple files, an add-more drop target in the gallery, and <code>addFiles()</code> for programmatic injection.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="9" cy="7" r="1.75" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.75" fill="currentColor" stroke="none"/><circle cx="7" cy="17" r="1.75" fill="currentColor" stroke="none"/></svg>
-          </div>
-          <h3>Non-destructive tools</h3>
-          <p>Crop, transform, liquify, curves, HSL, masks, stylize, 14 adjustments and 11 filters. Every edit stays parametric — with undo/redo — until Done bakes it.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14"/><path d="M17 5v14"/><path d="M3 9h4M3 15h4M17 9h4M17 15h4"/><path d="M11 10l3.5 2-3.5 2v-4z" fill="currentColor" stroke="none"/></svg>
-          </div>
-          <h3>Video</h3>
-          <p>Trim on a filmstrip, crop/adjust/filter every frame, 0.25–4× speed, GIF of a range. Re-encoded in the browser via WebCodecs — no upload.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>
-          </div>
-          <h3>On-device ML</h3>
-          <p>Cutout, 4× upscale, erase, click-to-select, depth bokeh, denoise, face &amp; object detection with <code>@retouchjs/ml</code>. Runs in the browser — no server, no keys.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l1.8 4.2L18 10l-4.2 1.8L12 16l-1.8-4.2L6 10l4.2-1.8L12 4z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg>
-          </div>
-          <h3>AI edits</h3>
-          <p>Press ⌘K and say it — “moody and cinematic, crop to a square”. A vision model maps it onto the same edit operations, applied as one undoable step.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 100 18c1.2 0 2-.9 2-2 0-.6-.2-1-.6-1.4-.4-.4-.6-.8-.6-1.3 0-1.1.9-1.9 2-1.9H16a5 5 0 005-5c0-3.6-4-6.4-9-6.4z"/><circle cx="7.5" cy="11" r="1.25" fill="currentColor" stroke="none"/><circle cx="10.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/><circle cx="15" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
-          </div>
-          <h3>Plugins &amp; theming</h3>
-          <p>Register your own feature-group tab in a dozen lines; restyle everything through CSS custom properties. Framework-agnostic, TypeScript types included.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Code Example ─── -->
-    <section class="code-section">
-      <div class="code-header">
-        <h2>Drop in, ship out</h2>
-        <p>A full editor in one call — ML tools in one more.</p>
-      </div>
-
-      <div class="code-block">
-<pre><span class="keyword">import</span> <span class="punct">{</span> Retouch <span class="punct">}</span> <span class="keyword">from</span> <span class="string">'@retouchjs/core'</span>
-<span class="keyword">import</span> <span class="punct">{</span> installMlTools <span class="punct">}</span> <span class="keyword">from</span> <span class="string">'@retouchjs/ml'</span>
-
-<span class="keyword">const</span> retouch <span class="punct">=</span> <span class="keyword">new</span> <span class="fn">Retouch</span><span class="punct">({</span>
-  <span class="prop">target</span><span class="punct">:</span> <span class="string">'#editor'</span><span class="punct">,</span>
-  <span class="prop">onDone</span><span class="punct">:</span> <span class="punct">(</span>blobs<span class="punct">)</span> <span class="punct">=></span> <span class="punct">{</span>
-    <span class="comment">// Done in the gallery → every file, edits applied</span>
-    <span class="fn">upload</span><span class="punct">(</span>blobs<span class="punct">)</span>
-  <span class="punct">}</span>
-<span class="punct">})</span>
-
-<span class="fn">installMlTools</span><span class="punct">(</span>retouch<span class="punct">)</span> <span class="comment">// optional: cutout, upscale, erase, …</span></pre>
-      </div>
-    </section>
-
-    <!-- ─── Footer ─── -->
-    <footer class="footer">
-      <div class="footer-left">
-        MIT License · Built by <a href="https://github.com/onursavas" target="_blank" rel="noopener">onursavas</a>
-      </div>
-      <div class="footer-links">
-        <a href="https://github.com/onursavas/retouch.js#readme" target="_blank" rel="noopener">Docs</a>
-        <a href="https://github.com/onursavas/retouch.js/issues" target="_blank" rel="noopener">Issues</a>
-        <a href="https://www.npmjs.com/package/@retouchjs/core" target="_blank" rel="noopener">npm</a>
+        <nav class="foot__links" aria-label="Project">
+          <a href="https://github.com/onursavas/retouch.js">GitHub</a>
+          <a href="https://www.npmjs.com/package/@retouchjs/core">npm</a>
+          <a href="https://github.com/onursavas/retouch.js#readme">Docs</a>
+          <a href="https://github.com/onursavas/retouch.js/issues">Issues</a>
+        </nav>
+        <p class="foot__small">© 2026 9Tensor LLC · MIT License</p>
+        <p class="foot__small foot__credits">Photos from Unsplash by <span id="credits"></span>.</p>
       </div>
     </footer>
 
+    <input class="visually-hidden" type="file" id="file-input" accept="image/*,video/*" multiple tabindex="-1" aria-hidden="true" />
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

@@ -117,6 +117,15 @@ export interface RailOptions {
   expanded?: boolean;
 }
 
+/** Options for `Retouch.openEditor()`. */
+export interface OpenEditorOptions {
+  /**
+   * The tool to open on, such as "adjust" or a plugin's id. Defaults to the
+   * first tool on the rail, and so does a tool the editor doesn't offer.
+   */
+  tool?: EditorTool;
+}
+
 /**
  * Gallery layouts: "rows" (justified, at true aspect ratios; the default),
  * "grid" (square crops), "height-fit" (a filmstrip of tall frames) and
