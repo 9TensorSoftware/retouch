@@ -2,6 +2,7 @@ import type { CurvePoint, Curves } from "../../types";
 import { buildCurveLut, curveIsIdentity } from "../../utils/curves";
 import { clamp } from "../../utils/math";
 import { h } from "../h";
+import { type AxisLock, createAxisLock } from "./axis-lock";
 import { createSegmented } from "./controls";
 
 export interface CurvesToolOptions {
@@ -49,6 +50,8 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
   let channel: Channel = "master";
   let histogram: Uint32Array = new Uint32Array(256);
   let dragging: number | null = null;
+  /** Where the dragged point and the pointer set off from, and the drag's direction lock. */
+  let dragFrom: { x: number; y: number; point: CurvePoint; lock: AxisLock } | null = null;
   let hover: number | null = null;
 
   const canvas = h("canvas", {
@@ -214,6 +217,12 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
         emit();
       }
       dragging = index;
+      dragFrom = {
+        x: e.clientX,
+        y: e.clientY,
+        point: { ...curves[channel][index] },
+        lock: createAxisLock(),
+      };
       try {
         canvas.setPointerCapture(e.pointerId);
       } catch {
@@ -240,6 +249,12 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
       }
       const pts = curves[channel];
       const pos = toNorm(e);
+      // A point pulled straight up or straight across keeps its other coordinate.
+      if (dragFrom) {
+        dragFrom.lock.apply(e.clientX - dragFrom.x, e.clientY - dragFrom.y);
+        if (dragFrom.lock.axis === "y") pos.x = dragFrom.point.x;
+        else if (dragFrom.lock.axis === "x") pos.y = dragFrom.point.y;
+      }
       const first = dragging === 0;
       const last = dragging === pts.length - 1;
       const minX = first ? 0 : pts[dragging - 1].x + MIN_GAP;
@@ -258,6 +273,7 @@ export function createCurvesTool(options: CurvesToolOptions): CurvesToolHandle {
 
   const endDrag = (): void => {
     dragging = null;
+    dragFrom = null;
     draw();
   };
   canvas.addEventListener("pointerup", endDrag, { signal });

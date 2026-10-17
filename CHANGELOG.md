@@ -139,6 +139,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   indicator (`env(safe-area-inset-*)`).
 - A state change is current at once (`state`, events), while the view swap can wait a frame for
   its transition.
+- Drags keep to the direction they start in: crop corners and moving the crop frame, every mask
+  handle, and curve points. A pull that sets off straight up, down or across stays on that axis,
+  so the hand's drift no longer widens the crop, tilts a gradient or moves a point's input; one
+  that sets off at an angle stays free. The first few pixels decide.
 
 ### Fixed
 
@@ -153,6 +157,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - On phones, the AI tools menu opened behind the controls (the rail's edge fade clipped it), and
   the Ask AI panel opened with its header, and its close button, off the top of the screen.
 - A second finger could drag the crop frame or a mask handle along with the first.
+- With an aspect preset, dragging the crop frame's top or left corner moved the opposite corner
+  too, so the frame slid instead of growing. The opposite corner stays put now, a corner sizes the
+  frame by the axis it was pulled along, and the side handles grow it evenly about its center.
 
 ## [0.1.0] — 2026-09-19
 

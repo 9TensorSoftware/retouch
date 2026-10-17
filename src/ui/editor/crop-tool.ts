@@ -1,6 +1,7 @@
 import { ASPECT_RATIOS } from "../../constants";
 import type { AspectRatioPreset, CropRect } from "../../types";
 import { clamp } from "../../utils/math";
+import { type AxisLock, createAxisLock, type DragAxis } from "./axis-lock";
 import type { CanvasRenderer } from "./canvas-renderer";
 
 export interface CropToolOptions {
@@ -126,12 +127,15 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
   // ── Drag interaction ──
 
   // One pointer drives a drag: other fingers (a pinch, a stray touch) are ignored.
+  // Moves and corners can go either way, so they lock to the direction they
+  // set off in; an edge handle only has one way to go.
   let dragging: {
     id: number;
     type: "move" | HandlePosition;
     startX: number;
     startY: number;
     startSel: CropRect;
+    lock: AxisLock | null;
   } | null = null;
 
   selection.addEventListener(
@@ -146,6 +150,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
         startX: e.clientX,
         startY: e.clientY,
         startSel: { ...sel },
+        lock: createAxisLock(),
       };
     },
     { signal },
@@ -164,6 +169,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
           startX: e.clientX,
           startY: e.clientY,
           startSel: { ...sel },
+          lock: pos.length === 2 ? createAxisLock() : null,
         };
       },
       { signal },
@@ -180,16 +186,19 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
       if (imgRect.width === 0 || imgRect.height === 0) return;
 
       // Pointer deltas are screen px; the stage may be magnifying the canvas.
+      let px = e.clientX - dragging.startX;
+      let py = e.clientY - dragging.startY;
+      if (dragging.lock) ({ dx: px, dy: py } = dragging.lock.apply(px, py));
       const zoom = renderer.getScreenScale();
-      const dx = (e.clientX - dragging.startX) / (imgRect.width * zoom);
-      const dy = (e.clientY - dragging.startY) / (imgRect.height * zoom);
+      const dx = px / (imgRect.width * zoom);
+      const dy = py / (imgRect.height * zoom);
       const ss = dragging.startSel;
 
       if (dragging.type === "move") {
         sel.x = clamp(ss.x + dx, 0, 1 - ss.width);
         sel.y = clamp(ss.y + dy, 0, 1 - ss.height);
       } else {
-        handleResize(dragging.type, ss, dx, dy);
+        handleResize(dragging.type, ss, dx, dy, dragging.lock?.axis ?? null);
       }
 
       updateLayout();
@@ -204,60 +213,64 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
   document.addEventListener("pointerup", endDrag, { signal });
   document.addEventListener("pointercancel", endDrag, { signal });
 
-  function handleResize(pos: HandlePosition, ss: CropRect, dx: number, dy: number): void {
+  /**
+   * Resize from a handle. The opposite corner or edge stays put. With an
+   * aspect preset, one axis sets the size and the other follows: an edge
+   * handle's own axis (the frame grows evenly across the other), a corner's
+   * locked axis, or for a diagonal pull whichever axis changed more.
+   */
+  function handleResize(
+    pos: HandlePosition,
+    ss: CropRect,
+    dx: number,
+    dy: number,
+    axis: DragAxis | null,
+  ): void {
+    const west = pos.includes("w");
+    const east = pos.includes("e");
+    const north = pos.includes("n");
+    const south = pos.includes("s");
+    const right = ss.x + ss.width;
+    const bottom = ss.y + ss.height;
+
+    // Each dragged edge follows the pointer.
+    let left = west ? clamp(ss.x + dx, 0, right - MIN_SIZE) : ss.x;
+    let top = north ? clamp(ss.y + dy, 0, bottom - MIN_SIZE) : ss.y;
+    let w = (east ? clamp(right + dx, ss.x + MIN_SIZE, 1) : right) - left;
+    let h = (south ? clamp(bottom + dy, ss.y + MIN_SIZE, 1) : bottom) - top;
+
     const ratio = ASPECT_RATIOS[aspectRatio];
-    let newX = ss.x;
-    let newY = ss.y;
-    let newW = ss.width;
-    let newH = ss.height;
-
-    // Horizontal edges
-    if (pos.includes("w")) {
-      const maxDx = ss.width - MIN_SIZE;
-      const clampedDx = clamp(dx, -ss.x, maxDx);
-      newX = ss.x + clampedDx;
-      newW = ss.width - clampedDx;
-    }
-    if (pos.includes("e")) {
-      newW = clamp(ss.width + dx, MIN_SIZE, 1 - ss.x);
-    }
-
-    // Vertical edges
-    if (pos.includes("n")) {
-      const maxDy = ss.height - MIN_SIZE;
-      const clampedDy = clamp(dy, -ss.y, maxDy);
-      newY = ss.y + clampedDy;
-      newH = ss.height - clampedDy;
-    }
-    if (pos.includes("s")) {
-      newH = clamp(ss.height + dy, MIN_SIZE, 1 - ss.y);
-    }
-
-    // Enforce aspect ratio
     if (ratio !== null && ratio !== undefined) {
       const imgRect = renderer.getImageRect();
-      const pixelRatio = imgRect.width / imgRect.height;
-      const normalizedRatio = ratio / pixelRatio;
+      // Normalized width per unit of normalized height.
+      const k = ratio / (imgRect.width / imgRect.height);
+      const corner = (west || east) && (north || south);
+      const byHeight = corner
+        ? axis === "y" ||
+          (axis !== "x" && Math.abs(h - ss.height) / ss.height > Math.abs(w - ss.width) / ss.width)
+        : north || south;
+      if (byHeight) w = h * k;
+      else h = w / k;
 
-      if (pos === "n" || pos === "s") {
-        newW = newH * normalizedRatio;
-        if (newX + newW > 1) newW = 1 - newX;
-        newH = newW / normalizedRatio;
-      } else {
-        newH = newW / normalizedRatio;
-        if (newY + newH > 1) newH = 1 - newY;
-        newW = newH * normalizedRatio;
-      }
+      // Never below the minimum, then never past the photo from the anchor.
+      const grow = Math.max(1, MIN_SIZE / w, MIN_SIZE / h);
+      w *= grow;
+      h *= grow;
+      const cx = ss.x + ss.width / 2;
+      const cy = ss.y + ss.height / 2;
+      const roomW = west ? right : east ? 1 - ss.x : 2 * Math.min(cx, 1 - cx);
+      const roomH = north ? bottom : south ? 1 - ss.y : 2 * Math.min(cy, 1 - cy);
+      const fit = Math.min(1, roomW / w, roomH / h);
+      w *= fit;
+      h *= fit;
+      left = west ? right - w : east ? ss.x : cx - w / 2;
+      top = north ? bottom - h : south ? ss.y : cy - h / 2;
     }
 
-    // Clamp to bounds
-    newW = clamp(newW, MIN_SIZE, 1 - newX);
-    newH = clamp(newH, MIN_SIZE, 1 - newY);
-
-    sel.x = newX;
-    sel.y = newY;
-    sel.width = newW;
-    sel.height = newH;
+    sel.x = left;
+    sel.y = top;
+    sel.width = w;
+    sel.height = h;
   }
 
   // Initial layout
