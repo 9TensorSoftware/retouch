@@ -89,7 +89,7 @@ describe("ML tool panes", () => {
     let pane = cutout.mount(context());
     await flush();
     const label = () => pane.root.querySelector(".rt-dock__chip--ai")?.textContent;
-    expect(label()).toBe("Download 25 MB and remove the background");
+    expect(label()).toBe("Remove the background · 25 MB");
     expect(pane.root.textContent).toContain("25 MB, once, then saved");
 
     useCaches([DEFAULT_CUTOUT_MODEL_URL]);
@@ -103,9 +103,7 @@ describe("ML tool panes", () => {
     const erase = register().get("erase") as EditorToolPlugin;
     const pane = erase.mount(context());
     await flush();
-    expect(pane.root.querySelector(".rt-dock__chip--ai")?.textContent).toBe(
-      "Download 208 MB and erase",
-    );
+    expect(pane.root.querySelector(".rt-dock__chip--ai")?.textContent).toBe("Erase · 208 MB");
     pane.destroy?.();
   });
 
@@ -127,7 +125,7 @@ describe("ML tool panes", () => {
     expect(pane.root.querySelector(".rt-dock__status")?.textContent).toBe(
       "Start selecting first: it downloads the model (38 MB) once.",
     );
-    expect(pane.root.textContent).toContain("Download 38 MB and start selecting");
+    expect(pane.root.textContent).toContain("Start selecting · 38 MB");
     fetchSpy.mockRestore();
     pane.destroy?.();
   });

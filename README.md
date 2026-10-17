@@ -181,8 +181,8 @@ browser.
 
 Nothing downloads behind your back. Each tool opens on a card naming its model,
 its download size and where it runs ("This device · WebGPU"), and its run
-button says what it will fetch — **Download 208 MB and erase** — until the
-model is saved, after which it just says **Erase**. Select doesn't start its
+button says what it will fetch — **Erase · 208 MB** — until the model is
+saved, after which it just says **Erase**. Select doesn't start its
 download from a click on the photo; it asks first. A run shows its steps
 (download with a progress bar, run, then add to the gallery or replace the
 photo), and the result wipes in over the photo before it lands:

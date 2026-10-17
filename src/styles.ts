@@ -2905,12 +2905,19 @@ const CSS = /* css */ `
   height: 14px;
 }
 
+/* A long label wraps inside the button instead of spilling past its edges. */
 .rt-card__body > .rt-dock__chip--ai {
   justify-content: center;
   width: 100%;
-  height: 42px;
+  height: auto;
+  min-height: 42px;
+  padding-block: 9px;
   border-radius: var(--rt-radius-md);
   font-size: var(--rt-type-md);
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .rt-steps {
