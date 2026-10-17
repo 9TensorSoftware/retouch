@@ -1,32 +1,42 @@
 import { installMlTools } from "../packages/ml/src/index";
-import type { Adjustments, FilterPreset, ToolContext } from "../src/index";
+import type { EditorTool, ToolContext } from "../src/index";
 import { Retouch, VERSION } from "../src/index";
+import {
+  ICON_CHECK,
+  ICON_DOWNLOAD,
+  ICON_SPARKLE,
+  ICON_TOOL_CROP,
+  ICON_TOOL_LIQUIFY,
+  ICON_TOOL_MASKS,
+  ICON_TOOL_STYLIZE,
+  ICON_TOOL_TRANSFORM,
+  ICON_TOOL_TRIM,
+} from "../src/ui/icons";
+import { mountCompare } from "./compare";
+import {
+  describe,
+  GALLERY,
+  LOOKS,
+  type Look,
+  PHOTOS,
+  type PhotoName,
+  POND_EDIT,
+  ROAD_EDIT,
+} from "./photos";
+import { decoded, lookRecipe, recipeEdits, render, toObjectUrl } from "./render";
+
+const BASE = import.meta.env.BASE_URL;
+const photoUrl = (name: PhotoName) => `${BASE}photos/${PHOTOS[name].file}`;
+
+function $<T extends HTMLElement>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) throw new Error(`Missing ${selector}`);
+  return element;
+}
 
 // ── Demo of the plugin API: a custom "Looks" feature group ──────────────
 // One-tap moods that write through the same non-destructive edit model the
 // built-in tools use, so previews, undo, and export all work unchanged.
-
-interface Look {
-  name: string;
-  filter: FilterPreset;
-  adjustments: Partial<Adjustments>;
-}
-
-const LOOKS: Look[] = [
-  {
-    name: "Golden hour",
-    filter: "warm",
-    adjustments: { temperature: 35, vibrance: 25, vignette: 20 },
-  },
-  { name: "Noir", filter: "bw", adjustments: { contrast: 130, grain: 25, vignette: 35 } },
-  { name: "Punchy", filter: "vivid", adjustments: { contrast: 115, vibrance: 40, sharpen: 20 } },
-  {
-    name: "Faded film",
-    filter: "vintage",
-    adjustments: { contrast: 88, grain: 30, temperature: 10 },
-  },
-  { name: "Cool morning", filter: "cool", adjustments: { temperature: -25, exposure: 10 } },
-];
 
 Retouch.registerTool({
   id: "looks",
@@ -70,25 +80,251 @@ Retouch.registerTool({
   },
 });
 
+// ── The editor, with the sample photos already in the gallery ───────────
+
 const editor = new Retouch({
   target: "#editor",
+  theme: "auto",
   // Visitors can paste their own Anthropic key to try the AI command bar.
   ai: { allowUserKey: true },
-  onDone: (blobs) => {
-    console.log(`[Rétouch] Done — exported ${blobs.length} image(s)`, blobs);
-
-    for (const blob of blobs) {
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-    }
-  },
+  onDone: saveAll,
 });
 
 // ML tools (on-device, lazy model download on first use)
 installMlTools(editor);
 
-// The nav badge follows the library, so there is no version string to keep in sync.
-const versionBadge = document.querySelector<HTMLAnchorElement>(".nav-version");
-if (versionBadge) versionBadge.textContent = `v${VERSION}`;
+/** Fetch the sample photos into the gallery; resolves to each one's entry id. */
+async function loadSamples(): Promise<Map<PhotoName, string>> {
+  const files = await Promise.all(
+    GALLERY.map(async (name) => {
+      const response = await fetch(photoUrl(name));
+      if (!response.ok) throw new Error(`Couldn't load ${PHOTOS[name].file}`);
+      const blob = await response.blob();
+      return new File([blob], PHOTOS[name].file, { type: blob.type || "image/jpeg" });
+    }),
+  );
+  await editor.addFiles(files);
+  const ids = new Map<PhotoName, string>();
+  for (const entry of editor.getMedia()) {
+    const name = GALLERY.find((n) => PHOTOS[n].file === entry.file.name);
+    if (name && !ids.has(name)) ids.set(name, entry.id);
+  }
+  return ids;
+}
+
+const samples = loadSamples();
+samples.catch((error) => console.error("[Rétouch demo]", error));
+
+/** The tool each page link opens its photo on. */
+const OPEN_ON: Partial<Record<PhotoName, EditorTool>> = { pond: "adjust", corgi: "depth" };
+
+/**
+ * Open a sample in the editor. The hero photo opens on the settings the page
+ * shows it with, so the sliders explain the picture.
+ */
+async function editSample(name: PhotoName): Promise<void> {
+  const id = (await samples).get(name);
+  const entry = editor.getImages().find((e) => e.id === id);
+  if (!entry) return;
+  if (name === "pond" && !entry.edited) Object.assign(entry.edits, recipeEdits(POND_EDIT));
+  editor.openEditor(entry.id, { tool: OPEN_ON[name] });
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-edit]")) {
+  button.addEventListener("click", () => void editSample(button.dataset.edit as PhotoName));
+}
+
+// "Open your photos": one photo goes straight into the editor, more land in
+// the gallery.
+const fileInput = $<HTMLInputElement>("#file-input");
+$("[data-open-files]").addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", async () => {
+  const files = [...(fileInput.files ?? [])];
+  fileInput.value = "";
+  if (files.length === 0) return;
+  await samples.catch(() => undefined);
+  const before = new Set(editor.getMedia().map((entry) => entry.id));
+  await editor.addFiles(files);
+  const added = editor.getMedia().filter((entry) => !before.has(entry.id));
+  if (added.length === 1) editor.openEditor(added[0].id);
+  else if (added.length > 1) $("#try").scrollIntoView({ block: "start" });
+});
+
+/** Done in the gallery saves every photo, edits applied. */
+function saveAll(blobs: Blob[]): void {
+  const media = editor.getMedia();
+  blobs.forEach((blob, i) => {
+    const stem = (media[i]?.file.name ?? `photo-${i + 1}`).replace(/\.[^.]+$/, "");
+    const ext =
+      blob.type.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov") ?? "jpg";
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${stem}-retouched.${ext}`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+  });
+}
+
+// ── The hero: the pond, edited live by the same renderer the editor uses ──
+
+const heroCompare = mountCompare($("#hero-compare"));
+$("#hero-recipe").textContent = describe(POND_EDIT).join(" · ");
+
+async function showHero(): Promise<void> {
+  const before = await decoded($<HTMLImageElement>("#hero-before"));
+  const after = $<HTMLImageElement>("#hero-after");
+  after.src = await toObjectUrl(render(before, POND_EDIT, 2000));
+  await decoded(after);
+  heroCompare.reveal();
+}
+void showHero();
+
+// ── Sections render when they come near the viewport ────────────────────
+
+function whenNear(element: Element, run: () => void): void {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      run();
+    },
+    { rootMargin: "600px 0px" },
+  );
+  observer.observe(element);
+}
+
+function chips(target: HTMLElement, labels: string[]): void {
+  target.replaceChildren(
+    ...labels.map((label) => {
+      const chip = document.createElement("span");
+      chip.textContent = label;
+      return chip;
+    }),
+  );
+}
+
+// Color mix on the road.
+const roadFigure = $("#road-compare");
+const roadCompare = mountCompare(roadFigure);
+chips($("#road-recipe"), describe(ROAD_EDIT));
+whenNear(roadFigure, async () => {
+  const before = await decoded($<HTMLImageElement>("#road-before"));
+  const after = $<HTMLImageElement>("#road-after");
+  after.src = await toObjectUrl(render(before, ROAD_EDIT, 1600));
+  await decoded(after);
+  roadCompare.reveal();
+});
+
+// The portrait in each look the Looks plugin offers.
+const looks = $<HTMLUListElement>("#looks");
+const lookTiles = LOOKS.map((look) => {
+  const tile = document.createElement("li");
+  tile.className = "looks__tile";
+  const img = document.createElement("img");
+  img.alt = `The portrait with the ${look.name} look`;
+  const label = document.createElement("span");
+  label.textContent = look.name;
+  tile.append(img, label);
+  looks.append(tile);
+  return { look, img };
+});
+whenNear(looks, async () => {
+  const portrait = await decoded($<HTMLImageElement>("#looks img"));
+  for (const { look, img } of lookTiles) {
+    img.src = await toObjectUrl(render(portrait, lookRecipe(look), 720), 0.86);
+    // Yield between tiles so scrolling stays smooth.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+});
+
+// The AI results: before/after for Erase and Upscale, modes for the others.
+for (const id of ["#erase-compare", "#upscale-compare"]) {
+  const figure = $(id);
+  const compare = mountCompare(figure, id === "#erase-compare" ? 0.66 : 0.5);
+  whenNear(figure, async () => {
+    await Promise.all([...figure.querySelectorAll("img")].map((img) => decoded(img)));
+    compare.reveal();
+  });
+}
+
+function segmented(group: string, target: HTMLElement, attribute: string): void {
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>(`[data-${group}]`)].filter(
+    (button) => button.tagName === "BUTTON",
+  );
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      target.setAttribute(attribute, button.getAttribute(`data-${group}`) ?? "");
+      for (const other of buttons) other.setAttribute("aria-pressed", String(other === button));
+    });
+  }
+}
+segmented("select", $("#select"), "data-mode");
+segmented("bg", $("#cutout"), "data-bg");
+
+// ── The rest of the page ────────────────────────────────────────────────
+
+const ICON_PHONE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>';
+const ICONS: Record<string, string> = {
+  crop: ICON_TOOL_CROP,
+  transform: ICON_TOOL_TRANSFORM,
+  masks: ICON_TOOL_MASKS,
+  liquify: ICON_TOOL_LIQUIFY,
+  stylize: ICON_TOOL_STYLIZE,
+  trim: ICON_TOOL_TRIM,
+  sparkle: ICON_SPARKLE,
+  phone: ICON_PHONE,
+  download: ICON_DOWNLOAD,
+};
+for (const slot of document.querySelectorAll<HTMLElement>("[data-icon]")) {
+  slot.innerHTML = ICONS[slot.dataset.icon ?? ""] ?? "";
+}
+
+// The version badge follows the library, so there is no version string to keep in sync.
+$("[data-version]").textContent = `v${VERSION}`;
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-copy]")) {
+  const icon = button.innerHTML;
+  button.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy ?? "");
+    } catch {
+      return;
+    }
+    button.classList.add("is-copied");
+    button.innerHTML = ICON_CHECK;
+    setTimeout(() => {
+      button.classList.remove("is-copied");
+      button.innerHTML = icon;
+    }, 1600);
+  });
+}
+
+// Photo credits, from the same list the page loads its photos from.
+$("#credits").replaceChildren(
+  ...Object.values(PHOTOS).flatMap((photo, i, all) => {
+    const link = document.createElement("a");
+    link.href = photo.authorUrl;
+    link.textContent = photo.author;
+    const joiner = i === all.length - 1 ? "" : i === all.length - 2 ? " and " : ", ";
+    return [link, joiner];
+  }),
+);
+
+// Sections settle in as they scroll into view, unless motion is reduced.
+if (window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+  document.documentElement.classList.add("has-motion");
+  const revealer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList.add("is-in");
+        revealer.unobserve(entry.target);
+      }
+    },
+    { rootMargin: "0px 0px -8% 0px" },
+  );
+  for (const element of document.querySelectorAll("[data-reveal]")) revealer.observe(element);
+}
 
 Object.assign(window, { editor });

@@ -86,6 +86,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   other; each exported file's check springs in, and a finished export shows a check and a green bar
   before it lets go; the AI result wipe has a prism edge. Reduced motion turns all of it off,
   delays included, and nothing waits on an animation to finish.
+- `openEditor(id, { tool })` opens the editor on a given tool, such as `"adjust"` or a plugin's id
+  (type `OpenEditorOptions`). Without it, or for a tool the editor doesn't offer, it opens on the
+  first tool as before.
+- The demo is now the landing page for retouch.9tensor.com: the live editor with five sample
+  photos already in its gallery, a before/after hero that Rétouch renders in the page (Edit this
+  photo opens it on those settings), and sections that show real output: a color mix, the Looks
+  plugin's looks, and what Erase, Select, Cutout and Upscale made of these photos. It has a social
+  preview image, an icon and the 9Tensor footer. The photos are from Unsplash, credited on the page
+  and in `demo/public/photos/CREDITS.txt`.
 
 ### Changed
 
