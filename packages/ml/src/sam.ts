@@ -1,4 +1,4 @@
-import { loadSession, ort, type RuntimeOptions, runResilient } from "./runtime";
+import { loadOrt, loadSession, type RuntimeOptions, runResilient } from "./runtime";
 
 /**
  * Click-to-select via SlimSAM-77 (Apache-2.0): the image encodes once into
@@ -176,6 +176,7 @@ export function encodeSamImage(
     ctx.drawImage(source, 0, 0, resized.width, resized.height);
     const data = ctx.getImageData(0, 0, resized.width, resized.height).data;
 
+    const ort = await loadOrt();
     const input = new ort.Tensor("float32", rgbaToSamTensor(data, resized.width, resized.height), [
       1,
       3,
@@ -214,6 +215,7 @@ export async function decodeSamClicks(
   options: SamOptions = {},
 ): Promise<{ mask: HTMLCanvasElement; score: number }> {
   if (points.length === 0) throw new Error("[Retouch ML] No prompt points");
+  const ort = await loadOrt();
   const { coords, labels } = pointsToSamTensors(points, embeddings.width, embeddings.height);
   const feeds = {
     input_points: new ort.Tensor("float32", coords, [1, 1, points.length, 2]),
