@@ -2,10 +2,10 @@
 
 <p>
   <a href="https://www.npmjs.com/package/@9tensor/retouch-ml"><img src="https://img.shields.io/npm/v/@9tensor/retouch-ml?color=D4572A&label=npm" alt="npm version" /></a>
-  <a href="https://github.com/9tensorsoftware/retouch.js/blob/main/packages/ml/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch-ml?color=1A1815" alt="license" /></a>
+  <a href="https://github.com/9tensorsoftware/retouch/blob/main/packages/ml/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch-ml?color=1A1815" alt="license" /></a>
 </p>
 
-On-device ML tools for [Rétouch](https://github.com/9tensorsoftware/retouch.js) — no
+On-device ML tools for [Rétouch](https://github.com/9tensorsoftware/retouch) — no
 server, no API keys. Models run in the browser through ONNX Runtime Web
 (WebGPU when available, WASM otherwise, inference in a worker so the UI never
 freezes); weights download on first use and are cached via the Cache API.

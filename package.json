@@ -7,10 +7,10 @@
   "homepage": "https://retouch.9tensor.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/9tensorsoftware/retouch.js.git"
+    "url": "git+https://github.com/9tensorsoftware/retouch.git"
   },
   "bugs": {
-    "url": "https://github.com/9tensorsoftware/retouch.js/issues"
+    "url": "https://github.com/9tensorsoftware/retouch/issues"
   },
   "keywords": [
     "canvas",
