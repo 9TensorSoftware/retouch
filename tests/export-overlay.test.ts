@@ -75,6 +75,8 @@ describe("export sheet", () => {
     sheet.finish();
     expect(text(".rt-export-overlay__title")).toBe("Exported 3 files");
     expect(text(".rt-export-overlay__eta")).toBe("1 sent unedited");
+    expect(sheet.root.classList.contains("rt-export-overlay--finished")).toBe(true);
+    expect(sheet.root.querySelector(".rt-export-overlay__mark svg")).not.toBeNull();
     expect(sheet.root.isConnected).toBe(true);
     vi.advanceTimersByTime(700);
     expect(sheet.root.isConnected).toBe(false);

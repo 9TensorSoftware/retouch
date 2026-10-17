@@ -37,6 +37,8 @@ export interface GalleryOptions {
   onViewChange?: (view: GalleryViewMode) => void;
   /** Selected ids. The caller owns the set, so a selection survives a re-render. */
   selection?: Set<string>;
+  /** Entries new since the gallery last showed: they arrive with a cascade. */
+  fresh?: ReadonlySet<string>;
 }
 
 /** The four layouts the switch offers. */
@@ -153,6 +155,10 @@ export function createGallery(options: GalleryOptions): ViewHandle {
   for (const id of selected) if (!items.some((e) => e.id === id)) selected.delete(id);
   let anchor: string | null = null;
   const touch = isTouchFirst();
+  // Fresh items cascade in, in order, on the first render only.
+  const arriving = new Map(
+    items.filter((e) => options.fresh?.has(e.id)).map((e, i) => [e.id, i] as const),
+  );
   /** Each frame's width ÷ height, refined as thumbnails load. */
   const ratios = new Map<string, number>();
 
@@ -544,6 +550,7 @@ export function createGallery(options: GalleryOptions): ViewHandle {
     const view = { item: tile, select, media };
     views.set(entry.id, view);
     mark(view, selected.has(entry.id));
+    arrive(tile, entry.id);
     return tile;
   }
 
@@ -616,7 +623,16 @@ export function createGallery(options: GalleryOptions): ViewHandle {
     const view = { item: row, select, media };
     views.set(entry.id, view);
     mark(view, selected.has(entry.id));
+    arrive(row, entry.id);
     return row;
+  }
+
+  /** Mark a fresh item to cascade in, a beat after the one before it. */
+  function arrive(item: HTMLElement, id: string): void {
+    const order = arriving.get(id);
+    if (order === undefined) return;
+    item.classList.add("rt-gallery__item--fresh");
+    item.style.setProperty("--i", String(order));
   }
 
   function render(): void {
@@ -666,7 +682,9 @@ export function createGallery(options: GalleryOptions): ViewHandle {
       lastWidth = e.contentRect.width;
       relayout();
     });
-    resize.observe(content);
+    // The header has the content's width but a steady height: watching the
+    // content itself, which relayout resizes, would loop the observer.
+    resize.observe(toolbar);
     rootSignal.addEventListener("abort", () => resize.disconnect());
   }
 
@@ -731,6 +749,11 @@ export function createGallery(options: GalleryOptions): ViewHandle {
   );
 
   render();
+  // Everything new: the sheet itself is arriving (from the drop zone, say).
+  if (items.length > 0 && arriving.size === items.length)
+    root.classList.add("rt-gallery--entering");
+  // Later renders (a layout switch) don't replay the cascade.
+  arriving.clear();
 
   return {
     root,

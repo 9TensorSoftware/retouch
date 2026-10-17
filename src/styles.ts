@@ -1344,7 +1344,18 @@ const CSS = /* css */ `
     max(8px, env(safe-area-inset-right))
     max(8px, env(safe-area-inset-bottom))
     max(8px, env(safe-area-inset-left));
-  animation: rt-overlay-in var(--rt-dur-3) var(--rt-ease-decel);
+  animation: rt-fade-in var(--rt-dur-2) var(--rt-ease) backwards;
+}
+
+/* Opened by a view transition, which does the fading. */
+.rt-editor-overlay--morphed {
+  animation: none;
+}
+
+/* Closing without a view transition: a quick fade out. */
+.rt-editor-overlay--leaving {
+  animation: rt-fade-out var(--rt-dur-2) var(--rt-ease) forwards;
+  pointer-events: none;
 }
 
 .rt-editor__topbar,
@@ -3611,16 +3622,17 @@ input.rt-dock__slider-value:focus-visible {
   height: 100%;
 }
 
+/* The wipe's front: a line of the prism (the mark of on-device AI), glowing. */
 .rt-reveal__edge {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: calc(2 * var(--rt-px, 1px));
-  margin-left: calc(-1 * var(--rt-px, 1px));
-  background: #fff;
+  width: calc(3 * var(--rt-px, 1px));
+  margin-left: calc(-1.5 * var(--rt-px, 1px));
+  background: linear-gradient(180deg, #FFC457, #8CE99A 33%, #5CC8FF 66%, #A58BFF);
   box-shadow:
-    0 0 calc(18 * var(--rt-px, 1px)) calc(4 * var(--rt-px, 1px)) rgba(255, 255, 255, 0.5),
+    0 0 calc(18 * var(--rt-px, 1px)) calc(4 * var(--rt-px, 1px)) rgba(255, 255, 255, 0.35),
     0 0 calc(44 * var(--rt-px, 1px)) rgba(165, 139, 255, 0.55);
 }
 
@@ -4335,14 +4347,46 @@ input.rt-dock__slider-value:focus-visible {
 
 .rt-export-overlay__head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
 }
 
 .rt-export-overlay__title {
+  flex: 1;
+  min-width: 0;
   font-size: var(--rt-type-lg);
   font-weight: 650;
+}
+
+/* The finish: a check springs in by the title, and the bar turns green. */
+.rt-export-overlay__mark {
+  display: none;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--rt-success);
+  color: #06140D;
+}
+
+.rt-export-overlay__mark svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.6;
+}
+
+.rt-export-overlay--finished .rt-export-overlay__mark {
+  display: grid;
+  animation: rt-pop 420ms var(--rt-ease-spring) backwards;
+}
+
+.rt-export-overlay--finished .rt-export-overlay__fill {
+  background: var(--rt-success);
+}
+
+.rt-export-overlay--finished .rt-export-overlay__card {
+  animation: rt-card-out 700ms var(--rt-ease) forwards;
 }
 
 .rt-export-overlay__count {
@@ -4364,7 +4408,13 @@ input.rt-dock__slider-value:focus-visible {
   width: 0%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--rt-accent), color-mix(in oklab, var(--rt-accent) 55%, #FFC457));
-  transition: width var(--rt-dur-2) var(--rt-ease);
+  transition: width var(--rt-dur-2) var(--rt-ease), background-color var(--rt-dur-3) var(--rt-ease);
+}
+
+/* Each file's check (or mark) springs in as it lands. */
+.rt-export-overlay__item--done .rt-export-overlay__badge,
+.rt-export-overlay__item--error .rt-export-overlay__badge {
+  animation: rt-pop 420ms var(--rt-ease-spring) backwards;
 }
 
 /* Every file as its picture, with a ring that fills as it exports. */
@@ -5576,14 +5626,125 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
 
 /* ── Motion ────────────────────────────────── */
 
-@keyframes rt-overlay-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Entrances. The editor's panels arrive from their own edges, a beat apart.
+   Fill is backwards only: once in, nothing keeps a transform, which would
+   otherwise trap the fixed menus inside. The rail and the stage fade as
+   panels and move only their contents, for the same reason. */
+.rt-editor__topbar {
+  animation: rt-from-top var(--rt-dur-4) var(--rt-ease-decel) backwards;
+}
+
+.rt-toolbar {
+  animation: rt-fade-in var(--rt-dur-3) var(--rt-ease) 40ms backwards;
+}
+
+.rt-toolbar__scroll {
+  animation: rt-from-left var(--rt-dur-4) var(--rt-ease-decel) 50ms backwards;
+}
+
+.rt-editor__inspector {
+  animation: rt-from-right var(--rt-dur-4) var(--rt-ease-decel) 90ms backwards;
+}
+
+.rt-editor__canvas-area {
+  animation: rt-fade-in var(--rt-dur-3) var(--rt-ease) 20ms backwards;
+}
+
+.rt-video-bar {
+  animation: rt-from-bottom var(--rt-dur-4) var(--rt-ease-decel) 70ms backwards;
+}
+
+@media (max-width: 760px) and (min-height: 501px), (max-width: 1024px) and (orientation: portrait) {
+  .rt-toolbar__scroll,
+  .rt-editor__inspector {
+    animation-name: rt-from-bottom;
+  }
+}
+
+/* The shell: the drop zone deals its prints; the gallery rises in, and new
+   frames cascade into it. */
+.rt-dropzone-wrapper,
+.rt-gallery--entering {
+  animation: rt-rise-in var(--rt-dur-3) var(--rt-ease-decel) backwards;
+}
+
+.rt-dropzone__print {
+  animation: rt-deal 640ms var(--rt-ease-spring) backwards;
+}
+
+.rt-dropzone__print--2 { animation-delay: 60ms; }
+.rt-dropzone__print--1 { animation-delay: 130ms; }
+.rt-dropzone__print--3 { animation-delay: 200ms; }
+
+.rt-gallery__item--fresh {
+  animation: rt-tile-in 520ms var(--rt-ease-spring) backwards;
+  animation-delay: calc(min(var(--i, 0), 16) * 34ms + 60ms);
+}
+
+/* Gallery ↔ editor: the photo morphs between its frame and the stage (a
+   view transition; html carries rt-morphing while it runs). */
+html.rt-morphing::view-transition-group(rt-photo) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+html.rt-morphing::view-transition-old(rt-photo),
+html.rt-morphing::view-transition-new(rt-photo) {
+  height: 100%;
+  object-fit: cover;
+  animation-duration: 420ms;
+}
+
+html.rt-morphing::view-transition-old(root),
+html.rt-morphing::view-transition-new(root) {
+  animation-duration: 300ms;
 }
 
 @keyframes rt-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes rt-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes rt-from-top {
+  from { opacity: 0; transform: translateY(-10px); }
+}
+
+@keyframes rt-from-left {
+  from { opacity: 0; transform: translateX(-10px); }
+}
+
+@keyframes rt-from-right {
+  from { opacity: 0; transform: translateX(12px); }
+}
+
+@keyframes rt-from-bottom {
+  from { opacity: 0; transform: translateY(12px); }
+}
+
+@keyframes rt-rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+@keyframes rt-tile-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+}
+
+/* Prints dealt from one pile into their fan (each ends at its own resting transform). */
+@keyframes rt-deal {
+  from { opacity: 0; transform: translate(-50%, -54%) rotate(0deg) scale(0.88); }
+}
+
+@keyframes rt-pop {
+  from { opacity: 0; transform: scale(0.4); }
+}
+
+@keyframes rt-card-out {
+  0%, 55% { transform: none; }
+  100% { transform: translateY(6px) scale(0.97); }
 }
 
 @keyframes rt-pane-in {
@@ -5620,13 +5781,22 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* No view transitions are started then; this covers any in flight. */
+  html.rt-morphing::view-transition-group(*),
+  html.rt-morphing::view-transition-old(*),
+  html.rt-morphing::view-transition-new(*) {
+    animation: none !important;
+  }
   .rt-root, .rt-root *, .rt-root *::before, .rt-root *::after,
   .rt-editor-overlay, .rt-editor-overlay *, .rt-editor-overlay *::before, .rt-editor-overlay *::after,
   .rt-export-overlay, .rt-export-overlay *, .rt-export-overlay *::before, .rt-export-overlay *::after,
   .rt-toasts, .rt-toasts *, .rt-toasts *::before, .rt-toasts *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    /* No waiting either: a staggered entrance would hold things unseen. */
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
   }
 }
 `;

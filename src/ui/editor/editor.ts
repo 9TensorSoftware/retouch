@@ -1875,7 +1875,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   return {
     root,
-    destroy() {
+    destroy({ fade = false } = {}) {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();
       history?.destroy();
@@ -1899,8 +1899,26 @@ export function createEditor(options: EditorOptions): ViewHandle {
       filtersTool.destroy();
       dock.destroy();
       toolbar.destroy();
-      renderer.destroy();
-      root.remove();
+      const remove = (): void => {
+        renderer.destroy();
+        root.remove();
+      };
+      if (!fade) {
+        remove();
+        return;
+      }
+      // Fade out (no view transition is doing it): already deaf to input,
+      // the photo stays until the fade ends; a timer covers a missed animationend.
+      root.inert = true;
+      root.classList.add("rt-editor-overlay--leaving");
+      let removed = false;
+      const once = (): void => {
+        if (removed) return;
+        removed = true;
+        remove();
+      };
+      root.addEventListener("animationend", once, { once: true });
+      setTimeout(once, 260);
     },
   };
 }
