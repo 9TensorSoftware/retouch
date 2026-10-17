@@ -157,6 +157,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - On phones, the AI tools menu opened behind the controls (the rail's edge fade clipped it), and
   the Ask AI panel opened with its header, and its close button, off the top of the screen.
 - A second finger could drag the crop frame or a mask handle along with the first.
+- `@9tensor/retouch-ml` tools failed in production builds: the first run stopped with "no
+  available backend found". ONNX Runtime starts its worker from the file it lives in, and a
+  bundler had put it in the app's bundle, so the worker ran the whole app and died at its first
+  `document`. ONNX Runtime now loads on first use, through a dynamic import that bundlers split
+  into a chunk of its own, which also keeps about 400 KB out of the page's first download.
 - With an aspect preset, dragging the crop frame's top or left corner moved the opposite corner
   too, so the frame slid instead of growing. The opposite corner stays put now, a corner sizes the
   frame by the axis it was pulled along, and the side handles grow it evenly about its center.

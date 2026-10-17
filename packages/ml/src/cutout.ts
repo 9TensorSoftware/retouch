@@ -1,4 +1,4 @@
-import { ort, type RuntimeOptions, runResilient } from "./runtime";
+import { loadOrt, type RuntimeOptions, runResilient } from "./runtime";
 
 /**
  * Background removal via MODNet (Apache-2.0): the image runs through the
@@ -89,6 +89,7 @@ export async function removeBackground(
   refCtx.drawImage(source, 0, 0, ref.width, ref.height);
   const refData = refCtx.getImageData(0, 0, ref.width, ref.height).data;
 
+  const ort = await loadOrt();
   const input = new ort.Tensor("float32", rgbaToNormalizedChw(refData, ref.width * ref.height), [
     1,
     3,

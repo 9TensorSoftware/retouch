@@ -1,4 +1,4 @@
-import { ort, type RuntimeOptions, runResilient } from "./runtime";
+import { loadOrt, type RuntimeOptions, runResilient } from "./runtime";
 
 /**
  * Detection models. Faces: UltraFace (MIT, ~1.2 MB) — the RFB-320 export
@@ -323,6 +323,7 @@ export async function detectObjects(
   ctx.drawImage(source, 0, 0, Math.round(srcW * ratio), Math.round(srcH * ratio));
   const data = ctx.getImageData(0, 0, YOLOX_SIZE, YOLOX_SIZE).data;
 
+  const ort = await loadOrt();
   const input = new ort.Tensor("float32", rgbaToYoloxTensor(data, YOLOX_SIZE * YOLOX_SIZE), [
     1,
     3,
@@ -364,6 +365,7 @@ export async function detectFaces(
   ctx.drawImage(source, 0, 0, INPUT_W, INPUT_H);
   const data = ctx.getImageData(0, 0, INPUT_W, INPUT_H).data;
 
+  const ort = await loadOrt();
   const input = new ort.Tensor("float32", rgbaToUltraFaceTensor(data, INPUT_W * INPUT_H), [
     1,
     3,

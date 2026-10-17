@@ -1,4 +1,4 @@
-import * as ort from "onnxruntime-web";
+import type * as Ort from "onnxruntime-web";
 import { type FetchProgress, fetchModel } from "./model-cache";
 import { enqueueInference } from "./queue";
 
@@ -26,10 +26,30 @@ export interface RuntimeOptions {
   onDownloadProgress?: (progress: FetchProgress) => void;
 }
 
+let ortModule: Promise<typeof Ort> | null = null;
+
+/**
+ * onnxruntime-web, loaded on first use. The dynamic import keeps it in a
+ * chunk of its own: in proxy mode ORT starts its worker from the URL of the
+ * file it lives in, and when that file is an app's bundle the worker runs
+ * the whole app and dies at its first `document`. On its own, the worker
+ * loads ORT alone. It also keeps ORT out of the page's first download.
+ */
+export function loadOrt(): Promise<typeof Ort> {
+  if (!ortModule) {
+    ortModule = import("onnxruntime-web");
+    // A failed load (offline, blocked) is retried by the next call.
+    ortModule.catch(() => {
+      ortModule = null;
+    });
+  }
+  return ortModule;
+}
+
 let defaultApplied = false;
 let runtimeConfigured = false;
 
-function configure(options: RuntimeOptions): void {
+function configure(ort: typeof Ort, options: RuntimeOptions): void {
   if (!runtimeConfigured) {
     runtimeConfigured = true;
     // Run inference off the main thread. Heavy models (upscale, inpaint) —
@@ -57,7 +77,7 @@ function configure(options: RuntimeOptions): void {
   ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${version}/dist/`;
 }
 
-const sessions = new Map<string, Promise<ort.InferenceSession>>();
+const sessions = new Map<string, Promise<Ort.InferenceSession>>();
 
 function sessionKey(url: string, options: RuntimeOptions): string {
   return `${url}|${(options.executionProviders ?? ["webgpu", "wasm"]).join(",")}`;
@@ -73,13 +93,14 @@ function sessionKey(url: string, options: RuntimeOptions): string {
 export function loadSession(
   url: string,
   options: RuntimeOptions = {},
-): Promise<ort.InferenceSession> {
+): Promise<Ort.InferenceSession> {
   const key = sessionKey(url, options);
   const existing = sessions.get(key);
   if (existing) return existing;
 
   const create = (async () => {
-    configure(options);
+    const ort = await loadOrt();
+    configure(ort, options);
     // The big sidecar (when present) downloads first so its progress is
     // what the user watches; the small stub follows.
     let externalData: Array<{ data: Uint8Array; path: string }> | undefined;
@@ -139,8 +160,8 @@ export async function releaseSession(url: string, options: RuntimeOptions = {}):
 const wasmPreferred = new Set<string>();
 
 export interface ResilientRunResult {
-  session: ort.InferenceSession;
-  results: Awaited<ReturnType<ort.InferenceSession["run"]>>;
+  session: Ort.InferenceSession;
+  results: Awaited<ReturnType<Ort.InferenceSession["run"]>>;
 }
 
 /**
@@ -149,10 +170,13 @@ export interface ResilientRunResult {
  * feed tensors, so it would hit a detached buffer — hand each run a
  * throwaway copy and the caller's tensors survive every attempt.
  */
-function cloneFeeds(feeds: Record<string, ort.Tensor>): Record<string, ort.Tensor> {
-  const out: Record<string, ort.Tensor> = {};
+function cloneFeeds(
+  ort: typeof Ort,
+  feeds: Record<string, Ort.Tensor>,
+): Record<string, Ort.Tensor> {
+  const out: Record<string, Ort.Tensor> = {};
   for (const [name, tensor] of Object.entries(feeds)) {
-    const data = tensor.data as { slice(): ort.Tensor["data"] };
+    const data = tensor.data as { slice(): Ort.Tensor["data"] };
     out[name] = new ort.Tensor(tensor.type, data.slice(), tensor.dims);
   }
   return out;
@@ -168,8 +192,9 @@ function cloneFeeds(feeds: Record<string, ort.Tensor>): Record<string, ort.Tenso
 export async function runResilient(
   url: string,
   options: RuntimeOptions,
-  feeds: (session: ort.InferenceSession) => Record<string, ort.Tensor>,
+  feeds: (session: Ort.InferenceSession) => Record<string, Ort.Tensor>,
 ): Promise<ResilientRunResult> {
+  const ort = await loadOrt();
   const explicit = options.executionProviders;
   const preferWasm = !explicit && wasmPreferred.has(url);
   let session = await loadSession(
@@ -177,7 +202,7 @@ export async function runResilient(
     preferWasm ? { ...options, executionProviders: ["wasm"] } : options,
   );
   try {
-    const results = await enqueueInference(() => session.run(cloneFeeds(feeds(session))));
+    const results = await enqueueInference(() => session.run(cloneFeeds(ort, feeds(session))));
     return { session, results };
   } catch (error) {
     if (explicit || preferWasm) throw error;
@@ -186,9 +211,7 @@ export async function runResilient(
     // Free the broken session's weights and GPU buffers.
     void releaseSession(url, options);
     session = await loadSession(url, { ...options, executionProviders: ["wasm"] });
-    const results = await enqueueInference(() => session.run(cloneFeeds(feeds(session))));
+    const results = await enqueueInference(() => session.run(cloneFeeds(ort, feeds(session))));
     return { session, results };
   }
 }
-
-export { ort };

@@ -1,4 +1,4 @@
-import { ort, type RuntimeOptions, runResilient } from "./runtime";
+import { loadOrt, type RuntimeOptions, runResilient } from "./runtime";
 import { computeTileGrid } from "./tiles";
 
 /**
@@ -85,6 +85,7 @@ export async function upscaleImage(
   let out: HTMLCanvasElement | null = null;
   let outCtx: CanvasRenderingContext2D | null = null;
 
+  const ort = await loadOrt();
   for (let i = 0; i < tiles.length; i++) {
     const t = tiles[i];
     const tileData = srcCtx.getImageData(t.sx, t.sy, t.sw, t.sh).data;

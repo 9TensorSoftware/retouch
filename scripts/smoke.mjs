@@ -63,6 +63,18 @@ console.log(`\n@9tensor/retouch-ml ${mlPkg.version}`);
     check(typeof mod.installMlTools === "function", `${label}: exports installMlTools`);
     check(typeof mod.removeBackground === "function", `${label}: exports removeBackground`);
   }
+  // ORT's proxy worker loads the file ORT lives in. A static import puts ORT
+  // in the app's bundle, and the worker then runs the whole app and dies, so
+  // a dynamic import has to be the only way in.
+  for (const file of ["dist/index.js", "dist/index.cjs"]) {
+    const code = readFileSync(join(mlDir, file), "utf8");
+    const staticRef =
+      /from\s*["']onnxruntime-web["']|require\(\s*["']onnxruntime-web["']\s*\)/.test(code);
+    check(
+      !staticRef && /import\(\s*["']onnxruntime-web["']\s*\)/.test(code),
+      `${file}: loads onnxruntime-web with a dynamic import only`,
+    );
+  }
 }
 
 // ── Tarballs ────────────────────────────────────────────────────────────

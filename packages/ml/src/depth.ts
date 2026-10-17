@@ -1,4 +1,4 @@
-import { ort, type RuntimeOptions, runResilient } from "./runtime";
+import { loadOrt, type RuntimeOptions, runResilient } from "./runtime";
 
 /**
  * Depth estimation via Depth Anything V2 Small (Apache-2.0, quantized
@@ -190,6 +190,7 @@ export function estimateDepth(
     ctx.drawImage(source, 0, 0, size.width, size.height);
     const data = ctx.getImageData(0, 0, size.width, size.height).data;
 
+    const ort = await loadOrt();
     const input = new ort.Tensor("float32", rgbaToDepthTensor(data, size.width, size.height), [
       1,
       3,

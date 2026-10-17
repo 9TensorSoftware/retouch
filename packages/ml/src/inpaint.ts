@@ -1,4 +1,4 @@
-import { ort, type RuntimeOptions, runResilient } from "./runtime";
+import { loadOrt, type RuntimeOptions, runResilient } from "./runtime";
 
 /**
  * Object erase via LaMa (Apache-2.0): the brush strokes define a hole, a
@@ -266,6 +266,7 @@ export async function inpaintMask(
   const maskData = maskCtx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE).data;
 
   const pixels = MODEL_SIZE * MODEL_SIZE;
+  const ort = await loadOrt();
   const imageTensor = new ort.Tensor("float32", rgbaToChw(patchData, pixels), [
     1,
     3,

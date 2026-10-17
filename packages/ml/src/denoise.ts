@@ -1,4 +1,4 @@
-import { ort, type RuntimeOptions, runResilient } from "./runtime";
+import { loadOrt, type RuntimeOptions, runResilient } from "./runtime";
 import { computeTileGrid } from "./tiles";
 import { chw01ToRgba, rgbaToChw01 } from "./upscale";
 
@@ -109,6 +109,7 @@ export async function denoiseImage(
   const outCtx = out.getContext("2d");
   if (!outCtx) throw new Error("[Retouch ML] Failed to create canvas context");
 
+  const ort = await loadOrt();
   for (let i = 0; i < tiles.length; i++) {
     const t = tiles[i];
     const tileData = srcCtx.getImageData(t.sx, t.sy, t.sw, t.sh).data;
