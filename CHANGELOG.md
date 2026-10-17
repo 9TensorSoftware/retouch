@@ -171,6 +171,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   bundler had put it in the app's bundle, so the worker ran the whole app and died at its first
   `document`. ONNX Runtime now loads on first use, through a dynamic import that bundlers split
   into a chunk of its own, which also keeps about 400 KB out of the page's first download.
+- Dragging the Compare divider re-rendered the whole edited photo on every move, every 2D pass
+  included (Dehaze, Clarity, masks, color mix, curves). On a heavily edited photo that took
+  hundreds of milliseconds per step. The divider now repaints from the frames it keeps while
+  comparing, in well under a millisecond, and an edit made while comparing still renders in full.
 - With an aspect preset, dragging the crop frame's top or left corner moved the opposite corner
   too, so the frame slid instead of growing. The opposite corner stays put now, and a corner sizes
   the frame by the axis it was pulled along.

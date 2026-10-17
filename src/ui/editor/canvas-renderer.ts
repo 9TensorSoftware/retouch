@@ -114,6 +114,11 @@ export class CanvasRenderer {
   private beforeSource: HTMLImageElement | null = null;
   /** The frame without look edits or liquify: the left side of the divider. */
   private beforeFrame: HTMLCanvasElement | null = null;
+  /**
+   * While comparing, the edited frame as last painted (every 2D pass done),
+   * so moving the divider only recomposites the two sides.
+   */
+  private editedFrame: HTMLCanvasElement | null = null;
 
   constructor(container: HTMLElement, source: RenderSource, edits: ImageEdits) {
     this.container = container;
@@ -205,6 +210,7 @@ export class CanvasRenderer {
       }
       // Listeners see the edited frame, before the compare split covers part of it.
       this.paintListener?.();
+      if (this.split !== null) this.keepEditedFrame(el);
       this.drawSplit(renderCtx, el.width, el.height);
     });
 
@@ -451,8 +457,44 @@ export class CanvasRenderer {
     const starting = fraction !== null && this.split === null;
     this.split = fraction === null ? null : Math.min(1, Math.max(0, fraction));
     if (starting) this.drawBeforeFrame();
-    if (this.split === null) this.beforeFrame = null;
+    if (this.split === null) {
+      this.beforeFrame = null;
+      this.editedFrame = null;
+    }
+    // Moving the divider changes no edits: redraw the two sides from the
+    // kept frames instead of running every pass over the whole photo again.
+    if (!starting && this.split !== null && this.repaintSplit()) return;
     this.fabricCanvas.requestRenderAll();
+  }
+
+  /** Copy the canvas as just painted, edits and all, for divider moves to reuse. */
+  private keepEditedFrame(el: HTMLCanvasElement): void {
+    if (!this.editedFrame) this.editedFrame = createCanvas(1, 1);
+    const kept = this.editedFrame;
+    if (kept.width !== el.width || kept.height !== el.height) {
+      kept.width = el.width;
+      kept.height = el.height;
+    }
+    const ctx = kept.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, kept.width, kept.height);
+    ctx.drawImage(el, 0, 0);
+  }
+
+  /** Repaint the canvas from the kept frames for a new divider position; false if it can't. */
+  private repaintSplit(): boolean {
+    const kept = this.editedFrame;
+    const el = this.fabricCanvas.getElement();
+    if (!kept || kept.width !== el.width || kept.height !== el.height) return false;
+    const ctx = el.getContext("2d");
+    if (!ctx) return false;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, el.width, el.height);
+    ctx.drawImage(kept, 0, 0);
+    ctx.restore();
+    this.drawSplit(ctx, el.width, el.height);
+    return true;
   }
 
   /** Draw the "before" side from this image instead of the source (same aspect ratio). */
