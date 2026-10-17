@@ -270,5 +270,5 @@ Apache-2.0 or BSD-3 licensed — see `docs/ADVANCED-FEATURES.md` for the audit.
 Initial public release, published as `@retouchjs/core`: drop zone → gallery → editor with crop,
 rotation and brightness/contrast/saturation adjustments; `onDone` export to Blobs.
 
-[0.1.0]: https://github.com/9tensorsoftware/retouch.js/compare/v0.0.2...v0.1.0
-[0.0.2]: https://github.com/9tensorsoftware/retouch.js/releases/tag/v0.0.2
+[0.1.0]: https://github.com/9tensorsoftware/retouch/compare/v0.0.2...v0.1.0
+[0.0.2]: https://github.com/9tensorsoftware/retouch/releases/tag/v0.0.2
