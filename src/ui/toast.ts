@@ -2,6 +2,7 @@ import type { FileRejectionReason } from "../types";
 import { formatBytes, formatNames, formatSpan, listOr } from "../utils/formats";
 import { h } from "./h";
 import { ICON_ALERT, ICON_CHECK, ICON_INFO } from "./icons";
+import { glide } from "./motion";
 
 export type ToastKind = "error" | "info" | "success";
 
@@ -113,6 +114,7 @@ export function createToastHost(parent: HTMLElement = document.body): ToastHost 
   const root = h("div", { class: "rt-toasts", "aria-live": "polite" });
   parent.appendChild(root);
   const live: Toast[] = [];
+  const others = (): HTMLElement[] => [...root.children] as HTMLElement[];
 
   function show(message: string, kind: ToastKind = "info", options: ToastOptions = {}): Toast {
     const icon = h("span", { class: "rt-toast__icon", "aria-hidden": "true" });
@@ -138,7 +140,8 @@ export function createToastHost(parent: HTMLElement = document.body): ToastHost 
       button.addEventListener("click", () => onClick());
       toast.appendChild(button);
     }
-    root.appendChild(toast);
+    // The others make room, gliding rather than jumping.
+    glide(others(), () => root.appendChild(toast));
     requestAnimationFrame(() => toast.classList.add("rt-toast--visible"));
 
     let removed = false;
@@ -150,9 +153,17 @@ export function createToastHost(parent: HTMLElement = document.body): ToastHost 
       const index = live.indexOf(handle);
       if (index >= 0) live.splice(index, 1);
       toast.classList.remove("rt-toast--visible");
-      // Remove after the fade, with a fallback in case transitionend doesn't fire.
-      toast.addEventListener("transitionend", () => toast.remove(), { once: true });
-      setTimeout(() => toast.remove(), 300);
+      // Remove after the fade, with a fallback in case transitionend doesn't
+      // fire; the toasts left glide into the gap.
+      const detach = (): void => {
+        if (!toast.isConnected) return;
+        glide(
+          others().filter((el) => el !== toast),
+          () => toast.remove(),
+        );
+      };
+      toast.addEventListener("transitionend", detach, { once: true });
+      setTimeout(detach, 300);
       options.onDismiss?.();
     }
 

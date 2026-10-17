@@ -21,4 +21,27 @@ describe("injectStyles", () => {
     expect(tokens).toContain('.rt-root[data-rt-theme="dark"]');
     expect(tokens).toMatch(/prefers-color-scheme: dark\)\s*\{\s*\.rt-root\[data-rt-theme="auto"\]/);
   });
+
+  it("turns all of its motion off under reduced motion, delays and view transitions included", () => {
+    injectStyles();
+    const rules = document.getElementById("rt-styles")?.textContent ?? "";
+    const reduced = rules.slice(rules.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    for (const rule of [
+      "animation-duration: 0.01ms !important",
+      "animation-delay: 0s !important",
+      "transition-duration: 0.01ms !important",
+      "transition-delay: 0s !important",
+      "html.rt-morphing::view-transition-group(*)",
+    ]) {
+      expect(reduced).toContain(rule);
+    }
+    for (const scope of [
+      ".rt-root *",
+      ".rt-editor-overlay *",
+      ".rt-export-overlay *",
+      ".rt-toasts *",
+    ]) {
+      expect(reduced).toContain(scope);
+    }
+  });
 });

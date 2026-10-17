@@ -434,5 +434,6 @@ export interface RetouchEventMap {
 
 export interface ViewHandle {
   root: HTMLElement;
-  destroy(): void;
+  /** Remove the view; with `fade`, it fades out first where it can. */
+  destroy(options?: { fade?: boolean }): void;
 }

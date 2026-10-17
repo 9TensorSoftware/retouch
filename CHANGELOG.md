@@ -79,6 +79,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - The tools row along the bottom of a phone settles on whole buttons and keeps the active tool in
   view. On phones, Ask AI moves to the sheet's header, and its chat pins under the top bar at full
   width.
+- Motion. Opening a photo zooms it from its gallery frame onto the stage, and Done or Cancel
+  settles it back into its frame, which already shows the edits (a view transition; without the
+  API, the editor cross-fades). The editor's panels slide in from their edges; the drop zone deals
+  its prints; the gallery rises in and new frames cascade into it; toasts glide aside for each
+  other; each exported file's check springs in, and a finished export shows a check and a green bar
+  before it lets go; the AI result wipe has a prism edge. Reduced motion turns all of it off,
+  delays included, and nothing waits on an animation to finish.
 
 ### Changed
 
@@ -121,6 +128,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   sliver; the names toggle and the dense rail are for laptop-sized screens only.
 - The editor uses the visible screen height (`100dvh`) and keeps clear of notches and the home
   indicator (`env(safe-area-inset-*)`).
+- A state change is current at once (`state`, events), while the view swap can wait a frame for
+  its transition.
 
 ### Fixed
 

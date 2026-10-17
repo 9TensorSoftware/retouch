@@ -24,6 +24,7 @@ import type { ExportOverlayHandle } from "./ui/export-overlay";
 import { createExportOverlay } from "./ui/export-overlay";
 import { createGallery, loadGalleryView, saveGalleryView } from "./ui/gallery";
 import { h } from "./ui/h";
+import { motionOK } from "./ui/motion";
 import { isTouchFirst, shortcutLabel } from "./ui/platform";
 import type { RejectionLimits, Toast, ToastHost } from "./ui/toast";
 import { createToastHost, rejectionDetail, rejectionMessage, rejectionSummary } from "./ui/toast";
@@ -42,6 +43,70 @@ import { captureFrame, frameFileName, isImageEntry, releaseVideo } from "./utils
 
 /** Image-only exports get the progress sheet once they've run this long (ms). */
 const EXPORT_SHEET_DELAY = 400;
+
+/** Opening and closing the editor morph the photo by this view-transition name. */
+const PHOTO_MORPH = "rt-photo";
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (update: () => Promise<void>) => {
+    ready: Promise<void>;
+    finished: Promise<void>;
+  };
+};
+
+/** View transitions can run: the API exists, motion is welcome, and the page is showing. */
+function canMorph(): boolean {
+  return (
+    typeof (document as ViewTransitionDocument).startViewTransition === "function" &&
+    motionOK() &&
+    !document.hidden
+  );
+}
+
+const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Two frames: layout and a paint. Bounded, since rAF stalls in background tabs. */
+function nextPaint(): Promise<void> {
+  return Promise.race([
+    new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+    wait(120),
+  ]);
+}
+
+/** True when some of the element is in the viewport. */
+function onScreen(el: Element): boolean {
+  const r = el.getBoundingClientRect();
+  return (
+    r.width > 0 &&
+    r.height > 0 &&
+    r.bottom > 0 &&
+    r.right > 0 &&
+    r.top < innerHeight &&
+    r.left < innerWidth
+  );
+}
+
+/** Transitions running now: the page-wide class stays until the last ends. */
+let morphsInFlight = 0;
+/** What holds the photo's transition name, so the next holder takes it over cleanly. */
+let photoHolder: HTMLElement | null = null;
+
+/** Give the photo's view-transition name to `el` (or to nothing). Names must be unique. */
+function holdPhoto(el: HTMLElement | null): void {
+  photoHolder?.style.removeProperty("view-transition-name");
+  photoHolder = el;
+  el?.style.setProperty("view-transition-name", PHOTO_MORPH);
+}
+
+/** A view swap animated as a view transition: the photo morphs from one view to the next. */
+interface Morph {
+  /** The photo in the view on screen now, if it's visible. */
+  from: HTMLElement | null;
+  /** Wait for this (briefly) before swapping, so the new view shows the right pixels. */
+  ready?: Promise<unknown>;
+  /** The photo in the new view, once it's mounted. */
+  to: () => HTMLElement | null;
+}
 
 /** True when an event lands in something that takes text, such as a host page field. */
 function isEditable(target: EventTarget | null): boolean {
@@ -88,6 +153,12 @@ export class Retouch {
   };
 
   private currentView: ViewHandle | null = null;
+  /** The state the mounted view shows; a step behind `state` while a transition is pending. */
+  private viewState: AppState = "idle";
+  /** Set just before a state change whose view swap should morph. */
+  private nextMorph: Morph | null = null;
+  /** Entries added since the gallery last showed: they arrive with a cascade. */
+  private fresh = new Set<string>();
   private editingImageId: string | null = null;
   /** Images whose Done-commit bake is still rendering. */
   private readonly baking = new Map<string, Promise<void>>();
@@ -137,9 +208,7 @@ export class Retouch {
     document.addEventListener("paste", this.onPaste);
 
     this.sm = new StateMachine<AppState>("idle", STATE_TRANSITIONS);
-    this.sm.onChange(({ to }) => {
-      this.handleStateChange(to);
-    });
+    this.sm.onChange(() => this.handleStateChange());
 
     this.sm.transition("dropzone");
   }
@@ -189,13 +258,14 @@ export class Retouch {
 
     for (const entry of entries) {
       this.media.set(entry.id, entry);
+      this.fresh.add(entry.id);
     }
 
     this.emitter.emit("images:add", { entries });
 
     if (this.sm.state === "dropzone") {
       this.sm.transition("gallery");
-    } else if (this.sm.state === "gallery") {
+    } else if (this.viewState === "gallery") {
       this.remountGallery();
     }
   }
@@ -277,10 +347,11 @@ export class Retouch {
     }
     this.media.clear();
     for (const entry of entries) this.media.set(entry.id, entry);
+    for (const { entry } of removed) this.fresh.add(entry.id);
     this.emitter.emit("images:add", { entries: removed.map((r) => r.entry) });
     if (this.sm.state === "dropzone") {
       this.sm.transition("gallery");
-    } else if (this.sm.state === "gallery") {
+    } else if (this.viewState === "gallery") {
       this.remountGallery();
     }
   }
@@ -404,7 +475,7 @@ export class Retouch {
       entry.edits = structuredClone(DEFAULT_EDITS);
       await this.refreshThumbnail(entry);
       this.emitter.emit("image:commit", { id: entry.id });
-      if (this.sm.state === "gallery") this.remountGallery();
+      if (this.viewState === "gallery") this.remountGallery();
     } catch (error) {
       // Baking failed — the entry simply stays non-destructive.
       console.error("[Retouch] Failed to commit edits into the image", error);
@@ -430,10 +501,10 @@ export class Retouch {
     revokeThumbnailUrl(entry.thumbnailUrl);
     entry.thumbnailUrl = createThumbnailUrl(entry.file);
     this.emitter.emit("image:restore", { id });
-    if (this.sm.state === "editor" && this.editingImageId === id) {
+    if (this.viewState === "editor" && this.editingImageId === id) {
       this.unmountCurrentView();
       this.mountEditor();
-    } else if (this.sm.state === "gallery") {
+    } else if (this.viewState === "gallery") {
       this.remountGallery();
     }
   }
@@ -456,10 +527,10 @@ export class Retouch {
     entry.image = image;
     entry.thumbnailUrl = createThumbnailUrl(file);
     entry.edited = true;
-    if (this.sm.state === "editor" && this.editingImageId === id) {
+    if (this.viewState === "editor" && this.editingImageId === id) {
       this.unmountCurrentView();
       this.mountEditor();
-    } else if (this.sm.state === "gallery") {
+    } else if (this.viewState === "gallery") {
       this.remountGallery();
     }
   }
@@ -474,6 +545,8 @@ export class Retouch {
     }
     this.editingImageId = id;
     this.emitter.emit("editor:open", { id });
+    // The photo grows from its gallery frame into the editor.
+    this.nextMorph = { from: this.galleryPhoto(id), to: () => this.editorPhoto() };
     this.sm.transition("editor");
   }
 
@@ -482,9 +555,10 @@ export class Retouch {
     const id = this.editingImageId;
     const entry = this.media.get(id);
 
+    let thumbnail: Promise<void> | undefined;
     if (commit && entry) {
       entry.edited = true;
-      void this.refreshThumbnail(entry);
+      thumbnail = this.refreshThumbnail(entry);
       this.emitter.emit("editor:done", { id, edits: entry.edits });
       if (
         entry.kind === "image" &&
@@ -499,6 +573,12 @@ export class Retouch {
     }
 
     this.editingImageId = null;
+    // The photo settles back into its frame, which by then shows the edits.
+    this.nextMorph = {
+      from: this.editorPhoto(),
+      ready: thumbnail,
+      to: () => this.galleryPhoto(id),
+    };
     this.sm.transition("gallery");
   }
 
@@ -632,9 +712,22 @@ export class Retouch {
 
   // ── View lifecycle ────────────────────────
 
-  private handleStateChange(to: AppState): void {
-    this.unmountCurrentView();
+  private handleStateChange(): void {
+    const morph = this.nextMorph;
+    this.nextMorph = null;
+    if (morph && canMorph()) this.morph(morph);
+    else this.swapView(true);
+  }
 
+  /**
+   * Mount the view the state calls for, unless it's up already. `fade` lets
+   * a closing editor fade out (where there's no view transition to do it).
+   */
+  private swapView(fade = false): void {
+    const to = this.sm.state;
+    if (to === this.viewState && this.currentView) return;
+    this.unmountCurrentView(fade && this.viewState === "editor" && motionOK());
+    this.viewState = to;
     switch (to) {
       case "dropzone":
         this.mountDropZone();
@@ -648,9 +741,69 @@ export class Retouch {
     }
   }
 
-  private unmountCurrentView(): void {
+  /**
+   * Swap views as a view transition: the photo morphs between its gallery
+   * frame and the editor while the rest cross-fades. The state has already
+   * changed; only the view swap waits for the transition's callback, which
+   * mounts whatever the state is by then.
+   */
+  private morph(morph: Morph): void {
+    const html = document.documentElement;
+    holdPhoto(morph.from);
+    html.classList.add("rt-morphing");
+    morphsInFlight++;
+    const transition = (document as ViewTransitionDocument).startViewTransition?.(async () => {
+      holdPhoto(null);
+      if (morph.ready) await Promise.race([morph.ready, wait(400)]);
+      this.swapView();
+      // The editor's own fade would double the cross-fade.
+      if (this.viewState === "editor") {
+        this.currentView?.root.classList.add("rt-editor-overlay--morphed");
+      }
+      const to = morph.to();
+      holdPhoto(to);
+      // A frame whose picture hasn't decoded would capture as a blank.
+      if (to instanceof HTMLImageElement && typeof to.decode === "function") {
+        await Promise.race([to.decode().catch(() => {}), wait(250)]);
+      }
+      await nextPaint();
+    });
+    if (!transition) {
+      if (--morphsInFlight === 0) html.classList.remove("rt-morphing");
+      holdPhoto(null);
+      this.swapView();
+      return;
+    }
+    // A transition the browser skips rejects `ready`; the swap has still happened.
+    transition.ready.catch(() => {});
+    // Another transition may have started meanwhile: tidy up after the last one.
+    void transition.finished
+      .catch(() => {})
+      .finally(() => {
+        if (--morphsInFlight > 0) return;
+        html.classList.remove("rt-morphing");
+        holdPhoto(null);
+      });
+  }
+
+  /** The entry's picture in the gallery, if the gallery is up and it's on screen. */
+  private galleryPhoto(id: string): HTMLElement | null {
+    if (this.viewState !== "gallery" || !this.currentView) return null;
+    const safe = id.replace(/["\\]/g, "\\$&");
+    const img = this.currentView.root.querySelector<HTMLElement>(`[data-id="${safe}"] img`);
+    return img && onScreen(img) ? img : null;
+  }
+
+  /** The photo on the editor's stage, if the editor is up. */
+  private editorPhoto(): HTMLElement | null {
+    if (this.viewState !== "editor" || !this.currentView) return null;
+    const stage = this.currentView.root.querySelector<HTMLElement>(".rt-editor__canvas-container");
+    return stage && onScreen(stage) ? stage : null;
+  }
+
+  private unmountCurrentView(fade = false): void {
     if (this.currentView) {
-      this.currentView.destroy();
+      this.currentView.destroy({ fade });
       this.currentView = null;
     }
   }
@@ -763,7 +916,7 @@ export class Retouch {
       });
       revokeThumbnailUrl(entry.thumbnailUrl);
       entry.thumbnailUrl = URL.createObjectURL(blob);
-      if (this.sm.state === "gallery") this.remountGallery();
+      if (this.viewState === "gallery") this.remountGallery();
     } catch {
       // Keep the original thumbnail if the preview render fails.
     }
@@ -784,7 +937,9 @@ export class Retouch {
         saveGalleryView(mode);
       },
       selection: this.selection,
+      fresh: this.fresh,
     });
+    this.fresh = new Set();
     this.root.appendChild(view.root);
     this.currentView = view;
   }

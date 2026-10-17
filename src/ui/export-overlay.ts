@@ -122,7 +122,18 @@ export function createExportOverlay(options: ExportOverlayOptions): ExportOverla
     h(
       "div",
       { class: "rt-export-overlay__card" },
-      h("div", { class: "rt-export-overlay__head" }, title, count),
+      h(
+        "div",
+        { class: "rt-export-overlay__head" },
+        // A check that springs in beside the title when the run is done.
+        h(
+          "span",
+          { class: "rt-export-overlay__mark", "aria-hidden": "true" },
+          iconElement(ICON_CHECK),
+        ),
+        title,
+        count,
+      ),
       bar,
       grid,
       h("div", { class: "rt-export-overlay__foot" }, eta, cancelBtn),
