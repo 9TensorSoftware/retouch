@@ -38,8 +38,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - A brush ring for Liquify and the ML package's Erase, sized to the brush; `[` and `]` resize the
   Liquify brush.
 - AI tools explain themselves before they cost anything. `@9tensor/retouch-ml` panes open on a card with
-  the model, its download size and where it runs; the run button names the download ("Download
-  208 MB and erase") until the model is saved; Select asks before downloading instead of starting
+  the model, its download size and where it runs; the run button names the download ("Erase ·
+  208 MB") until the model is saved; Select asks before downloading instead of starting
   on a click; runs show download, run and save steps, with a progress bar; and results wipe in
   over the photo. Without `openResults`, a finished gallery result offers "Open it".
 - Ask AI replies are cards listing what they set ("Contrast +15", "Warm filter") with an Undo for
@@ -139,6 +139,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   indicator (`env(safe-area-inset-*)`).
 - A state change is current at once (`state`, events), while the view swap can wait a frame for
   its transition.
+- Resting the mouse on the rail's All AI tools button opens the AI tools menu; it closes once the
+  pointer has left both the button and the menu. A click, or the I key, still opens it to stay,
+  with focus inside. Keyboard focus on the button shows its tooltip as before.
+- AI run buttons lead with the action and then the download: "Erase · 208 MB" instead of
+  "Download 208 MB and erase". A label too long for its button wraps inside it instead of
+  spilling past the edges.
 - With an aspect preset (Square, 4:3, …) the crop frame shows only its corners. Its side handles
   looked like they'd move one edge, but the shape made the whole frame follow; they come back
   with Free, and the hint under the presets says which handles to drag.

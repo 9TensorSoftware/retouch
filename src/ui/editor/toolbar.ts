@@ -45,6 +45,11 @@ export interface ToolbarHandle extends ViewHandle {
 /** AI tools on the rail before anyone chooses: the first few, by registration. */
 export const DEFAULT_PINNED_AI = 3;
 
+/** How long the mouse rests on the AI launcher before its menu opens. */
+export const HOVER_OPEN_MS = 150;
+/** How long the menu waits once the pointer leaves it and the launcher. */
+export const HOVER_CLOSE_MS = 300;
+
 const GROUP_LABELS: Record<ToolGroup, string> = {
   frame: "Frame",
   tone: "Tone",
@@ -119,15 +124,17 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     tip.hidden = true;
   }
 
-  function withTooltip(btn: HTMLElement, label: string, key?: string): void {
-    btn.addEventListener(
-      "pointerenter",
-      (e) => {
-        if (e.pointerType === "mouse") showTip(btn, label, key);
-      },
-      { signal },
-    );
-    btn.addEventListener("pointerleave", hideTip, { signal });
+  function withTooltip(btn: HTMLElement, label: string, key?: string, hover = true): void {
+    if (hover) {
+      btn.addEventListener(
+        "pointerenter",
+        (e) => {
+          if (e.pointerType === "mouse") showTip(btn, label, key);
+        },
+        { signal },
+      );
+      btn.addEventListener("pointerleave", hideTip, { signal });
+    }
     btn.addEventListener("pointerdown", hideTip, { signal });
     btn.addEventListener(
       "focus",
@@ -179,14 +186,26 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
   let menu: HTMLElement | null = null;
   let launcher: HTMLButtonElement | null = null;
   const menuRows = new Map<EditorTool, { item: HTMLButtonElement; pin: HTMLButtonElement }>();
+  // Resting the mouse on the launcher opens the menu; it stays while the
+  // pointer is on either and closes soon after it leaves both. A click (or
+  // the I key) opens it to stay, with focus inside.
+  let hoverOpen = false;
+  let hoverTimer = 0;
+
+  function hoverClose(): void {
+    clearTimeout(hoverTimer);
+    if (hoverOpen) hoverTimer = window.setTimeout(() => closeMenu(), HOVER_CLOSE_MS);
+  }
 
   function menuItems(): HTMLButtonElement[] {
     return [...menuRows.values()].map((row) => row.item);
   }
 
-  function openMenu(): void {
+  function openMenu(focus = true): void {
     if (!menu || !launcher) return;
     hideTip();
+    clearTimeout(hoverTimer);
+    hoverOpen = !focus;
     menu.hidden = false;
     launcher.setAttribute("aria-expanded", "true");
     const r = launcher.getBoundingClientRect();
@@ -202,10 +221,16 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
       menu.style.left = `${root.getBoundingClientRect().right + 8}px`;
       menu.style.top = `${Math.max(8, Math.min(r.top - 8, innerHeight - m.height - 8))}px`;
     }
+    if (focus) focusMenu();
+  }
+
+  function focusMenu(): void {
     (menuRows.get(active)?.item ?? menuItems()[0])?.focus();
   }
 
   function closeMenu(refocus = false): void {
+    clearTimeout(hoverTimer);
+    hoverOpen = false;
     if (!menu || menu.hidden) return;
     menu.hidden = true;
     launcher?.setAttribute("aria-expanded", "false");
@@ -272,6 +297,30 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     );
     menu.hidden = true;
     paintPins();
+
+    menu.addEventListener(
+      "pointerenter",
+      (e) => {
+        if (e.pointerType === "mouse") clearTimeout(hoverTimer);
+      },
+      { signal },
+    );
+    menu.addEventListener(
+      "pointerleave",
+      (e) => {
+        if (e.pointerType === "mouse") hoverClose();
+      },
+      { signal },
+    );
+    // Clicking inside (a pin, say) keeps it open until a click elsewhere.
+    menu.addEventListener(
+      "pointerdown",
+      () => {
+        clearTimeout(hoverTimer);
+        hoverOpen = false;
+      },
+      { signal },
+    );
 
     menu.addEventListener(
       "keydown",
@@ -356,8 +405,39 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
       "aria-keyshortcuts": "I",
     });
     buttonContent(btn, ICON_SPARKLE, "All AI tools", "i");
-    btn.addEventListener("click", () => (menu?.hidden ? openMenu() : closeMenu()), { signal });
-    withTooltip(btn, "All AI tools · pin your favorites", "i");
+    btn.addEventListener(
+      "click",
+      () => {
+        if (menu?.hidden) openMenu();
+        // Already open from a hover: the click keeps it open.
+        else if (hoverOpen) {
+          hoverOpen = false;
+          focusMenu();
+        } else closeMenu();
+      },
+      { signal },
+    );
+    // The mouse gets the tools themselves; the tooltip is for keyboard focus.
+    btn.addEventListener(
+      "pointerenter",
+      (e) => {
+        if (e.pointerType !== "mouse" || !menu) return;
+        // Back on the launcher from the menu: stay open.
+        clearTimeout(hoverTimer);
+        if (menu.hidden) hoverTimer = window.setTimeout(() => openMenu(false), HOVER_OPEN_MS);
+      },
+      { signal },
+    );
+    btn.addEventListener(
+      "pointerleave",
+      (e) => {
+        if (e.pointerType !== "mouse") return;
+        if (menu?.hidden) clearTimeout(hoverTimer);
+        else hoverClose();
+      },
+      { signal },
+    );
+    withTooltip(btn, "All AI tools · pin your favorites", "i", false);
     return btn;
   }
 

@@ -117,10 +117,11 @@ function downloadFact(model: ModelSpec, cached: boolean): string {
 }
 
 /** The run button names the download until the model is saved: nobody starts one blind. */
+/** The run button names the download until the model is saved: "Erase · 208 MB". */
 function actionLabel(action: string, model: ModelSpec, cached: boolean): string {
   if (cached) return action;
-  const rest = action[0].toLowerCase() + action.slice(1);
-  return model.mb === null ? `Download and ${rest}` : `Download ${model.mb} MB and ${rest}`;
+  if (model.mb !== null) return `${action} · ${model.mb} MB`;
+  return `Download and ${action[0].toLowerCase()}${action.slice(1)}`;
 }
 
 function runsOn(): string {

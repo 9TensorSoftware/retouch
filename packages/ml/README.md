@@ -69,8 +69,8 @@ installMlTools(retouch);
 ```
 
 In the editor, every tool opens on a card naming its model, its download size
-and where it runs, and its run button names the download ("Download 208 MB and
-erase") until the model is saved on the device. Runs show their steps —
+and where it runs, and its run button names the download ("Erase · 208 MB")
+until the model is saved on the device. Runs show their steps —
 download with a progress bar, run, then add to the gallery or replace the photo
 — and results wipe in over the photo. With a self-hosted `modelUrl` the size
 is unknown, so the button says "Download and …" instead.

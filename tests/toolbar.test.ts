@@ -1,6 +1,6 @@
 import { registerEditorTool, resolveToolDef } from "../src/ui/editor/tool-registry";
 import type { RailLayout } from "../src/ui/editor/toolbar";
-import { createToolbar } from "../src/ui/editor/toolbar";
+import { createToolbar, HOVER_CLOSE_MS, HOVER_OPEN_MS } from "../src/ui/editor/toolbar";
 
 const pane = () => ({ root: document.createElement("div") });
 
@@ -238,6 +238,63 @@ describe("toolbar AI tools", () => {
     tb.openAiMenu();
     document.body.dispatchEvent(pointer("pointerdown"));
     expect(tb.root.querySelector<HTMLElement>(".rt-flyout")?.hidden).toBe(true);
+    tb.destroy();
+  });
+});
+
+describe("toolbar AI menu on hover", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function hoverSetup() {
+    vi.useFakeTimers();
+    const { tb } = mount(["crop", "test-ai-a", "test-ai-b"]);
+    const launcher = tb.root.querySelector<HTMLElement>(".rt-toolbar__btn--ai") as HTMLElement;
+    const menu = tb.root.querySelector<HTMLElement>(".rt-flyout") as HTMLElement;
+    const tip = tb.root.querySelector<HTMLElement>(".rt-tooltip") as HTMLElement;
+    return { tb, launcher, menu, tip };
+  }
+
+  it("shows the tools when the mouse rests on the launcher, and lets them go after it leaves", () => {
+    const { tb, launcher, menu, tip } = hoverSetup();
+    launcher.dispatchEvent(pointer("pointerenter"));
+    expect(menu.hidden).toBe(true); // a pass over the rail doesn't open it
+    vi.advanceTimersByTime(HOVER_OPEN_MS);
+    expect(menu.hidden).toBe(false);
+    expect(tip.hidden).toBe(true);
+    expect(menu.contains(document.activeElement)).toBe(false);
+
+    // Crossing over to the menu keeps it open; leaving both closes it.
+    launcher.dispatchEvent(pointer("pointerleave"));
+    menu.dispatchEvent(pointer("pointerenter"));
+    vi.advanceTimersByTime(HOVER_CLOSE_MS * 2);
+    expect(menu.hidden).toBe(false);
+    menu.dispatchEvent(pointer("pointerleave"));
+    vi.advanceTimersByTime(HOVER_CLOSE_MS);
+    expect(menu.hidden).toBe(true);
+    expect(launcher.getAttribute("aria-expanded")).toBe("false");
+    tb.destroy();
+  });
+
+  it("a click on a menu opened by hovering keeps it open, with focus inside", () => {
+    const { tb, launcher, menu } = hoverSetup();
+    launcher.dispatchEvent(pointer("pointerenter"));
+    vi.advanceTimersByTime(HOVER_OPEN_MS);
+    launcher.click();
+    expect(menu.hidden).toBe(false);
+    expect(menu.contains(document.activeElement)).toBe(true);
+    launcher.dispatchEvent(pointer("pointerleave"));
+    vi.advanceTimersByTime(HOVER_CLOSE_MS * 2);
+    expect(menu.hidden).toBe(false);
+    tb.destroy();
+  });
+
+  it("doesn't open from a touch passing over", () => {
+    const { tb, launcher, menu } = hoverSetup();
+    launcher.dispatchEvent(pointer("pointerenter", "touch"));
+    vi.advanceTimersByTime(HOVER_OPEN_MS * 2);
+    expect(menu.hidden).toBe(true);
     tb.destroy();
   });
 });
