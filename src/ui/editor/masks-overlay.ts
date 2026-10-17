@@ -1,5 +1,6 @@
 import type { EditMask } from "../../types";
 import { clamp } from "../../utils/math";
+import { type AxisLock, createAxisLock } from "./axis-lock";
 import type { CanvasRenderer } from "./canvas-renderer";
 
 export interface MasksOverlayOptions {
@@ -107,12 +108,15 @@ export function createMasksOverlay(options: MasksOverlayOptions): MasksOverlayHa
   // ── Handle dragging ──
 
   // One pointer drives a drag: other fingers (a pinch, a stray touch) are ignored.
+  // Every handle locks to the direction it sets off in, so a straight pull
+  // keeps a gradient level or changes one of an ellipse's radii, not both.
   let drag: {
     id: number;
     role: HandleRole;
     startX: number;
     startY: number;
     snapshot: EditMask;
+    lock: AxisLock;
   } | null = null;
 
   function handle(x: number, y: number, role: HandleRole, title: string): SVGElement {
@@ -136,6 +140,7 @@ export function createMasksOverlay(options: MasksOverlayOptions): MasksOverlayHa
           startX: (e as PointerEvent).clientX,
           startY: (e as PointerEvent).clientY,
           snapshot: structuredClone(mask),
+          lock: createAxisLock(),
         };
       },
       { signal },
@@ -153,8 +158,9 @@ export function createMasksOverlay(options: MasksOverlayOptions): MasksOverlayHa
       if (r.width === 0 || r.height === 0) return;
       // Pointer deltas are screen px; the stage may be magnifying the canvas.
       const zoom = renderer.getScreenScale();
-      const dx = (e.clientX - drag.startX) / (r.width * zoom);
-      const dy = (e.clientY - drag.startY) / (r.height * zoom);
+      const locked = drag.lock.apply(e.clientX - drag.startX, e.clientY - drag.startY);
+      const dx = locked.dx / (r.width * zoom);
+      const dy = locked.dy / (r.height * zoom);
       const s = drag.snapshot;
       if (drag.role === "move") {
         mask.x0 = clamp(s.x0 + dx, 0, 1);
