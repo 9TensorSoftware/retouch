@@ -114,8 +114,14 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
 
   const aspectBtns = new Map<AspectRatioPreset, HTMLButtonElement>();
   const aspectGrid = h("div", { class: "rt-aspects", role: "group", "aria-label": "Aspect ratio" });
+  // The hint follows the frame: a fixed shape only has corners to drag.
+  const cropHint = document.createTextNode("");
   function setActiveAspect(preset: AspectRatioPreset): void {
     for (const [id, b] of aspectBtns) b.setAttribute("aria-pressed", String(id === preset));
+    cropHint.textContent =
+      ASPECT_RATIOS[preset] == null
+        ? "Drag the frame's edges and corners on the photo. The crop applies when you switch tools"
+        : "Drag a corner to resize the frame; it keeps its shape. The crop applies when you switch tools";
   }
   for (const preset of ASPECT_PRESETS) {
     // The glyph is the shape itself, scaled into a 22 px box.
@@ -170,7 +176,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     h(
       "p",
       { class: "rt-dock__hint rt-crop-pane__note" },
-      "Drag the frame's edges and corners on the photo. The crop applies when you switch tools",
+      cropHint,
       h("span", { class: "rt-keys" }, ", press Enter or Done."),
       h("span", { class: "rt-touch" }, " or tap Done."),
     ),
