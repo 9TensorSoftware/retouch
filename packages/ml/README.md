@@ -1,11 +1,11 @@
-# @retouchjs/ml
+# @9tensor/retouch-ml
 
 <p>
-  <a href="https://www.npmjs.com/package/@retouchjs/ml"><img src="https://img.shields.io/npm/v/@retouchjs/ml?color=D4572A&label=npm" alt="npm version" /></a>
-  <a href="https://github.com/onursavas/retouch.js/blob/main/packages/ml/LICENSE"><img src="https://img.shields.io/npm/l/@retouchjs/ml?color=1A1815" alt="license" /></a>
+  <a href="https://www.npmjs.com/package/@9tensor/retouch-ml"><img src="https://img.shields.io/npm/v/@9tensor/retouch-ml?color=D4572A&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/9tensorsoftware/retouch.js/blob/main/packages/ml/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch-ml?color=1A1815" alt="license" /></a>
 </p>
 
-On-device ML tools for [Rétouch](https://github.com/onursavas/retouch.js) — no
+On-device ML tools for [Rétouch](https://github.com/9tensorsoftware/retouch.js) — no
 server, no API keys. Models run in the browser through ONNX Runtime Web
 (WebGPU when available, WASM otherwise, inference in a worker so the UI never
 freezes); weights download on first use and are cached via the Cache API.
@@ -13,10 +13,10 @@ freezes); weights download on first use and are cached via the Cache API.
 ## Install
 
 ```bash
-npm install @retouchjs/core @retouchjs/ml
+npm install @9tensor/retouch @9tensor/retouch-ml
 ```
 
-`@retouchjs/core` is a peer dependency — the tools register into its editor
+`@9tensor/retouch` is a peer dependency — the tools register into its editor
 through the plugin API and ride its edit model.
 
 ## Features
@@ -61,8 +61,8 @@ through the plugin API and ride its edit model.
 ## Usage
 
 ```ts
-import { Retouch } from "@retouchjs/core";
-import { installMlTools } from "@retouchjs/ml";
+import { Retouch } from "@9tensor/retouch";
+import { installMlTools } from "@9tensor/retouch-ml";
 
 const retouch = new Retouch({ target: "#editor" });
 installMlTools(retouch);
@@ -83,7 +83,7 @@ takes an `HTMLImageElement | HTMLCanvasElement` plus options, and accepts
 import {
   denoiseImage, detectFaces, detectObjects, estimateDepth,
   inpaintStrokes, removeBackground, upscaleImage,
-} from "@retouchjs/ml";
+} from "@9tensor/retouch-ml";
 
 const cutout = await removeBackground(image, {
   onDownloadProgress: ({ loaded, total }) => console.log(loaded / total),

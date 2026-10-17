@@ -7,7 +7,7 @@ import type {
   UiNote,
   UiStep,
   UiSteps,
-} from "@retouchjs/core";
+} from "@9tensor/retouch";
 import { KEEP_RGB, ON_KEEP, rgba } from "./colors";
 import {
   applyMatteAlpha,

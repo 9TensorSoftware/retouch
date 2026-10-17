@@ -1,17 +1,17 @@
 {
-  "name": "@retouchjs/ml",
+  "name": "@9tensor/retouch-ml",
   "version": "0.1.0",
   "description": "Rétouch ML tools — on-device cutout, 4× upscale, erase, click-to-select, depth bokeh, denoise and face/object detection via ONNX Runtime Web",
-  "author": "Onur Savas",
+  "author": "9Tensor (https://9tensor.com)",
   "license": "MIT",
-  "homepage": "https://github.com/onursavas/retouch.js/tree/main/packages/ml#readme",
+  "homepage": "https://github.com/9tensorsoftware/retouch.js/tree/main/packages/ml#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/onursavas/retouch.js.git",
+    "url": "git+https://github.com/9tensorsoftware/retouch.js.git",
     "directory": "packages/ml"
   },
   "bugs": {
-    "url": "https://github.com/onursavas/retouch.js/issues"
+    "url": "https://github.com/9tensorsoftware/retouch.js/issues"
   },
   "keywords": [
     "retouch",
@@ -63,10 +63,10 @@
     "onnxruntime-web": "^1.22.0"
   },
   "peerDependencies": {
-    "@retouchjs/core": "workspace:^"
+    "@9tensor/retouch": "workspace:^"
   },
   "devDependencies": {
-    "@retouchjs/core": "workspace:*",
+    "@9tensor/retouch": "workspace:*",
     "tsup": "^8.5.0",
     "typescript": "^5.7.0"
   }

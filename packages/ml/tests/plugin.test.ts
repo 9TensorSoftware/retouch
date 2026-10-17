@@ -1,4 +1,4 @@
-import type { EditorToolPlugin, ToolContext } from "@retouchjs/core";
+import type { EditorToolPlugin, ToolContext } from "@9tensor/retouch";
 import { DEFAULT_EDITS } from "../../../src/constants";
 import { createToolUi } from "../../../src/ui/editor/tool-ui";
 import { DEFAULT_CUTOUT_MODEL_URL } from "../src/cutout";

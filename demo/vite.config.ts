@@ -3,10 +3,11 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   root: ".",
-  base: "/retouch.js/",
+  // Served from the root of retouch.9tensor.com (GitHub Pages custom domain).
+  base: "/",
   resolve: {
     alias: {
-      "@retouchjs/core": fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+      "@9tensor/retouch": fileURLToPath(new URL("../src/index.ts", import.meta.url)),
     },
   },
   build: {

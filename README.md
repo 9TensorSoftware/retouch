@@ -18,13 +18,13 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@retouchjs/core"><img src="https://img.shields.io/npm/v/@retouchjs/core?color=D4572A&label=npm" alt="npm version" /></a>
-  <a href="https://github.com/onursavas/retouch.js/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@retouchjs/core?color=1A1815" alt="license" /></a>
-  <a href="https://www.npmjs.com/package/@retouchjs/core"><img src="https://img.shields.io/npm/dm/@retouchjs/core?color=6B6560" alt="downloads" /></a>
+  <a href="https://www.npmjs.com/package/@9tensor/retouch"><img src="https://img.shields.io/npm/v/@9tensor/retouch?color=D4572A&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/9tensorsoftware/retouch.js/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@9tensor/retouch?color=1A1815" alt="license" /></a>
+  <a href="https://www.npmjs.com/package/@9tensor/retouch"><img src="https://img.shields.io/npm/dm/@9tensor/retouch?color=6B6560" alt="downloads" /></a>
 </p>
 
 <p align="center">
-  <a href="https://onursavas.github.io/retouch.js/">Live Demo</a> &nbsp;·&nbsp;
+  <a href="https://retouch.9tensor.com">Live Demo</a> &nbsp;·&nbsp;
   <a href="#install">Install</a> &nbsp;·&nbsp;
   <a href="#quick-start">Quick Start</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How It Works</a> &nbsp;·&nbsp;
@@ -45,7 +45,7 @@ Most image editors bolt onto your app like an afterthought. Rétouch was designe
 - **Three-state UX** — drop zone, gallery, editor — all handled for you
 - **Canvas-native** — all processing happens on an HTML Canvas, no server round-trips
 - **Video too** — trim, crop, adjust and filter videos, re-encoded in the browser via WebCodecs ([mediabunny](https://mediabunny.dev/) loads lazily, only when a video is exported)
-- **On-device ML** — background removal, upscaling, object erase, click-to-select, depth bokeh, denoise via the optional [`@retouchjs/ml`](packages/ml) package; no server, no keys
+- **On-device ML** — background removal, upscaling, object erase, click-to-select, depth bokeh, denoise via the optional [`@9tensor/retouch-ml`](packages/ml) package; no server, no keys
 - **Framework-agnostic** — a vanilla TypeScript class you mount into any element (framework wrappers are on the roadmap)
 
 <br />
@@ -53,15 +53,15 @@ Most image editors bolt onto your app like an afterthought. Rétouch was designe
 ## Install
 
 ```bash
-npm install @retouchjs/core
+npm install @9tensor/retouch
 ```
 
 ```bash
-pnpm add @retouchjs/core
+pnpm add @9tensor/retouch
 ```
 
 ```bash
-yarn add @retouchjs/core
+yarn add @9tensor/retouch
 ```
 
 Requirements: a browser with `<canvas>`; ESM-first with a CommonJS build (the CJS bundle still loads
@@ -74,7 +74,7 @@ mediabunny/gifenc through `import()`). Importing is side-effect free — styles 
 ## Quick Start
 
 ```ts
-import { Retouch } from "@retouchjs/core";
+import { Retouch } from "@9tensor/retouch";
 
 const retouch = new Retouch({
   target: "#editor",
@@ -168,7 +168,7 @@ transport. Everything is non-destructive until export:
 - **GIF of the trimmed range** — forward, reverse, or boomerang loops with every edit applied ([gifenc](https://github.com/mattdesl/gifenc) loads lazily); **deflicker** smooths brightness on export; **Set poster** picks the gallery thumbnail frame
 - Progress is reported per file (`export:progress` events) with cancellation via `cancelExport()`
 
-### ML tools (`@retouchjs/ml`)
+### ML tools (`@9tensor/retouch-ml`)
 
 On-device background removal, 4× super-resolution, an object-erase heal
 brush, face and object detection (labeled COCO boxes, masks, privacy
@@ -188,7 +188,7 @@ download from a click on the photo; it asks first. A run shows its steps
 photo), and the result wipes in over the photo before it lands:
 
 ```ts
-import { installMlTools } from "@retouchjs/ml";
+import { installMlTools } from "@9tensor/retouch-ml";
 
 installMlTools(retouch); // Cutout, Upscale, Erase, Select, Detect, Depth, Denoise
 ```
@@ -244,7 +244,7 @@ new Retouch({
 
 Tools in the `"ai"` group share one launcher on the rail when there are two or
 more; each opens from a menu that shows its `description` and `badge` (a short
-tag such as a model's download size). `@retouchjs/ml` registers its tools
+tag such as a model's download size). `@9tensor/retouch-ml` registers its tools
 this way.
 
 Custom tools write through the same non-destructive edit model as the
@@ -259,7 +259,7 @@ size), `steps` (a run's progress: waiting, active with a bar, done, failed) and
 `button({ variant: "ai" })` (the prism ring) — and keeps them matching as the
 editor's design changes, so a plugin never styles anything itself.
 `ctx.reveal(result)` wipes a tool's result in over the photo before you commit
-it; `@retouchjs/ml` is built on all of these. Sliders take an optional `track` (a CSS gradient showing what the
+it; `@9tensor/retouch-ml` is built on all of these. Sliders take an optional `track` (a CSS gradient showing what the
 slider does) and `parse` (reading a typed value back, the inverse of `format`).
 `ctx.preview(edits)` draws the current photo with `edits` (adjustments, filter,
 curves, color mix, stylize) laid over the current ones, as an image URL for a
@@ -281,7 +281,7 @@ const tiles = ctx.ui.tiles({
 Panes built by hand still
 work: the `rt-dock__*` classes stay styled, and a hand-built slider gets the
 filled track by calling `refreshRangeFill(input)` (exported from
-`@retouchjs/core`) after creating it, from its `input` listener, and wherever
+`@9tensor/retouch`) after creating it, from its `input` listener, and wherever
 you set `input.value` programmatically.
 
 ### Theming
@@ -541,8 +541,8 @@ pnpm test:watch       # …in watch mode
 pnpm test:coverage    # …with coverage
 pnpm typecheck        # Type-check both packages
 pnpm check            # Biome lint + format check (pnpm format to fix)
-pnpm build            # Build @retouchjs/core → dist/
-pnpm build:all        # Build core, then @retouchjs/ml
+pnpm build            # Build @9tensor/retouch → dist/
+pnpm build:all        # Build core, then @9tensor/retouch-ml
 pnpm smoke            # Import both built packages from Node and inspect their tarballs
 pnpm build:demo       # Static demo build → demo-dist/ (what GitHub Pages serves)
 ```
@@ -564,7 +564,7 @@ src/
 ├── ui/                    # Drop zone, gallery, toasts, export overlay, icons
 │   └── editor/            # Editor shell, tool registry, per-tool panes and overlays
 └── utils/                 # Pure processing: filters, curves, HSL, masks, seam carving, liquify, …
-packages/ml/               # @retouchjs/ml — ONNX Runtime Web tools (cutout, upscale, erase, …)
+packages/ml/               # @9tensor/retouch-ml — ONNX Runtime Web tools (cutout, upscale, erase, …)
 tests/                     # Vitest + jsdom (core); packages/ml/tests for the ML package
 demo/                      # The landing page and playground (GitHub Pages); photo credits in
                            # demo/public/photos/CREDITS.txt
@@ -575,4 +575,4 @@ docs/                      # ROADMAP.md, ADVANCED-FEATURES.md (research + licens
 
 ## License
 
-[MIT](LICENSE) — use it however you want.
+[MIT](LICENSE) © [9Tensor LLC](https://9tensor.com) — use it however you want.

@@ -91,7 +91,7 @@ license audit behind the ML and advanced-feature rows is in
 | ✅ | — | AI panel (⌘K): natural-language edits via VLM over the full edit surface (token-gated, Anthropic by default, `baseUrl`/`complete` for proxies, `allowUserKey`) |
 | ⬜ | P3 | AI auto-enhance suggestions · smart-crop refinements · alt-text generation on export |
 
-## G. On-device ML (`@retouchjs/ml`)
+## G. On-device ML (`@9tensor/retouch-ml`)
 
 | Status | P | Feature |
 |--------|---|---------|
@@ -110,6 +110,6 @@ license audit behind the ML and advanced-feature rows is in
 
 | Status | P | Feature |
 |--------|---|---------|
-| ✅ | — | Plugin API v1: `Retouch.registerTool` feature groups over the shared edit model (demo: "Looks"; `@retouchjs/ml` is built on it) |
+| ✅ | — | Plugin API v1: `Retouch.registerTool` feature groups over the shared edit model (demo: "Looks"; `@9tensor/retouch-ml` is built on it) |
 | ⬜ | P3 | Plugin API v2: custom render passes + `registerFilter` (needed for Draw/Text/Sticker as plugins) |
 | ⬜ | P3 | Collage canvas · batch watermark |
