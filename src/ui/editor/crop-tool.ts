@@ -273,7 +273,17 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     sel.height = h;
   }
 
+  /**
+   * A fixed shape resizes from its corners only. A side handle would promise
+   * a one-way move the shape can't make, so the sides hide until Free.
+   */
+  function syncHandles(): void {
+    const ratio = ASPECT_RATIOS[aspectRatio];
+    root.classList.toggle("rt-crop--locked", ratio !== null && ratio !== undefined);
+  }
+
   // Initial layout
+  syncHandles();
   updateLayout();
 
   return {
@@ -288,11 +298,13 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
       sel.width = 1;
       sel.height = 1;
       aspectRatio = "free";
+      syncHandles();
       updateLayout();
     },
     refresh: updateLayout,
     setAspectRatio(preset) {
       aspectRatio = preset;
+      syncHandles();
       const ratio = ASPECT_RATIOS[preset];
       if (ratio !== null && ratio !== undefined) {
         // Fit the largest centered selection with this ratio

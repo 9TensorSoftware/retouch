@@ -131,6 +131,23 @@ describe("crop drags", () => {
   });
 });
 
+describe("crop handles", () => {
+  it("a fixed shape shows only its corners, and Free brings the sides back", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const tool = createCropTool({ container, renderer, onChange: () => {} });
+    const locked = () => tool.root.classList.contains("rt-crop--locked");
+    expect(locked()).toBe(false);
+    tool.setAspectRatio("1:1");
+    expect(locked()).toBe(true);
+    tool.setAspectRatio("free");
+    expect(locked()).toBe(false);
+    tool.setAspectRatio("16:9");
+    tool.resetSelection();
+    expect(locked()).toBe(false);
+  });
+});
+
 describe("mask handle drags", () => {
   function overlay(mask: EditMask) {
     const container = document.createElement("div");

@@ -139,6 +139,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   indicator (`env(safe-area-inset-*)`).
 - A state change is current at once (`state`, events), while the view swap can wait a frame for
   its transition.
+- With an aspect preset (Square, 4:3, …) the crop frame shows only its corners. Its side handles
+  looked like they'd move one edge, but the shape made the whole frame follow; they come back
+  with Free, and the hint under the presets says which handles to drag.
 - Drags keep to the direction they start in: crop corners and moving the crop frame, every mask
   handle, and curve points. A pull that sets off straight up, down or across stays on that axis,
   so the hand's drift no longer widens the crop, tilts a gradient or moves a point's input; one
@@ -163,8 +166,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   `document`. ONNX Runtime now loads on first use, through a dynamic import that bundlers split
   into a chunk of its own, which also keeps about 400 KB out of the page's first download.
 - With an aspect preset, dragging the crop frame's top or left corner moved the opposite corner
-  too, so the frame slid instead of growing. The opposite corner stays put now, a corner sizes the
-  frame by the axis it was pulled along, and the side handles grow it evenly about its center.
+  too, so the frame slid instead of growing. The opposite corner stays put now, and a corner sizes
+  the frame by the axis it was pulled along.
 
 ## [0.1.0] — 2026-09-19
 
