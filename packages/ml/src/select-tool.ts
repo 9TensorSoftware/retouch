@@ -7,6 +7,19 @@ import type { SamPoint } from "./sam";
  * as a tinted region plus the prompt points (green = keep, red = remove).
  */
 
+/** Clicks closer than this, as a fraction of the photo, land on the same spot. */
+export const SAME_SPOT = 0.015;
+
+/**
+ * True when a keep click lands on the last keep point again. A repeated
+ * point tells the model nothing new, so the Select tool reads it as "not
+ * that one" and steps to the next candidate shape instead.
+ */
+export function isRepeatClick(points: SamPoint[], x: number, y: number, label: 0 | 1): boolean {
+  const last = points[points.length - 1];
+  return label === 1 && last?.label === 1 && Math.hypot(x - last.x, y - last.y) < SAME_SPOT;
+}
+
 export interface SelectSurfaceHandle {
   setMask(mask: HTMLCanvasElement | null): void;
   setPoints(points: SamPoint[]): void;

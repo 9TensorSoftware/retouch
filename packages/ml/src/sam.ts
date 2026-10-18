@@ -96,16 +96,73 @@ export function pointsToSamTensors(
   return { coords, labels };
 }
 
-/** Pick the highest-scoring of the 3 candidate masks. */
+/** The part of each low-res mask that holds the photo (the rest is padding). */
+export interface MaskRegion {
+  width: number;
+  height: number;
+  /** Row length of the mask grid. */
+  stride: number;
+}
+
+/** A candidate at least this stable counts as crisp. */
+const STABLE = 0.9;
+
+/**
+ * How stable a candidate mask is: of the pixels in at a logit threshold of
+ * −1, the share still in at +1. A crisp object scores near 1; a blob that
+ * fades into its surroundings scores low. Segment Anything's own mask
+ * generator filters on the same measure.
+ */
+export function maskStability(mask: Float32Array, region?: MaskRegion): number {
+  const width = region?.width ?? mask.length;
+  const height = region?.height ?? 1;
+  const stride = region?.stride ?? mask.length;
+  let inside = 0;
+  let firm = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const v = mask[y * stride + x];
+      if (v > -1) inside++;
+      if (v > 1) firm++;
+    }
+  }
+  return inside === 0 ? 0 : firm / inside;
+}
+
+/**
+ * The decoder's candidates, best first. SlimSAM's IoU guesses sit close
+ * together and often favour a blob that spills past the object, so crisp
+ * candidates come first, ordered by IoU guess; the others follow, ordered
+ * by IoU guess weighted by stability.
+ */
+export function rankMasks(
+  iouScores: Float32Array,
+  masks: Float32Array,
+  maskPixels: number,
+  region?: MaskRegion,
+): number[] {
+  const scored = [...iouScores].map((iou, i) => {
+    const stability = maskStability(masks.subarray(i * maskPixels, (i + 1) * maskPixels), region);
+    return { i, iou, stability, crisp: stability >= STABLE };
+  });
+  scored.sort((a, b) =>
+    a.crisp !== b.crisp
+      ? Number(b.crisp) - Number(a.crisp)
+      : a.crisp
+        ? b.iou - a.iou
+        : b.iou * b.stability - a.iou * a.stability,
+  );
+  return scored.map((s) => s.i);
+}
+
+/** The best of the decoder's candidate masks (see rankMasks). */
 export function pickBestMask(
   iouScores: Float32Array,
   masks: Float32Array,
   maskPixels: number,
+  region?: MaskRegion,
 ): { mask: Float32Array; score: number } {
-  let best = 0;
-  for (let i = 1; i < iouScores.length; i++) {
-    if (iouScores[i] > iouScores[best]) best = i;
-  }
+  const best = rankMasks(iouScores, masks, maskPixels, region)[0] ?? 0;
   return {
     mask: masks.subarray(best * maskPixels, (best + 1) * maskPixels),
     score: iouScores[best],
@@ -208,12 +265,15 @@ export function encodeSamImage(
 /**
  * Run the prompt decoder for the given clicks. Returns a white-on-black
  * binary mask canvas at the source resolution plus the model's confidence.
+ * `pick` steps through the candidates, best first (see rankMasks), and wraps
+ * around; `candidates` is how many there are to step through.
  */
 export async function decodeSamClicks(
   embeddings: SamEmbeddings,
   points: SamPoint[],
   options: SamOptions = {},
-): Promise<{ mask: HTMLCanvasElement; score: number }> {
+  pick = 0,
+): Promise<{ mask: HTMLCanvasElement; score: number; candidates: number }> {
   if (points.length === 0) throw new Error("[Retouch ML] No prompt points");
   const ort = await loadOrt();
   const { coords, labels } = pointsToSamTensors(points, embeddings.width, embeddings.height);
@@ -231,12 +291,19 @@ export async function decodeSamClicks(
   const iou = results[session.outputNames[0]].data as Float32Array;
   const masks = results[session.outputNames[1]].data as Float32Array;
   const side = 256;
-  const { mask, score } = pickBestMask(iou, masks, side * side);
+  const resized = samResizedSize(embeddings.width, embeddings.height);
+  const order = rankMasks(iou, masks, side * side, {
+    width: Math.round((side * resized.width) / SAM_SIZE),
+    height: Math.round((side * resized.height) / SAM_SIZE),
+    stride: side,
+  });
+  const chosen = order[((pick % order.length) + order.length) % order.length] ?? 0;
+  const mask = masks.subarray(chosen * side * side, (chosen + 1) * side * side);
+  const score = iou[chosen];
 
   // 256² sigmoid-gray → bilinear to 1024² → crop padding → source size
   const small = canvasOf(side, side);
   small.getContext("2d")?.putImageData(new ImageData(maskLogitsToGray(mask), side, side), 0, 0);
-  const resized = samResizedSize(embeddings.width, embeddings.height);
   const up = canvasOf(resized.width, resized.height);
   const upCtx = up.getContext("2d");
   if (!upCtx) throw new Error("[Retouch ML] Failed to create canvas context");
@@ -272,5 +339,5 @@ export async function decodeSamClicks(
     d[i + 3] = 255;
   }
   outCtx.putImageData(image, 0, 0);
-  return { mask: out, score };
+  return { mask: out, score, candidates: order.length };
 }

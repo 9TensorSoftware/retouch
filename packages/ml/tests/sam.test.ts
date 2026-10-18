@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   maskLogitsToGray,
+  maskStability,
   pickBestMask,
   pointsToSamTensors,
+  rankMasks,
   rgbaToSamTensor,
   SAM_SIZE,
   samResizedSize,
 } from "../src/sam";
+import { isRepeatClick, SAME_SPOT } from "../src/select-tool";
 
 describe("samResizedSize", () => {
   it("caps the long edge at 1024 keeping aspect", () => {
@@ -74,6 +77,49 @@ describe("pickBestMask", () => {
     const { mask, score } = pickBestMask(new Float32Array([0.2, 0.9, 0.5]), masks, 2);
     expect(score).toBeCloseTo(0.9);
     expect(Array.from(mask)).toEqual([2, 2]);
+  });
+});
+
+describe("choosing among the decoder's candidates", () => {
+  // Four pixels per candidate: a crisp object (firmly in or out), and a
+  // blob whose logits hover around zero, the kind that spills past an object.
+  const crisp = [4, 4, -4, -4];
+  const blob = [0.5, 0.5, 0.5, -4];
+
+  it("measures how crisp a mask is", () => {
+    expect(maskStability(new Float32Array(crisp))).toBe(1);
+    expect(maskStability(new Float32Array(blob))).toBe(0);
+    // Only the region that holds the photo counts: here the first column of a 2-wide grid.
+    expect(
+      maskStability(new Float32Array([4, 0.5, 4, 0.5]), { width: 1, height: 2, stride: 2 }),
+    ).toBe(1);
+  });
+
+  it("prefers a crisp candidate over a blob the model scored a little higher", () => {
+    const masks = new Float32Array([...blob, ...crisp, ...crisp]);
+    const iou = new Float32Array([0.984, 0.982, 0.9]);
+    expect(rankMasks(iou, masks, 4)).toEqual([1, 2, 0]);
+    expect(pickBestMask(iou, masks, 4).score).toBeCloseTo(0.982);
+  });
+
+  it("falls back to score weighted by crispness when nothing is crisp", () => {
+    const soft = [2, 0.5, 0.5, 0.5]; // a quarter firm
+    const masks = new Float32Array([...blob, ...soft, ...blob]);
+    expect(rankMasks(new Float32Array([0.99, 0.6, 0.5]), masks, 4)[0]).toBe(1);
+  });
+});
+
+describe("clicking the same spot again", () => {
+  const keep = [{ x: 0.5, y: 0.5, label: 1 as const }];
+
+  it("counts a keep click on the last keep point as a repeat", () => {
+    expect(isRepeatClick(keep, 0.5 + SAME_SPOT / 2, 0.5, 1)).toBe(true);
+    expect(isRepeatClick(keep, 0.5 + SAME_SPOT * 2, 0.5, 1)).toBe(false);
+  });
+
+  it("never counts the first click or a subtract click", () => {
+    expect(isRepeatClick([], 0.5, 0.5, 1)).toBe(false);
+    expect(isRepeatClick(keep, 0.5, 0.5, 0)).toBe(false);
   });
 });
 

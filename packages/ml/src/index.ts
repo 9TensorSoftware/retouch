@@ -81,9 +81,12 @@ export {
   DEFAULT_SAM_ENCODER_URL,
   decodeSamClicks,
   encodeSamImage,
+  type MaskRegion,
   maskLogitsToGray,
+  maskStability,
   pickBestMask,
   pointsToSamTensors,
+  rankMasks,
   rgbaToSamTensor,
   SAM_SIZE,
   type SamEmbeddings,
@@ -91,7 +94,12 @@ export {
   type SamPoint,
   samResizedSize,
 } from "./sam";
-export { createSelectSurface, type SelectSurfaceHandle } from "./select-tool";
+export {
+  createSelectSurface,
+  isRepeatClick,
+  SAME_SPOT,
+  type SelectSurfaceHandle,
+} from "./select-tool";
 export { computeTileGrid, type Tile } from "./tiles";
 export {
   chw01ToRgba,
