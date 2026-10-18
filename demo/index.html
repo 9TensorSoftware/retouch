@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Rétouch: a photo editor that runs in your browser</title>
-    <meta name="description" content="Crop, adjust, cut out and erase, with AI that runs on your own device. Free and open source, by 9Tensor." />
+    <meta name="description" content="A photo and video editor in your browser, with on-device AI. Open source, by 9Tensor." />
     <link rel="canonical" href="https://retouch.9tensor.com/" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#F7F5F2" media="(prefers-color-scheme: light)" />
@@ -16,7 +16,7 @@
     <meta property="og:site_name" content="Rétouch" />
     <meta property="og:url" content="https://retouch.9tensor.com/" />
     <meta property="og:title" content="Rétouch: a darkroom in your browser" />
-    <meta property="og:description" content="Crop, adjust, cut out and erase, with AI that runs on your own device. Free and open source." />
+    <meta property="og:description" content="A photo and video editor in your browser, with on-device AI." />
     <meta property="og:image" content="https://retouch.9tensor.com/og.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -46,11 +46,11 @@
       <section class="wrap hero" aria-labelledby="hero-title">
         <div class="hero__head">
           <div>
-            <p class="eyebrow">Photo and video editor · Free and open source</p>
+            <p class="eyebrow">Photo and video editor · Open source</p>
             <h1 class="display" id="hero-title">A darkroom in your&nbsp;browser.</h1>
           </div>
           <div class="hero__aside">
-            <p class="lede">Crop, adjust, cut out and erase, with AI that runs on your own device, so your photos never leave it. No install, no account, no upload.</p>
+            <p class="lede">Crop, adjust, cut out and erase, with AI that runs on your device.</p>
             <div class="actions">
               <button class="btn btn--primary" type="button" data-edit="pond">
                 Edit this photo
@@ -74,7 +74,7 @@
             </div>
           </div>
           <figcaption class="caption">
-            <span><span class="caption__label">Rendered by Rétouch in this page:</span> <span id="hero-recipe"></span></span>
+            <span id="hero-recipe"></span>
             <a href="https://unsplash.com/photos/mysUTgf61cM">Photo: Adrian Eperjessy</a>
           </figcaption>
         </figure>
@@ -87,7 +87,7 @@
             <p class="eyebrow">Try it</p>
             <h2 class="display" id="try-title">Your photos stay on your device.</h2>
           </div>
-          <p class="section-head__text">Here are five photos to start with. Click one to edit it, or drop in your own. They stay in this tab, and nothing is uploaded.</p>
+          <p class="section-head__text">Start with these, or drop in your own.</p>
         </div>
         <div class="try__frame">
           <div id="editor"></div>
@@ -99,7 +99,7 @@
         <div class="spread__text" data-reveal>
           <p class="eyebrow">Adjust · Curves · Color mix</p>
           <h2 class="display" id="color-title">Change one color. Leave the rest alone.</h2>
-          <p>Fourteen adjustments, tone curves for each channel and an eight-band color mixer. Here the maples turn from orange to crimson; the sky and the road don't move.</p>
+          <p>Fourteen adjustments, tone curves and an eight-band color mixer.</p>
           <p class="chips" id="road-recipe"></p>
         </div>
         <figure class="compare spread__visual" id="road-compare" style="--ratio: 3 / 2" data-reveal>
@@ -123,7 +123,7 @@
         <div class="spread__text" data-reveal>
           <p class="eyebrow">Looks and filters</p>
           <h2 class="display" id="looks-title">Try a look. Then take it apart.</h2>
-          <p>A look is only settings: a filter and a few sliders you can keep adjusting. Every preview is drawn from your own photo. These five come from a plugin a few dozen lines long, built on the same API you'd use.</p>
+          <p>A look is only settings, so you can keep adjusting it.</p>
         </div>
         <figure class="spread__visual" data-reveal>
           <ul class="looks" id="looks" aria-label="The same portrait in six looks">
@@ -141,7 +141,7 @@
               <p class="eyebrow eyebrow--prism">AI, on your device</p>
               <h2 class="display" id="ai-title">AI that never sees a&nbsp;server.</h2>
             </div>
-            <p class="section-head__text" data-reveal>Each model downloads once, then runs on your own graphics card or processor. Your photos stay put, and there's no account or API key to set up. These results came out of Rétouch on these photos.</p>
+            <p class="section-head__text" data-reveal>Each model downloads once, then runs on your device. The results below came from Rétouch.</p>
           </div>
 
           <div class="ai-grid">
@@ -161,7 +161,7 @@
               </figure>
               <div class="ai-card__body">
                 <h3>Erase</h3>
-                <p>Brush over anything and it's gone, filled in from what's around it.</p>
+                <p>Brush over it and it's gone.</p>
                 <p class="model">LaMa · 208 MB</p>
               </div>
             </article>
@@ -171,10 +171,8 @@
                 <div class="stage" style="--at: 70%">
                   <img class="select__photo" src="/photos/corgi.jpg" width="1067" height="1600" loading="lazy" alt="A corgi on stone steps in front of yellow flowers" />
                   <img class="select__subject" src="/showcase/corgi-select.webp" width="801" height="1200" loading="lazy" alt="" />
-                  <!-- Where the three clicks went, in the photo's own coordinates. -->
-                  <span class="select__click" style="--x: 47.8%; --y: 47.5%"></span>
+                  <!-- Where the click went, in the photo's own coordinates. -->
                   <span class="select__click" style="--x: 50.6%; --y: 59.4%"></span>
-                  <span class="select__click" style="--x: 51.1%; --y: 71.9%"></span>
                 </div>
               </div>
               <div class="ai-card__body">
@@ -186,7 +184,7 @@
                     <button type="button" data-select="cutout" aria-pressed="false">Cut out</button>
                   </div>
                 </div>
-                <p>Click what you want. Three clicks pick out the corgi, ready to cut out, mask or adjust.</p>
+                <p>One click, and the corgi is selected.</p>
                 <p class="model">SlimSAM · 38 MB</p>
               </div>
             </article>
@@ -208,7 +206,7 @@
                     <button type="button" data-bg="none" aria-pressed="false">None</button>
                   </div>
                 </div>
-                <p>One step lifts a person off the background, hair and all. Put them anywhere.</p>
+                <p>People lift off the background, hair and all.</p>
                 <p class="model">MODNet · 25 MB</p>
               </div>
             </article>
@@ -229,13 +227,13 @@
               </figure>
               <div class="ai-card__body">
                 <h3>Upscale</h3>
-                <p>Four times the pixels, with fur and whiskers instead of blur. This was a 220-pixel crop.</p>
+                <p>Four times the pixels, from a 220-pixel crop.</p>
                 <p class="model">Real-ESRGAN · 67 MB</p>
               </div>
             </article>
           </div>
 
-          <p class="darkroom__more" data-reveal>Also on board: depth blur, denoise, and face and object detection. <button class="link" type="button" data-edit="corgi">Try them on the corgi</button></p>
+          <p class="darkroom__more" data-reveal>Also: depth blur, denoise, and face and object detection. <button class="link" type="button" data-edit="corgi">Try them on the corgi</button></p>
         </div>
       </section>
 
@@ -246,18 +244,18 @@
             <p class="eyebrow">And the rest</p>
             <h2 class="display" id="rest-title">Everything you'd reach for.</h2>
           </div>
-          <p class="section-head__text" data-reveal>Every edit stays adjustable until you're done, with undo all the way back to the original.</p>
+          <p class="section-head__text" data-reveal>Every edit stays adjustable, with undo all the way back.</p>
         </div>
         <ul class="tools">
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="crop"></span><h3>Crop and straighten</h3><p>Aspect presets, a straighten ruler, quarter turns and flips.</p></li>
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="transform"></span><h3>Perspective and lens</h3><p>Straighten leaning buildings and undo lens distortion.</p></li>
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="masks"></span><h3>Masks</h3><p>Darken a sky or warm a face with linear and radial masks.</p></li>
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="liquify"></span><h3>Liquify</h3><p>Push, pull and smooth with a brush.</p></li>
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="stylize"></span><h3>Stylize</h3><p>Tilt-shift, duotone, halftone, posterize and pixelate.</p></li>
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="trim"></span><h3>Video</h3><p>Trim, crop, adjust and change the speed, or save a GIF. Encoded in the browser.</p></li>
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="sparkle"></span><h3>Ask AI</h3><p>Press ⌘K and describe the edit you want. Bring your own Anthropic key.</p></li>
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="phone"></span><h3>Phones and tablets</h3><p>A bottom sheet, tools you can swipe through, and pinch to zoom.</p></li>
-          <li class="tool" data-reveal><span class="tool__icon" data-icon="download"></span><h3>Batch export</h3><p>Edit a whole set, then save every photo in one go.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="crop"></span><h3>Crop and straighten</h3><p>Aspect presets, a straighten ruler, turns and flips.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="transform"></span><h3>Perspective and lens</h3><p>Leaning buildings and lens distortion.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="masks"></span><h3>Masks</h3><p>Linear and radial, for local edits.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="liquify"></span><h3>Liquify</h3><p>Push, pull and smooth.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="stylize"></span><h3>Stylize</h3><p>Tilt-shift, duotone, halftone and more.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="trim"></span><h3>Video</h3><p>Trim, crop, adjust, change the speed, save a GIF.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="sparkle"></span><h3>Ask AI</h3><p>Describe the edit. Bring your own Anthropic key.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="phone"></span><h3>Phones and tablets</h3><p>A bottom sheet and pinch to zoom.</p></li>
+          <li class="tool" data-reveal><span class="tool__icon" data-icon="download"></span><h3>Batch export</h3><p>Save a whole set in one go.</p></li>
         </ul>
       </section>
 
@@ -266,7 +264,7 @@
         <div class="dev__text" data-reveal>
           <p class="eyebrow">For developers</p>
           <h2 class="display" id="dev-title">Drop it into your own app.</h2>
-          <p>Rétouch is a TypeScript library with no framework to adopt. Mount the gallery and editor in any element, add tools with the same controls the built-in ones use, and restyle everything with CSS custom properties.</p>
+          <p>A TypeScript library for any framework, with plugins and theming.</p>
           <div class="install">
             <code><span class="install__prompt" aria-hidden="true">$</span> npm i @9tensor/retouch</code>
             <button class="install__copy" type="button" data-copy="npm i @9tensor/retouch" aria-label="Copy the install command">
@@ -304,7 +302,7 @@
             <circle cx="7" cy="16" r="3.3"/><circle cx="16" cy="16" r="3.3"/><circle cx="25" cy="16" r="3.3"/>
             <circle class="foot__off" cx="7" cy="25" r="3.3"/><circle class="foot__off" cx="16" cy="25" r="3.3"/><circle class="foot__accent" cx="25" cy="25" r="3.3"/>
           </svg>
-          <span>Rétouch is made by <b>9Tensor</b>, which builds open-source software and data.</span>
+          <span>Made by <b>9Tensor</b></span>
         </a>
         <nav class="foot__links" aria-label="Project">
           <a href="https://github.com/9tensorsoftware/retouch">GitHub</a>

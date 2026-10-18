@@ -544,10 +544,6 @@ h2.display {
   text-decoration: underline;
 }
 
-.caption__label {
-  color: var(--ink-2);
-}
-
 /* ── Sections ── */
 
 .section-head {
