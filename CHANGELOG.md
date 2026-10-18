@@ -4,7 +4,32 @@ All notable changes to `@9tensor/retouch` and `@9tensor/retouch-ml` are document
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); both packages use
 [Semantic Versioning](https://semver.org/) and share a version number.
 
-## Unreleased
+## [0.2.0] — 2026-10-18
+
+The first release of `@9tensor/retouch` and `@9tensor/retouch-ml` on npm. It carries everything
+in 0.1.0, which was prepared but never published, and adds a redesign of every screen, called
+Safelight: an editor on a graphite stage with an inspector, a contact-sheet gallery, a drop zone,
+phone layouts, motion, and AI tools that say what they'll download before they do. Plugins get
+a UI kit (`ctx.ui`) that keeps their panes matching the built-in tools, and theming takes one
+variable for a brand color. See [Writing a tool](docs/PLUGINS.md) and [Theming](docs/THEMING.md).
+
+### Upgrading from `@retouchjs/core` 0.0.2
+
+Each of these is explained under [0.1.0](#010--2026-09-19) below.
+
+- Install `@9tensor/retouch` in place of `@retouchjs/core` and update imports. The AI tools are
+  `@9tensor/retouch-ml`. `@retouchjs/core` stays at 0.0.2 and is deprecated.
+- Video is accepted by default. Pass `acceptedVideoTypes: []` to accept only images, as before.
+- Done bakes edits into the image. Pass `commitMode: "keep-edits"` to keep them parametric
+  until export, as before.
+- Entries can be images or videos: `getEditingEntry()`, `images:add` and `editor:done` carry
+  either, and `isImageEntry()` / `isVideoEntry()` tell them apart. `getImages()` is deprecated
+  in favor of `getMedia()`.
+- `ImageEdits` is the full edit model now; code that builds one by hand needs every field.
+- `fabric` is a dependency; `mediabunny` and `gifenc` load only when video or a GIF is exported.
+
+Nothing else is needed for the redesign: options, methods and events from 0.1.0 work as they
+did, and custom tools built by hand from the `rt-dock__*` classes still render.
 
 ### Added
 
@@ -12,7 +37,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   editor's darkroom tokens; auto follows the OS setting.
 - `ctx.ui` for custom tools: `row`, `section`, `slider`, `button`, `choice` and `note` build pane
   controls that match the built-in tools (types exported as `ToolUi`, `UiSlider`, and so on).
-- Tokens for the coming redesign: type families and scale (`--rt-font-*`, `--rt-type-*`),
+- Tokens: type families and scale (`--rt-font-*`, `--rt-type-*`),
   `--rt-shadow-float`, `--rt-highlight`, `--rt-prism`, `--rt-radius-full`, `--rt-dur-4`, and a
   spring easing, `--rt-ease-spring`.
 - Zoom and pan in the editor: zoom controls at the foot of the stage (−, +, Fit, 1:1), ⌘/Ctrl +
@@ -89,6 +114,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - `openEditor(id, { tool })` opens the editor on a given tool, such as `"adjust"` or a plugin's id
   (type `OpenEditorOptions`). Without it, or for a tool the editor doesn't offer, it opens on the
   first tool as before.
+- Guides for [writing a tool](docs/PLUGINS.md) and [theming](docs/THEMING.md), and screenshots in
+  the README (`node scripts/screenshots.mjs` retakes them from a running demo).
 - The demo is now the landing page for retouch.9tensor.com: the live editor with five sample
   photos already in its gallery, a before/after hero that Rétouch renders in the page (Edit this
   photo opens it on those settings), and sections that show real output: a color mix, the Looks
@@ -196,8 +223,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ## [0.1.0] — 2026-09-19
 
-The first release since 0.0.2 turns a crop/brightness prototype into a full image *and video*
-editor with an on-device ML companion package. `@9tensor/retouch-ml` is published for the first time.
+Prepared but never published; 0.2.0 is its first release. It turned a crop/brightness prototype
+into a full image *and video* editor with an on-device ML companion package.
 
 ### Breaking changes since 0.0.2
 
@@ -310,5 +337,6 @@ Apache-2.0 or BSD-3 licensed — see `docs/ADVANCED-FEATURES.md` for the audit.
 Initial public release, published as `@retouchjs/core`: drop zone → gallery → editor with crop,
 rotation and brightness/contrast/saturation adjustments; `onDone` export to Blobs.
 
-[0.1.0]: https://github.com/9tensorsoftware/retouch/compare/v0.0.2...v0.1.0
+[0.2.0]: https://github.com/9tensorsoftware/retouch/compare/v0.0.2...v0.2.0
+[0.1.0]: https://github.com/9tensorsoftware/retouch/commit/97870cf
 [0.0.2]: https://github.com/9tensorsoftware/retouch/releases/tag/v0.0.2

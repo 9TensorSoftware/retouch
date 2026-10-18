@@ -1,6 +1,6 @@
 {
   "name": "@9tensor/retouch-ml",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Rétouch ML tools — on-device cutout, 4× upscale, erase, click-to-select, depth bokeh, denoise and face/object detection via ONNX Runtime Web",
   "author": "9Tensor (https://9tensor.com)",
   "license": "MIT",
