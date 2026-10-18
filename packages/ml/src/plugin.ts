@@ -8,6 +8,7 @@ import type {
   UiStep,
   UiSteps,
 } from "@9tensor/retouch";
+import { composeBokeh, prepareBokeh, renderBokeh, suggestFocus } from "./bokeh";
 import { KEEP_RGB, ON_KEEP, rgba } from "./colors";
 import {
   applyMatteAlpha,
@@ -21,14 +22,7 @@ import {
   type DenoiseOptions,
   denoiseImage,
 } from "./denoise";
-import {
-  composeBokeh,
-  DEFAULT_DEPTH_MODEL_URL,
-  type DepthOptions,
-  depthAt,
-  estimateDepth,
-  prepareBokeh,
-} from "./depth";
+import { DEFAULT_DEPTH_MODEL_URL, type DepthOptions, depthAt, estimateDepth } from "./depth";
 import { createDepthSurface } from "./depth-tool";
 import {
   DEFAULT_FACE_MODEL_URL,
@@ -928,7 +922,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
         let prep: ReturnType<typeof prepareBokeh> | null = null;
         let depthMap: Awaited<ReturnType<typeof estimateDepth>> | null = null;
-        let focus = 0.75;
+        let focus = 0.5;
         let busy = false;
 
         const analyze = ctx.ui.button({
@@ -1011,6 +1005,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             });
             await new Promise((r) => setTimeout(r, 0));
             prep = prepareBokeh(ctx.entry.image, depthMap, 1280);
+            focus = suggestFocus(depthMap);
             recompose();
             steps.set(0, "done", { detail: cached() ? "Saved" : undefined });
             steps.set(1, "done");
@@ -1036,12 +1031,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           try {
             await new Promise((r) => setTimeout(r, 0));
             const image = ctx.entry.image;
-            const full = prepareBokeh(
-              image,
-              depthMap,
-              Math.max(image.naturalWidth, image.naturalHeight),
+            prep ??= prepareBokeh(image, depthMap, 1280);
+            await replacePhoto(
+              ctx,
+              renderBokeh(prep, image, depthMap, focus, aperture.value / 100),
             );
-            await replacePhoto(ctx, composeBokeh(full, focus, aperture.value / 100));
           } catch (error) {
             note.set(errorText(error, "Apply failed"));
             console.error(error);
