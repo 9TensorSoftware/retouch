@@ -66,7 +66,7 @@ import {
   type SamOptions,
   type SamPoint,
 } from "./sam";
-import { createSelectSurface } from "./select-tool";
+import { createSelectSurface, isRepeatClick } from "./select-tool";
 import { DEFAULT_UPSCALE_MODEL_URL, type UpscaleOptions, upscaleImage } from "./upscale";
 
 export interface MlToolsOptions {
@@ -660,6 +660,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         steps.root.hidden = true;
 
         let points: SamPoint[] = [];
+        /** Which candidate shape to show for these clicks (see decodeSamClicks). */
+        let pick = 0;
         let mask: HTMLCanvasElement | null = null;
         let embeddings: SamEmbeddings | null = null;
         let busy = false;
@@ -714,13 +716,14 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           if (busy) return;
           if (!neutral) note.set(NEEDS_FRAME);
           else if (!armed) note.set("");
-          else if (mask) note.set("Selected. Click to refine it, or pick what to do with it.");
+          else if (mask) note.set("Selected. Click the same spot again for another shape.");
           else note.set("Click an object in the photo.");
         }
 
         function clearSelection(): void {
           if (busy) return;
           points = [];
+          pick = 0;
           mask = null;
           surface.setPoints(points);
           surface.setMask(null);
@@ -765,7 +768,13 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             note.set(`Start selecting first: it downloads the model (${model.mb ?? "?"} MB) once.`);
             return;
           }
-          points.push({ x, y, label: shiftKey || mode.value === "subtract" ? 0 : 1 });
+          const label = shiftKey || mode.value === "subtract" ? 0 : 1;
+          // The same spot again means "not that one": step to the next shape.
+          if (isRepeatClick(points, x, y, label)) pick++;
+          else {
+            points.push({ x, y, label });
+            pick = 0;
+          }
           surface.setPoints(points);
           void refine();
         });
@@ -777,7 +786,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           activeRuns.add("select");
           note.set("Selecting…");
           try {
-            const result = await decodeSamClicks(ready_, points, selectOptions);
+            const result = await decodeSamClicks(ready_, points, selectOptions, pick);
             mask = result.mask;
             surface.setMask(mask);
           } catch (error) {

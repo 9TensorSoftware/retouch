@@ -152,6 +152,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   handle, and curve points. A pull that sets off straight up, down or across stays on that axis,
   so the hand's drift no longer widens the crop, tilts a gradient or moves a point's input; one
   that sets off at an angle stays free. The first few pixels decide.
+- Select gets the whole object from one click more often. Of the shapes the model offers, it
+  prefers one with a crisp edge to a blob that spills past the object, which the model often
+  rates a hair higher. Clicking the same spot again steps to the next shape: a corgi's nose, its
+  face, the whole dog. `decodeSamClicks()` takes which shape to return and says how many there
+  are; `rankMasks()`, `maskStability()` and `isRepeatClick()` are exported.
 
 ### Fixed
 
