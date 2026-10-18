@@ -33,6 +33,10 @@
   <a href="#development">Development</a>
 </p>
 
+<p align="center">
+  <img src=".github/screenshots/editor.webp" width="880" alt="The Rétouch editor: a misty pond on Adjust, with a before/after divider across the photo" />
+</p>
+
 <br />
 
 ---
@@ -130,9 +134,17 @@ add more anytime, and press **Done** (shown when `onDone` is configured) to
 export everything: long runs show an export sheet with every file's thumbnail,
 a ring filling as it exports, and the time left.
 
+<p align="center">
+  <img src=".github/screenshots/gallery.webp" width="880" alt="The gallery: five photos in justified rows, numbered, with layout switches and Add and Done buttons" />
+</p>
+
 ### 3. Editor
 
 Opens as a modal overlay: a neutral graphite stage that keeps focus — and color judgment — on the image, with floating panels around it. The tool rail down the left edge groups tools by job (frame, tone, looks, then plugins), with the AI tools gathered behind one ✦ launcher; the inspector on the right holds the active tool's controls — sliders whose tracks show what they do, preview tiles drawn from your photo — and a live RGB histogram. Zoom up to 800%, pan around the stage, and drag a before/after divider across the photo to compare. On phones, narrow windows and upright tablets the panels stack: the stage on top, the controls in a bottom sheet you drag between its header, half and most of the screen (or fold away by tapping the active tool again), and the tools in a row along the bottom edge to swipe through — every tool works one-handed at 375 × 667. Pinch to zoom, pan with two fingers (or one, once zoomed), and double-tap to zoom in or back to fit. Touch targets are 44 px, and the editor keeps clear of notches and the home indicator when the host page uses `viewport-fit=cover`. A phone on its side keeps the three columns. Opening a photo zooms it from its gallery frame onto the stage, and Done or Cancel settles it back (a view transition; browsers without them cross-fade), while the panels slide in from their edges. With reduced motion asked for, all of it is off and the views simply swap. Tools are pluggable via `Retouch.registerTool`. Everything is non-destructive until you hit **Done**.
+
+<p align="center">
+  <img src=".github/screenshots/phone.webp" width="300" alt="The editor on a phone: the photo on top, Adjust in a bottom sheet, the tools in a row along the bottom edge" />
+</p>
 
 <br />
 
@@ -193,6 +205,10 @@ import { installMlTools } from "@9tensor/retouch-ml";
 installMlTools(retouch); // Cutout, Upscale, Erase, Select, Detect, Depth, Denoise
 ```
 
+<p align="center">
+  <img src=".github/screenshots/ai.webp" width="880" alt="The AI tools menu over a corgi photo, each tool with its download size and a pin, and Depth's model card in the inspector" />
+</p>
+
 ### Plugin feature groups
 
 The editor's tools are registry-driven. Register your own feature group — a
@@ -242,47 +258,18 @@ new Retouch({
 });
 ```
 
-Tools in the `"ai"` group share one launcher on the rail when there are two or
-more; each opens from a menu that shows its `description` and `badge` (a short
-tag such as a model's download size). `@9tensor/retouch-ml` registers its tools
-this way.
-
 Custom tools write through the same non-destructive edit model as the
-built-ins, so previews, undo/redo, AI ops, and export work unchanged. (Tools
-that need their own render passes — draw/text layers — are on the roadmap.)
+built-ins, so previews, undo/redo, AI ops, and export work unchanged. `ctx.ui`
+builds pane controls that match the built-in tools (rows, sections, sliders,
+buttons, choices, preview tiles, notes, and for AI tools a model card and run
+steps), so a tool never styles anything itself; `ctx.preview(edits)` draws the
+photo with a look for a tile, and `ctx.reveal(result)` wipes a result in before
+it's committed. Tools in the `"ai"` group get their own section of the rail and
+the AI tools menu, where `description` and `badge` show. `@9tensor/retouch-ml`
+is built on all of it.
 
-`ctx.ui` builds pane controls that match the built-in tools — `row`, `section`,
-`slider`, `button`, `choice` (one of several options), `tiles` (preview tiles,
-like Filters), `note` (status text, announced to screen readers), and for AI
-tools `card` (what the tool does, then facts such as its model and download
-size), `steps` (a run's progress: waiting, active with a bar, done, failed) and
-`button({ variant: "ai" })` (the prism ring) — and keeps them matching as the
-editor's design changes, so a plugin never styles anything itself.
-`ctx.reveal(result)` wipes a tool's result in over the photo before you commit
-it; `@9tensor/retouch-ml` is built on all of these. Sliders take an optional `track` (a CSS gradient showing what the
-slider does) and `parse` (reading a typed value back, the inverse of `format`).
-`ctx.preview(edits)` draws the current photo with `edits` (adjustments, filter,
-curves, color mix, stylize) laid over the current ones, as an image URL for a
-tile:
-
-```ts
-const tiles = ctx.ui.tiles({
-  label: "Look",
-  options: LOOKS.map((look) => ({
-    value: look.name,
-    label: look.name,
-    preview: ctx.preview({ filter: look.filter }),
-  })),
-  value: null,
-  onChange: (name) => applyLook(name),
-});
-```
-
-Panes built by hand still
-work: the `rt-dock__*` classes stay styled, and a hand-built slider gets the
-filled track by calling `refreshRangeFill(input)` (exported from
-`@9tensor/retouch`) after creating it, from its `input` listener, and wherever
-you set `input.value` programmatically.
+**[Writing a tool](docs/PLUGINS.md)** covers the lifecycle, every control and its
+options, and AI tools end to end.
 
 ### Theming
 
@@ -308,34 +295,13 @@ you want to change:
 ```
 
 The hover shade, the soft and glow washes, the focus ring, and accent-as-text
-all derive from `--rt-accent`; set any of them to tune it. For a light brand
-color, set `--rt-accent-text` to a darker shade that keeps 4.5:1 against the
-surface, and `--rt-on-accent` for text on filled buttons.
+all derive from `--rt-accent`; set any of them to tune it. The shell follows the
+`theme` option: `"light"` (default), `"dark"`, or `"auto"` to track the OS
+setting; `setTheme()` switches it at runtime. The editor itself is always dark.
 
-The shell follows the `theme` option: `"light"` (default), `"dark"`, or
-`"auto"` to track the OS setting; `setTheme()` switches it at runtime. Dark
-uses the editor's darkroom set. The editor itself is always dark.
-
-The main tokens (each defined per world):
-
-| Token | Role |
-|---|---|
-| `--rt-surface`, `--rt-surface-raised`, `--rt-surface-overlay`, `--rt-surface-subtle` | Stage, panels/cards, menus/toasts, inset wells |
-| `--rt-control`, `--rt-control-hover` | Idle/hover washes on chips and buttons |
-| `--rt-text-1/2/3`, `--rt-text-disabled` | Text hierarchy |
-| `--rt-line`, `--rt-line-strong`, `--rt-line-loud` | Hairlines → emphasized borders |
-| `--rt-accent`, `--rt-accent-hover`, `--rt-accent-soft`, `--rt-accent-glow`, `--rt-accent-text`, `--rt-on-accent` | The accent ramp: fills, washes, accent-as-text, text-on-accent |
-| `--rt-success`, `--rt-danger`, `--rt-danger-soft` | Status colors |
-| `--rt-focus` | The `:focus-visible` ring |
-| `--rt-font-ui`, `--rt-font-mono`, `--rt-font-display` | Type families (display defaults to the UI face) |
-| `--rt-type-xs/sm/md/lg/xl` | 11 / 12 / 13 / 15 / 18 px |
-| `--rt-shadow-sm/md/lg/float`, `--rt-highlight` | Elevation; `float` for panels over the stage, `highlight` for their top edge |
-| `--rt-prism` | The spectral gradient that marks on-device AI |
-| `--rt-radius-sm/md/lg/xl/full` | 6 / 10 / 16 / 24 / 999 px |
-| `--rt-dur-1/2/3/4`, `--rt-ease`, `--rt-ease-decel`, `--rt-ease-spring` | Motion (respects `prefers-reduced-motion`; the spring uses `linear()` where supported) |
-
-Colors drawn onto canvases (the curves editor, ML overlays) can't read CSS
-variables and keep matching constants in TypeScript.
+**[Theming](docs/THEMING.md)** lists every token with its light and dark
+values: surfaces, text, lines, the accent ramp, type, radii, elevation and
+motion.
 
 ### AI edits
 
@@ -534,8 +500,8 @@ Types: `RetouchOptions`, `RailOptions`, `RetouchEventMap`, `AppState`, `ShellThe
 
 ```bash
 pnpm install          # Install dependencies (workspace: core + packages/ml)
-pnpm dev              # Dev server with the live demo at http://localhost:5173/retouch.js/
-                      # (and every token and plugin control at /retouch.js/kitchen.html)
+pnpm dev              # Dev server with the landing page and demo at http://localhost:5173/
+                      # (and every token and plugin control at /kitchen.html)
 pnpm test             # Run the test suite (core + ml)
 pnpm test:watch       # …in watch mode
 pnpm test:coverage    # …with coverage
@@ -545,6 +511,7 @@ pnpm build            # Build @9tensor/retouch → dist/
 pnpm build:all        # Build core, then @9tensor/retouch-ml
 pnpm smoke            # Import both built packages from Node and inspect their tarballs
 pnpm build:demo       # Static demo build → demo-dist/ (what GitHub Pages serves)
+node scripts/screenshots.mjs   # Retake the README screenshots from a running `pnpm dev`
 ```
 
 CI runs typecheck → lint → tests → builds → smoke on every push; the demo deploys only from a green
@@ -568,7 +535,7 @@ packages/ml/               # @9tensor/retouch-ml — ONNX Runtime Web tools (cut
 tests/                     # Vitest + jsdom (core); packages/ml/tests for the ML package
 demo/                      # The landing page and playground (GitHub Pages); photo credits in
                            # demo/public/photos/CREDITS.txt
-docs/                      # ROADMAP.md, ADVANCED-FEATURES.md (research + license audit)
+docs/                      # PLUGINS.md, THEMING.md, ROADMAP.md, ADVANCED-FEATURES.md
 ```
 
 <br />

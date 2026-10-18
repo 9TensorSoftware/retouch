@@ -27,7 +27,8 @@ license audit behind the ML and advanced-feature rows is in
 | ✅ | — | Zoom & pan canvas (Cmd/Ctrl+wheel and trackpad pinch, wheel/Space/middle-drag pan, fit/1:1, sharp re-render up to the preview's resolution) |
 | ✅ | — | Controls v2: typed slider values, changed dots, semantic tracks; Adjust in sections, full-width Curves, Color mix swatches, preview tiles (Filters, Stylize, plugin looks), crop aspect tiles + straighten ruler, masks list, brush ring, before/after divider |
 | ✅ | — | AI surfaces: model cards (model, size, device), named downloads, run steps with progress, result wipe; Ask AI change cards with Undo and suggestions; ML panes on the plugin UI kit |
-| ⬜ | P1 | Mobile: touch pinch-zoom, bottom-sheet inspector, touch-size hit targets (the panels already stack on narrow screens) |
+| ✅ | — | Phones and tablets: bottom-sheet inspector, swipeable tool row, pinch-zoom and two-finger pan, 44 px touch targets, safe areas |
+| ✅ | — | Motion: the photo morphs between gallery and editor (view transitions), panel entrances, toasts that glide; all off under reduced motion |
 | ⬜ | P3 | Highlights/shadows recovery · custom LUT import · auto-enhance |
 | ⬜ | P3 | Straighten-with-grid overlay · loading skeletons · pixel-size readout on crop |
 
@@ -49,9 +50,10 @@ license audit behind the ML and advanced-feature rows is in
 
 | Status | P | Feature |
 |--------|---|---------|
-| ✅ | — | View modes (cols-2/3/4, width-fit, height-fit, list) · add-more drop target · Done button when `onDone` is set |
+| ✅ | — | Contact-sheet gallery: justified rows at true aspect ratios, grid, filmstrip and list, remembered per browser · add-more drop target · Done button when `onDone` is set |
+| ✅ | — | Drop zone with Choose files and Paste (⌘/Ctrl+V anywhere on the page) |
 | ✅ | — | Revert to original (`restoreOriginal()`, editor Reset) · size/duration in list view |
-| ⬜ | P2 | Multi-select + batch delete/export |
+| ✅ | — | Multi-select (⌘/Ctrl-click, Shift, ⌘/Ctrl+A) to download or remove together · Undo after removing · export sheet with per-file progress |
 | ⬜ | P2 | Copy/paste edits between items · "apply to all" |
 | ⬜ | P3 | Drag to reorder · inline rename · full metadata · sort/filter by edited |
 
@@ -63,9 +65,10 @@ license audit behind the ML and advanced-feature rows is in
 | ✅ | — | Export lifecycle events (`export:start/progress/complete/error`) + `cancelExport()` + progress overlay |
 | ✅ | — | `tools` option — feature-group tabs are registry-driven |
 | ✅ | — | Export options: format png/jpeg/webp, quality, max dimension (`export` option) |
-| ✅ | — | Documented CSS-var theming (README "Theming": semantic tokens, light on `.rt-root`, dark on the overlay roots) |
+| ✅ | — | Theming: tokens in a cascade layer so host overrides always win, one-variable brand color, `theme: "light" \| "dark" \| "auto"` for the shell ([THEMING.md](THEMING.md)) |
+| ✅ | — | Plugin UI kit: `ctx.ui` controls, `ctx.preview` tiles, `ctx.reveal` result wipes, AI model cards and run steps ([PLUGINS.md](PLUGINS.md)) |
 | ✅ | — | README truth pass (docs match the real API) · CHANGELOG · CI (typecheck/lint/test/build/smoke) · release script for both packages |
-| ⬜ | P2 | Paste-from-clipboard + URL import |
+| ⬜ | P2 | URL import |
 | ⬜ | P2 | `getEdits()/setEdits()` JSON round-trip for host persistence |
 | ⬜ | P3 | i18n strings option · React wrapper · Vue/Svelte wrappers |
 
