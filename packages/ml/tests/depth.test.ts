@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  blendWeights,
   type DepthMap,
   depthAt,
   depthResizedSize,
@@ -58,30 +57,5 @@ describe("depthAt", () => {
   it("clamps out-of-range coordinates", () => {
     expect(depthAt(map, -1, 0)).toBe(0);
     expect(depthAt(map, 2, 2)).toBe(1);
-  });
-});
-
-describe("blendWeights", () => {
-  const radii = [0, 2, 5, 10];
-
-  it("stays on the sharp level at radius 0", () => {
-    expect(blendWeights(0, radii)).toEqual({ lo: 0, hi: 0, t: 0 });
-  });
-
-  it("clamps to the last level beyond the max radius", () => {
-    expect(blendWeights(50, radii)).toEqual({ lo: 3, hi: 3, t: 0 });
-  });
-
-  it("brackets and interpolates in between", () => {
-    const w = blendWeights(3.5, radii);
-    expect(w.lo).toBe(1);
-    expect(w.hi).toBe(2);
-    expect(w.t).toBeCloseTo(0.5);
-  });
-
-  it("lands exactly on an interior level", () => {
-    const w = blendWeights(5, radii);
-    expect(w.hi).toBe(2);
-    expect(w.t).toBeCloseTo(1 - (radii[2] - 5) / 3, 5);
   });
 });

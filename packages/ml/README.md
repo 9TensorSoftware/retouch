@@ -42,10 +42,13 @@ through the plugin API and ride its edit model.
   inpainter). The image encodes once and is cached, so refinement clicks
   land in tens of milliseconds.
 - **Depth (bokeh)** — Depth Anything V2 Small (Apache-2.0, ~27 MB). One
-  analysis produces a depth map; then click anything to set the focal plane
-  and scrub Aperture with instant feedback (pre-blurred levels are blended
-  per pixel, so the controls never re-run a blur). Apply renders the
-  depth-of-field at full resolution and replaces the image in place.
+  analysis produces a depth map, its edges snapped to the photo's own with a
+  guided filter. The focus starts on the middle of the photo; click anything
+  to move it, then scrub Aperture with instant feedback (the blur is built
+  once per focus, in levels blended per pixel). The background blurs without
+  the sharp subject, so nothing glows around it, and what's in front of the
+  focus blurs over what's behind it, as through a lens. Apply renders the
+  result at full resolution and replaces the image in place.
 - **Denoise** — SCUNet real-PSNR (Apache-2.0, ~77 MB as a small graph stub
   plus a weights sidecar). One click removes real-world noise — sensor
   grain, compression speckle — tile-by-tile at native resolution and
@@ -95,6 +98,11 @@ const things = await detectObjects(image);           // …plus `label` (COCO cl
 const healed = await inpaintStrokes(image, [{ x, y, r }, …]);
 const depth = await estimateDepth(image);            // { width, height, data: Float32Array } (0–1, higher = closer)
 ```
+
+For your own bokeh UI: `prepareBokeh(image, depth)` once, then
+`composeBokeh(prep, focus, strength)` (focus is a depth, such as
+`depthAt(depth, x, y)` for a click; strength 0–1) for a preview, and
+`renderBokeh(prep, image, depth, focus, strength)` for the full-size result.
 
 `inpaintMask(image, maskCanvas)` takes a painted mask instead of strokes; the
 SAM pieces are exposed as `encodeSamImage` / `decodeSamClicks` / `pickBestMask`.

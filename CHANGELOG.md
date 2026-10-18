@@ -157,6 +157,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   rates a hair higher. Clicking the same spot again steps to the next shape: a corgi's nose, its
   face, the whole dog. `decodeSamClicks()` takes which shape to return and says how many there
   are; `rankMasks()`, `maskStability()` and `isRepeatClick()` are exported.
+- Depth blurs like a lens. The background blurs without the sharp subject, which used to glow
+  into it as a pale halo. The depth map's edges snap to the photo's own (a guided filter), so the
+  blur stops at the subject's outline instead of a stepped one, fur included. Whatever is in front
+  of the focus blurs over what's behind it, so a near subject goes soft at its edges instead of
+  looking cut out. The whole subject stays sharp, not only the spot clicked, and the focus starts
+  on the middle of the photo rather than on nothing in particular. Apply renders from the
+  preview's blur, so the result matches it, and takes far less memory on large photos. New:
+  `renderBokeh()`, `composeBokehPixels()`, `renderBokehPixels()`, `focusLayers()`,
+  `guidedDepth()`, `defocus()` and `suggestFocus()`; `BokehPrep` holds the photo and its depth,
+  and the blur levels come with the focus.
 
 ### Fixed
 

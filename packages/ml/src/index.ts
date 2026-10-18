@@ -1,4 +1,18 @@
 export {
+  type BokehPrep,
+  blendWeights,
+  composeBokeh,
+  composeBokehPixels,
+  defocus,
+  type FocusLayers,
+  focusLayers,
+  guidedDepth,
+  prepareBokeh,
+  renderBokeh,
+  renderBokehPixels,
+  suggestFocus,
+} from "./bokeh";
+export {
   applyMatteAlpha,
   type CutoutOptions,
   DEFAULT_CUTOUT_MODEL_URL,
@@ -17,10 +31,7 @@ export {
   padRgbaReplicate,
 } from "./denoise";
 export {
-  type BokehPrep,
-  blendWeights,
   clearDepthCache,
-  composeBokeh,
   DEFAULT_DEPTH_MODEL_URL,
   type DepthMap,
   type DepthOptions,
@@ -28,7 +39,6 @@ export {
   depthResizedSize,
   estimateDepth,
   normalizeDepth,
-  prepareBokeh,
   rgbaToDepthTensor,
 } from "./depth";
 export { createDepthSurface, type DepthSurfaceHandle } from "./depth-tool";
