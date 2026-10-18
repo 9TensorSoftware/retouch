@@ -1,6 +1,6 @@
 {
   "name": "@9tensor/retouch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Rétouch — a drop-in, canvas-based image and video editor: crop, adjust, filters, curves, masks, trim, AI edits, plugin tools",
   "author": "9Tensor (https://9tensor.com)",
   "license": "MIT",
