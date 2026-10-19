@@ -12,7 +12,7 @@ license audit behind the ML and advanced-feature rows is in
 | Status | P | Feature |
 |--------|---|---------|
 | ✅ | — | Undo/redo history (Cmd/Ctrl+Z / ⇧Z / Y) over the edits object |
-| ✅ | — | Keyboard: Esc=cancel, Cmd/Ctrl+Enter=done, Cmd/Ctrl+K=AI, letter + 1–9 tool hotkeys, I=AI tools menu, +/−/0 zoom, Enter=apply crop, Space=play, arrow-nudge trim handles |
+| ✅ | — | Keyboard: Esc=cancel, Cmd/Ctrl+Enter=done, Cmd/Ctrl+K=AI, letter + 1–9 tool hotkeys, I=AI tools menu, +/−/0 zoom, Enter=apply crop (and a question before leaving Crop with a frame that wasn't applied), Space=play, arrow-nudge trim handles |
 | ✅ | — | Focus trap + `role="dialog"` + ARIA in editor; full keyboard operability; `:focus-visible` rings |
 | ✅ | — | Error feedback: toast on rejected files (type/size/duration/count) + `file:rejected` event |
 | ✅ | — | Side-by-side compare view (images) · hold-to-compare (video) · Reset-all |

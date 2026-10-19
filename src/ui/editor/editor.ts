@@ -56,6 +56,7 @@ import { createAiChat, getStoredAiKey } from "./ai-chat";
 import { CanvasRenderer } from "./canvas-renderer";
 import { listChanges } from "./changes";
 import { createCompareSplit } from "./compare-split";
+import { createConfirm } from "./confirm";
 import type { TransformOp } from "./context-dock";
 import { createContextDock } from "./context-dock";
 import { createCropTool } from "./crop-tool";
@@ -509,6 +510,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   function syncCropButtons(): void {
     syncHeadReset();
+    dock.setCropPending(!cropTool.isSelectionFull());
   }
 
   /** Compose the pending selection into the committed crop. */
@@ -529,6 +531,46 @@ export function createEditor(options: EditorOptions): ViewHandle {
     dock.setAspect("free");
     syncCropButtons();
     recordEdit();
+  }
+
+  /** Put the crop frame back without applying it. */
+  function discardCrop(): void {
+    cropTool.resetSelection();
+    cropTool.refresh();
+    dock.setAspect("free");
+    syncCropButtons();
+  }
+
+  /**
+   * A crop applies only when someone says so. Leaving Crop with a frame
+   * that wasn't applied asks first; resolves false to stay in Crop.
+   */
+  async function settleCrop(): Promise<boolean> {
+    if (cropTool.isSelectionFull()) return true;
+    const choice = await confirm.ask({
+      title: "Apply the crop?",
+      detail: "The frame you set isn't applied yet.",
+      confirmLabel: "Apply",
+      discardLabel: "Discard",
+    });
+    if (choice === "confirm") applyCrop();
+    else if (choice === "discard") discardCrop();
+    return choice !== "stay";
+  }
+
+  /** Switch tools at someone's request, settling an unapplied crop first. */
+  function requestTool(tool: EditorTool): void {
+    if (activeTool !== "crop" || tool === "crop" || cropTool.isSelectionFull()) {
+      selectTool(tool);
+      return;
+    }
+    // The rail stays on Crop until they've answered
+    toolbar.setActiveTool("crop");
+    void settleCrop().then((leave) => {
+      if (!leave) return;
+      toolbar.setActiveTool(tool);
+      selectTool(tool);
+    });
   }
 
   // Adjust tool (with the white-balance eyedropper)
@@ -937,12 +979,12 @@ export function createEditor(options: EditorOptions): ViewHandle {
             scheduleCarveIfNeeded();
           }
         : undefined,
+    onApplyCrop: applyCrop,
+    onCancelCrop: discardCrop,
   });
 
   /** Apply a tool's side effects (crop overlay visibility, inspector pane). */
   function selectTool(tool: EditorTool): void {
-    // A marquee left behind is still the user's crop, not a draft to discard.
-    if (activeTool === "crop" && tool !== "crop") applyCrop();
     if (tool !== activeTool) customHandles.get(activeTool)?.onDeactivate?.();
     activeTool = tool;
     // Picking a tool shows its controls, even from a folded sheet.
@@ -971,7 +1013,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
   const toolbar = createToolbar({
     tools,
     activeTool,
-    onToolChange: selectTool,
+    onToolChange: requestTool,
     // On a phone, the active tool again folds its sheet away, or brings it back.
     onToolReselect: () => sheet?.toggle(),
     layout: {
@@ -1706,16 +1748,18 @@ export function createEditor(options: EditorOptions): ViewHandle {
     },
     ...rootChildren,
   );
+  const confirm = createConfirm(root, signal);
 
   // Button handlers
   function cancel(): void {
     Object.assign(entry.edits, editSnapshot);
     onCancel();
   }
-  /** Done keeps what's on screen, including a crop marquee nobody applied. */
+  /** Done, once a crop frame nobody applied is applied or discarded. */
   function finish(): void {
-    applyCrop();
-    onDone();
+    void settleCrop().then((leave) => {
+      if (leave) onDone();
+    });
   }
   cancelBtn.addEventListener("click", cancel, { signal });
   doneBtn.addEventListener("click", finish, { signal });
@@ -1738,6 +1782,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
       if (e.key === "Escape") {
         e.preventDefault();
         if (isFormField(e.target)) (e.target as HTMLElement).blur();
+        // An unapplied crop frame goes back first; the next Esc cancels
+        else if (activeTool === "crop" && !cropTool.isSelectionFull()) discardCrop();
         else cancel();
         return;
       }
@@ -1827,7 +1873,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
       if (tool) {
         e.preventDefault();
         toolbar.setActiveTool(tool);
-        selectTool(tool);
+        requestTool(tool);
         return;
       }
       if (e.key === " " && transport && (e.target as HTMLElement).tagName !== "BUTTON") {

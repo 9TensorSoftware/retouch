@@ -152,7 +152,7 @@ Opens as a modal overlay: a neutral graphite stage that keeps focus — and colo
 
 | Tool | Description |
 |------|-------------|
-| **Crop** | Drag the frame over a rule-of-thirds grid, free or locked to an aspect tile (square, 4:3, 3:2, 16:9, 9:16). The crop applies when you switch tools, press Enter or Done; the inspector's **Reset** brings the full frame back. A **straighten ruler** (drag it, or use the arrow keys) and rotate/flip buttons sit right in the pane. Works on video too. |
+| **Crop** | Drag the frame over a rule-of-thirds grid, free or locked to an aspect tile (square, 4:3, 3:2, 16:9, 9:16), then press **Apply** (or Enter); **Cancel** (or Esc) puts the frame back. Nothing is cropped until it's applied: leaving Crop, or pressing Done, with a frame that wasn't applied asks whether to apply it or discard it. The inspector's **Reset** brings the full frame back. A **straighten ruler** (drag it, or use the arrow keys) and rotate/flip buttons sit right in the pane. Works on video too. |
 | **Transform** | Rotate 90° and flip H/V that keep the crop over your content, a straighten slider (0.1° steps) that auto-crops to the largest inscribed window (no black corners), vertical/horizontal **perspective (keystone) correction**, **lens corrections** — barrel/pincushion distortion and corner devignetting — and **content-aware width** (seam carving in a worker, images only). |
 | **Liquify** | Brush-based push warp: drag on the image to bend and reshape content under a **brush ring** sized to the brush (`[` and `]` resize it), with size and strength controls. Displacements live in a coarse grid in the edit model, so strokes preview live, undo cleanly, and apply to image and video exports alike. |
 | **Adjust** | All 14 controls at once, in four folding sections — **Light** (exposure, brightness, contrast, dehaze), **Color** (temperature, tint, vibrance, saturation, hue), **Effects** (clarity, vignette, grain) and **Detail** (sharpen, blur) — real-time, live on playing video. Color sliders show what they do on their tracks (cool to warm, green to magenta, around the hue wheel). Includes a **white-balance eyedropper**: click a neutral area and temperature/tint correct themselves. |
@@ -341,7 +341,7 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | Shortcut | Action |
 |----------|--------|
 | `Cmd/Ctrl+Z` · `Cmd/Ctrl+Shift+Z` / `Cmd/Ctrl+Y` | Undo · redo (also toolbar buttons) |
-| `Esc` · `Cmd/Ctrl+Enter` | Cancel · Done |
+| `Esc` · `Cmd/Ctrl+Enter` | Cancel (in Crop, an unapplied frame goes back first) · Done |
 | `Cmd/Ctrl+K` | Open the AI panel |
 | `C` `T` `L` · `A` `V` `H` `M` · `S` `F` (`R` on video) | Crop, Transform, Liquify · Adjust, Curves, Color mix, Masks · Stylize, Filters (Trim) |
 | `I` | Open the AI tools menu (arrow keys to move, `Esc` to close) |

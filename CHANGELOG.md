@@ -4,6 +4,15 @@ All notable changes to `@9tensor/retouch` and `@9tensor/retouch-ml` are document
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); both packages use
 [Semantic Versioning](https://semver.org/) and share a version number.
 
+## Unreleased
+
+### Changed
+
+- A crop waits for an explicit OK. Moving the frame, or picking an aspect, only proposes a crop:
+  **Apply** (or Enter) crops, and **Cancel** (or Esc) puts the frame back. Leaving Crop for
+  another tool, or pressing Done, with a frame that wasn't applied asks first: Apply or Discard,
+  or Esc to keep cropping. Before, switching tools or pressing Done applied it without asking.
+
 ## [0.2.0] — 2026-10-18
 
 The first release of `@9tensor/retouch` and `@9tensor/retouch-ml` on npm. It carries everything
