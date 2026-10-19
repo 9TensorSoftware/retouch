@@ -39,6 +39,10 @@ export interface ContextDockOptions {
   onLensChange: (distortion: number, devignette: number) => void;
   /** Content-aware width changed (images only; omit to hide the slider). */
   onSeamWidthChange?: (percent: number) => void;
+  /** Apply the crop frame on the photo. */
+  onApplyCrop: () => void;
+  /** Put the crop frame back without applying it. */
+  onCancelCrop: () => void;
 }
 
 export interface ContextDockHandle extends ViewHandle {
@@ -47,6 +51,8 @@ export interface ContextDockHandle extends ViewHandle {
   setRotation(degrees: number): void;
   /** Reflect the crop tool's aspect preset in the tiles. */
   setAspect(preset: AspectRatioPreset): void;
+  /** Whether a crop frame is waiting to be applied: Apply and Cancel work only then. */
+  setCropPending(pending: boolean): void;
   /** Sync the keystone sliders after an external change (does not fire onKeystoneChange). */
   setKeystone(vertical: number, horizontal: number): void;
   /** Sync the lens sliders after an external change (does not fire onLensChange). */
@@ -120,8 +126,8 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     for (const [id, b] of aspectBtns) b.setAttribute("aria-pressed", String(id === preset));
     cropHint.textContent =
       ASPECT_RATIOS[preset] == null
-        ? "Drag the frame's edges and corners on the photo. The crop applies when you switch tools"
-        : "Drag a corner to resize the frame; it keeps its shape. The crop applies when you switch tools";
+        ? "Drag the frame's edges and corners on the photo, then press Apply"
+        : "Drag a corner to resize the frame; it keeps its shape. Then press Apply";
   }
   for (const preset of ASPECT_PRESETS) {
     // The glyph is the shape itself, scaled into a 22 px box.
@@ -167,9 +173,24 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     signal,
   );
 
+  // Nothing is cropped until it's applied: moving the frame only proposes.
+  const cropCancel = h(
+    "button",
+    { type: "button", class: "rt-dock__chip", disabled: true },
+    "Cancel",
+  );
+  const cropApply = h(
+    "button",
+    { type: "button", class: "rt-dock__chip rt-dock__chip--primary", disabled: true },
+    "Apply",
+  );
+  cropCancel.addEventListener("click", () => options.onCancelCrop(), { signal });
+  cropApply.addEventListener("click", () => options.onApplyCrop(), { signal });
+
   const cropPane = h(
     "div",
     { class: "rt-dock__pane rt-crop-pane" },
+    h("div", { class: "rt-crop-pane__actions" }, cropCancel, cropApply),
     aspectGrid,
     ruler.root,
     transformButtons(),
@@ -177,8 +198,8 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       "p",
       { class: "rt-dock__hint rt-crop-pane__note" },
       cropHint,
-      h("span", { class: "rt-keys" }, ", press Enter or Done."),
-      h("span", { class: "rt-touch" }, " or tap Done."),
+      h("span", { class: "rt-keys" }, " or Enter."),
+      h("span", { class: "rt-touch" }, "."),
     ),
   );
 
@@ -318,6 +339,10 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     },
     setAspect(preset) {
       setActiveAspect(preset);
+    },
+    setCropPending(pending) {
+      cropCancel.disabled = !pending;
+      cropApply.disabled = !pending;
     },
     destroy() {
       abort.abort();

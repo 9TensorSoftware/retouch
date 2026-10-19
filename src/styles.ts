@@ -2819,6 +2819,68 @@ const CSS = /* css */ `
   line-height: 1.5;
 }
 
+/* Apply and Cancel: moving the frame only proposes a crop */
+.rt-crop-pane__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rt-crop-pane__actions .rt-dock__chip {
+  justify-content: center;
+}
+
+/* ── Confirm: a small question over the editor ── */
+
+.rt-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--rt-scrim);
+  animation: rt-fade-in var(--rt-dur-2) var(--rt-ease) both;
+}
+
+.rt-confirm__card {
+  width: min(340px, 100%);
+  box-sizing: border-box;
+  padding: 20px 20px 16px;
+  border: 1px solid var(--rt-line-strong);
+  border-radius: var(--rt-radius-lg);
+  background: var(--rt-surface-overlay);
+  box-shadow: var(--rt-shadow-lg), var(--rt-highlight);
+  color: var(--rt-text-1);
+  animation: rt-pop-in var(--rt-dur-3) var(--rt-ease-spring) both;
+}
+
+.rt-confirm__title {
+  margin: 0;
+  font-size: var(--rt-type-lg);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.rt-confirm__detail {
+  margin: 6px 0 0;
+  color: var(--rt-text-2);
+  font-size: var(--rt-type-md);
+  line-height: 1.5;
+}
+
+.rt-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.rt-confirm__btn {
+  min-width: 84px;
+  justify-content: center;
+}
+
 .rt-dock__pane.rt-transform-pane {
   gap: 0;
 }
