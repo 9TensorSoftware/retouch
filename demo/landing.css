@@ -1,6 +1,6 @@
-/* Rétouch's landing page: one page around the live editor. Light and dark
-   follow the system; the colors match the library's shell tokens so the
-   embedded gallery sits in the page without a seam. */
+/* Rétouch's landing page: one page around the live editor. It sits in
+   9tensor.com's frame (the same header, menus, footer, dark palette and
+   backdrop) and keeps its own serif and orange. */
 
 @font-face {
   font-family: "Instrument Serif";
@@ -19,56 +19,33 @@
 }
 
 :root {
-  color-scheme: light dark;
-  --paper: #f7f5f2;
-  --paper-2: #efebe5;
-  --sheet: #ffffff;
-  --ink: #1c1917;
-  --ink-2: #57514a;
-  --ink-3: #756e64;
-  --line: #e7e2da;
-  --line-2: #cfc8bc;
-  --accent: #d4572a;
-  --accent-ink: #b4461f;
-  --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
-  --button: #c2391d;
-  --button-hover: #ab3118;
-  --on-button: #ffffff;
-  --wash: rgba(28, 25, 23, 0.05);
-  --darkroom: #0b0b0c;
+  color-scheme: dark;
+  --paper: #07080b;
+  --paper-2: #111319;
+  --sheet: #111319;
+  --ink: #f1f2f5;
+  --ink-2: #a9aeba;
+  --ink-3: #8a8f99;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --accent: #f5753f;
+  --accent-ink: #ff9068;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --button: linear-gradient(180deg, #ff7c55, #f15a35);
+  --button-hover: linear-gradient(180deg, #ff8b67, #f76944);
+  --on-button: #1f0a04;
+  --wash: rgba(255, 255, 255, 0.06);
+  --darkroom: #0b0d12;
   --keep: #5ed278;
-  --tensor: #3e4bf0;
-  --photo-shadow: 0 34px 80px -42px rgba(52, 33, 18, 0.62), 0 2px 6px rgba(52, 33, 18, 0.06);
+  --tensor: #8c96ff;
+  --photo-shadow: 0 34px 80px -36px rgba(0, 0, 0, 0.9);
   --prism: linear-gradient(90deg, #ffc457, #8ce99a, #5cc8ff, #a58bff);
   --serif: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --max: 1200px;
   --gutter: clamp(16px, 4vw, 40px);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0b0b0c;
-    --paper-2: #151517;
-    --sheet: #161618;
-    --ink: #ededef;
-    --ink-2: #b5b5ba;
-    --ink-3: #8b8b91;
-    --line: #232326;
-    --line-2: #37373d;
-    --accent: #f5753f;
-    --accent-ink: #ff9068;
-    --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
-    --button: linear-gradient(180deg, #ff7c55, #f15a35);
-    --button-hover: linear-gradient(180deg, #ff8b67, #f76944);
-    --on-button: #1f0a04;
-    --wash: rgba(255, 255, 255, 0.06);
-    --darkroom: #121214;
-    --tensor: #8c96ff;
-    --photo-shadow: 0 34px 80px -36px rgba(0, 0, 0, 0.9);
-  }
 }
 
 *,
@@ -83,12 +60,30 @@ html {
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   margin: 0;
   background: var(--paper);
   color: var(--ink);
   font: 17px / 1.6 var(--sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Two soft glows and a dot grid behind the top of the page, as on 9tensor.com. */
+body::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto;
+  height: min(1100px, 140vh);
+  pointer-events: none;
+  background:
+    radial-gradient(50% 45% at 78% 8%, rgba(108, 118, 255, 0.24), transparent 70%),
+    radial-gradient(38% 35% at 8% 30%, rgba(245, 117, 63, 0.1), transparent 70%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1.2px) 0 0 / 28px 28px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent);
+  mask-image: linear-gradient(to bottom, #000 30%, transparent);
 }
 
 img {
@@ -144,74 +139,167 @@ button {
     max(var(--gutter), env(safe-area-inset-right));
 }
 
-/* ── Header ── */
+/* ── Header: the same as 9tensor.com's ── */
 
 .top {
+  position: relative;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-block: 20px;
+  padding-block: 28px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand__home {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.brand__name {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.brand__slash {
+  color: var(--line-2);
+  font-size: 22px;
+  font-weight: 300;
 }
 
 .wordmark {
-  font: 400 30px / 1 var(--serif);
+  font: 400 28px / 1 var(--serif);
   letter-spacing: -0.01em;
   text-decoration: none;
 }
 
-.wordmark em {
+.wordmark em,
+.menu__item em {
   color: var(--accent);
+  font-style: normal;
 }
 
 .top__nav {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 24px;
 }
 
 .top__link {
-  padding: 8px 12px;
-  border-radius: 9px;
   color: var(--ink-2);
   font-size: 15px;
   text-decoration: none;
-  transition:
-    color 0.15s,
-    background 0.15s;
-}
-
-.top__link:hover {
-  background: var(--wash);
-  color: var(--ink);
-}
-
-.top__link--icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-}
-
-.top__link--icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.top__version {
-  margin-left: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--ink-3);
-  font: 500 12px / 1.4 var(--mono);
-  text-decoration: none;
+  cursor: pointer;
   transition: color 0.15s;
 }
 
-.top__version:hover {
+.top__link:hover,
+.menu[open] > .top__link {
   color: var(--ink);
+}
+
+/* A menu is a <details>: it opens without script, and main.ts closes it on an outside click. */
+.menu {
+  position: relative;
+}
+
+.menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  user-select: none;
+}
+
+.menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.menu[open] > summary::after {
+  margin-top: 3px;
+  transform: rotate(-135deg);
+}
+
+/* The nav sits at the right edge, so the panels open leftwards. */
+.menu__panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: -14px;
+  width: 300px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(17, 19, 25, 0.88);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
+}
+
+.menu__item {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 9px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.menu__item:hover {
+  background: var(--wash);
+}
+
+.menu__item strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.menu__item span {
+  display: block;
+  color: var(--ink-3);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.menu__all {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 9px 9px;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.menu__item.menu__all span {
+  display: inline;
+  color: inherit;
 }
 
 /* ── Type ── */
@@ -287,10 +375,10 @@ h2.display {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 50px;
+  height: 48px;
   padding: 0 22px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 999px;
   font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
@@ -333,13 +421,13 @@ h2.display {
 }
 
 .btn--ghost {
-  background: var(--sheet);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 .btn--ghost:hover {
-  box-shadow: inset 0 0 0 1px var(--ink-3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .link {
@@ -1066,87 +1154,52 @@ h2.display {
   font-style: italic;
 }
 
-/* ── Footer: 9Tensor ── */
+/* ── Footer: the same as 9tensor.com's ── */
 
 .foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
   margin-top: clamp(100px, 12vw, 170px);
+  padding-top: 28px;
+  padding-bottom: max(48px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: 14px;
 }
 
-.foot__inner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px 32px;
-  align-items: center;
-  padding-top: 36px;
-  padding-bottom: max(44px, env(safe-area-inset-bottom));
+.foot p {
+  margin: 0;
 }
 
-.foot__maker {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ink-2);
-  font-size: 15px;
-  text-decoration: none;
-}
-
-.foot__maker b {
-  color: var(--ink);
-  font-weight: 650;
-}
-
-.foot__maker:hover b {
-  text-decoration: underline;
-  text-decoration-color: var(--tensor);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 4px;
-}
-
-/* 9Tensor's mark: nine dots, the lit seven drawing a 9. */
-.foot__mark {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  fill: var(--ink);
-}
-
-.foot__off {
-  opacity: 0.16;
-}
-
-.foot__accent {
-  fill: var(--tensor);
+.foot address {
+  font-style: normal;
 }
 
 .foot__links {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 20px;
-  font-size: 15px;
 }
 
-.foot__links a {
-  color: var(--ink-2);
+.foot a {
   text-decoration: none;
   transition: color 0.15s;
 }
 
-.foot__links a:hover {
+.foot a:hover {
   color: var(--ink);
 }
 
-.foot__small {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: 13.5px;
-}
-
 .foot__credits {
-  text-align: right;
+  flex-basis: 100%;
+  font-size: 13px;
 }
 
 .foot__credits a {
+  text-decoration: underline;
   text-decoration-color: var(--line-2);
   text-underline-offset: 3px;
 }
@@ -1197,8 +1250,32 @@ h2.display {
 }
 
 @media (max-width: 720px) {
-  .top__link:not(.top__link--icon) {
+  .top__nav {
+    gap: 16px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand__name {
     display: none;
+  }
+
+  .wordmark {
+    font-size: 25px;
+  }
+
+  /* On a phone the panel spans the header, so it never runs off the screen. */
+  .menu {
+    position: static;
+  }
+
+  .menu__panel {
+    left: var(--gutter);
+    right: var(--gutter);
+    top: calc(100% - 12px);
+    width: auto;
   }
 
   .code {
@@ -1232,13 +1309,5 @@ h2.display {
 
   .looks {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .foot__inner {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .foot__credits {
-    text-align: left;
   }
 }
