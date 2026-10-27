@@ -1251,7 +1251,11 @@ h2.display {
 
 @media (max-width: 720px) {
   .top__nav {
-    gap: 16px;
+    gap: 14px;
+  }
+
+  .top__link {
+    font-size: 14px;
   }
 
   .brand {
@@ -1309,5 +1313,26 @@ h2.display {
 
   .looks {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── Narrow phones: four menus and the wordmark only fit without 9Tensor's mark ── */
+
+@media (max-width: 420px) {
+  .brand__home,
+  .brand__slash {
+    display: none;
+  }
+
+  .top__nav {
+    gap: 12px;
+  }
+
+  .top__link {
+    font-size: 13.5px;
+  }
+
+  .wordmark {
+    font-size: 23px;
   }
 }
