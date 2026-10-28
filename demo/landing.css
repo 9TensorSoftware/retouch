@@ -44,7 +44,7 @@
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  --max: 1440px;
+  --max: 1280px;
   --gutter: clamp(16px, 4vw, 40px);
 }
 
