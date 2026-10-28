@@ -27,8 +27,9 @@ export const ICON_TOOL_CROP = icon(
 export const ICON_TOOL_TRANSFORM = icon(
   '<path d="M3 9V5a2 2 0 012-2h4M21 15v4a2 2 0 01-2 2h-4M3 15v4a2 2 0 002 2h4M21 9V5a2 2 0 00-2-2h-4"/><path d="M9 15l6-6"/>',
 );
+/** A grid bulging from its center: the warp Liquify makes. */
 export const ICON_TOOL_LIQUIFY = icon(
-  '<circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L21 21M3 21c3-1 4.5-3 5-6"/>',
+  '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9c4 0 6-2 9-2s5 2 9 2M3 15c4 0 6 2 9 2s5-2 9-2M9 3c0 4-2 6-2 9s2 5 2 9M15 3c0 4 2 6 2 9s-2 5-2 9"/>',
 );
 export const ICON_TOOL_CURVES = icon(
   '<path d="M3 21C10 21 14 3 21 3"/><circle cx="8.2" cy="14.8" r="1.6" fill="currentColor" stroke="none"/><circle cx="15.8" cy="6.4" r="1.6" fill="currentColor" stroke="none"/>',
@@ -72,8 +73,13 @@ export const ICON_POSTER = icon(
 
 // ── Transform operations ─────────────────────────────────────────────────
 
-export const ICON_ROTATE_CCW = icon('<path d="M4 10a8 8 0 108-8"/><path d="M4 3v7h7"/>');
-export const ICON_ROTATE_CW = icon('<path d="M20 10a8 8 0 10-8-8"/><path d="M20 3v7h-7"/>');
+/** A frame with a quarter-turn arrow over it, one per direction. */
+export const ICON_ROTATE_CCW = icon(
+  '<rect x="9" y="10" width="11" height="11" rx="1.5"/><path d="M4 13V9a5 5 0 015-5h3M2 11l2 2 2-2"/>',
+);
+export const ICON_ROTATE_CW = icon(
+  '<rect x="4" y="10" width="11" height="11" rx="1.5"/><path d="M20 13V9a5 5 0 00-5-5h-3M18 11l2 2 2-2"/>',
+);
 export const ICON_FLIP_H = icon('<path d="M12 2v20M8 7H4v10h4zM16 7h4v10h-4z"/>');
 export const ICON_FLIP_V = icon('<path d="M2 12h20M7 8V4h10v4zM7 16v4h10v-4z"/>');
 export const ICON_EYEDROPPER = icon(

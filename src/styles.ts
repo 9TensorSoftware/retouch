@@ -2482,6 +2482,10 @@ const CSS = /* css */ `
 .rt-crop__handle--w { top: 50%; left: var(--rt-handle-offset); transform: translateY(-50%); cursor: w-resize; }
 .rt-crop__handle--e { top: 50%; right: var(--rt-handle-offset); transform: translateY(-50%); cursor: e-resize; }
 
+/* While a crop drag is on, its cursor holds wherever the pointer goes. */
+.rt-drag-cursor,
+.rt-drag-cursor * { cursor: var(--rt-drag-cursor) !important; }
+
 /* A fixed shape resizes from its corners: side handles would suggest a one-way move. */
 .rt-crop--locked .rt-crop__handle--n,
 .rt-crop--locked .rt-crop__handle--s,

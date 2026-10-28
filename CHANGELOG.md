@@ -12,6 +12,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   **Apply** (or Enter) crops, and **Cancel** (or Esc) puts the frame back. Leaving Crop for
   another tool, or pressing Done, with a frame that wasn't applied asks first: Apply or Discard,
   or Esc to keep cropping. Before, switching tools or pressing Done applied it without asking.
+- Liquify and the rotate buttons have new icons: a bulging grid, and a frame with a quarter-turn
+  arrow. The old Liquify icon looked like search.
+
+### Fixed
+
+- Pinch and ⌘/Ctrl + wheel zoom no longer stall on edited photos. Zoomed in, the canvas is drawn
+  with no more device pixels than the preview has (on a 2× screen it was drawn at four times
+  that), and it's redrawn only when it needs another size, ahead of the zoom.
+- Dragging the crop frame keeps the cursor it started with until the drag ends. With a fixed
+  shape, the pointer soon left the corner handle and showed the frame's move cursor.
+- The rotate-right icon was drawn mostly outside its box.
 
 ## [0.2.0] — 2026-10-18
 
