@@ -23,6 +23,8 @@ import type { CurveLuts } from "../../utils/curves";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../../utils/curves";
 import { applyDetailToContext, detailIsNeutral } from "../../utils/detail";
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
+import type { PostPasses } from "../../utils/gpu-passes";
+import { GpuPasses, postPassesAreNeutral } from "../../utils/gpu-passes";
 import type { HueTable } from "../../utils/hsl";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "../../utils/hsl";
 import { applyLensToCanvas, hasLens } from "../../utils/lens";
@@ -109,6 +111,8 @@ export class CanvasRenderer {
   private drawScale = 1;
   /** CSS magnification the stage adds on top of the drawn canvas. */
   private screenScale = 1;
+  /** Post passes on the GPU: undefined until first needed, null when unavailable. */
+  private gpu: GpuPasses | null | undefined = undefined;
   private renderListener: (() => void) | null = null;
   private paintListener: (() => void) | null = null;
   /** Straighten's fill zoom from the last render (the "before" side matches it). */
@@ -184,32 +188,14 @@ export class CanvasRenderer {
 
     this.fabricCanvas.add(this.fabricImage);
 
-    // Curves and vignette are 2D passes over the composed frame, not fabric
-    // filters (curves need an arbitrary per-channel LUT).
+    // Detail, masks, HSL, curves, stylize and vignette are passes over the
+    // composed frame, not fabric filters (curves need an arbitrary
+    // per-channel LUT, clarity a wide blur). The GPU runs them when it can;
+    // the CPU versions are the fallback, and what export uses.
     this.fabricCanvas.on("after:render", ({ ctx: renderCtx }) => {
       if (!renderCtx) return;
       const el = this.fabricCanvas.getElement();
-      if (!detailIsNeutral(this.adjustments.clarity, this.adjustments.dehaze)) {
-        applyDetailToContext(
-          renderCtx,
-          el.width,
-          el.height,
-          this.adjustments.clarity,
-          this.adjustments.dehaze,
-        );
-      }
-      if (this.preparedMasks.length > 0) {
-        applyMasksToContext(renderCtx, el.width, el.height, this.preparedMasks);
-      }
-      if (this.hueTable) {
-        applyHslToContext(renderCtx, el.width, el.height, this.hueTable);
-      }
-      if (this.curveLuts) {
-        applyCurvesToContext(renderCtx, el.width, el.height, this.curveLuts);
-      }
-      if (!stylizeIsNeutral(this.stylize)) {
-        applyStylizeToContext(renderCtx, el.width, el.height, this.stylize);
-      }
+      if (!this.runGpuPasses(renderCtx, el)) this.runCpuPasses(renderCtx, el);
       if (this.adjustments.vignette > 0) {
         drawVignette(renderCtx, el.width, el.height, this.adjustments.vignette);
       }
@@ -565,6 +551,7 @@ export class CanvasRenderer {
   destroy(): void {
     this.stopLoop();
     this.abort.abort();
+    this.gpu?.dispose();
     this.fabricCanvas.dispose();
   }
 
@@ -764,6 +751,46 @@ export class CanvasRenderer {
 
   private stopLoop(): void {
     this.looping = false;
+  }
+
+  /** The post passes as they stand. */
+  private postPasses(): PostPasses {
+    return {
+      clarity: this.adjustments.clarity,
+      dehaze: this.adjustments.dehaze,
+      masks: this.preparedMasks,
+      hueTable: this.hueTable,
+      curveLuts: this.curveLuts,
+      stylize: this.stylize,
+    };
+  }
+
+  /**
+   * The post passes on the GPU; true when they ran, or there are none. The
+   * GPU runner is made on first need, and given up on if it ever fails.
+   */
+  private runGpuPasses(ctx: CanvasRenderingContext2D, el: HTMLCanvasElement): boolean {
+    const passes = this.postPasses();
+    if (postPassesAreNeutral(passes)) return true;
+    if (this.gpu === undefined) this.gpu = GpuPasses.create();
+    if (this.gpu?.apply(ctx, el, passes)) return true;
+    this.gpu?.dispose();
+    this.gpu = null;
+    return false;
+  }
+
+  /** The same passes on the CPU, as export runs them. */
+  private runCpuPasses(ctx: CanvasRenderingContext2D, el: HTMLCanvasElement): void {
+    const { width, height } = el;
+    if (!detailIsNeutral(this.adjustments.clarity, this.adjustments.dehaze)) {
+      applyDetailToContext(ctx, width, height, this.adjustments.clarity, this.adjustments.dehaze);
+    }
+    if (this.preparedMasks.length > 0) {
+      applyMasksToContext(ctx, width, height, this.preparedMasks);
+    }
+    if (this.hueTable) applyHslToContext(ctx, width, height, this.hueTable);
+    if (this.curveLuts) applyCurvesToContext(ctx, width, height, this.curveLuts);
+    if (!stylizeIsNeutral(this.stylize)) applyStylizeToContext(ctx, width, height, this.stylize);
   }
 
   private applyFilters(): void {

@@ -15,6 +15,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - Liquify and the rotate buttons have new icons: a bulging grid, and a frame with a quarter-turn
   arrow. The old Liquify icon looked like search.
 
+- The preview runs clarity, dehaze, masks, the color mixer, curves and stylize on the GPU
+  (WebGL2): 4–30 ms a frame where the CPU took 40 ms to 2.5 s, so zooming, sliders and video
+  playback no longer stall on edited photos. Results match the CPU passes within a level or two;
+  export still runs the CPU passes, and so does the preview where WebGL2 is missing or fails.
+
 ### Fixed
 
 - Pinch and ⌘/Ctrl + wheel zoom no longer stall on edited photos. Zoomed in, the canvas is drawn

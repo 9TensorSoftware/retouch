@@ -13,7 +13,7 @@ export function stylizeIsNeutral(effect: StylizeEffect): boolean {
   return effect.kind === "none";
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+export function hexToRgb(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return [0, 0, 0];
   const v = Number.parseInt(m[1], 16);
