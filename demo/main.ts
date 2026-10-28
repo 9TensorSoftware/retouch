@@ -85,6 +85,8 @@ Retouch.registerTool({
 const editor = new Retouch({
   target: "#editor",
   theme: "dark",
+  // The rail opens as a list: group titles and tool names beside the icons.
+  rail: { expanded: true },
   // Visitors can paste their own Anthropic key to try the AI command bar.
   ai: { allowUserKey: true },
   onDone: saveAll,
