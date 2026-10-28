@@ -42,6 +42,11 @@ export interface ImageRect {
 
 export type RenderSource = HTMLImageElement | HTMLVideoElement;
 
+/** Zoomed in, a redraw draws this far ahead of the zoom it's for. */
+const ZOOM_AHEAD = 1.5;
+/** A drawn canvas stays until it's this much bigger than shown (or not sharp enough). */
+const ZOOM_KEEP = 2;
+
 type VideoWithRVFC = HTMLVideoElement & {
   requestVideoFrameCallback?: (cb: () => void) => number;
 };
@@ -367,9 +372,15 @@ export class CanvasRenderer {
     return { ...this.imageRect };
   }
 
-  /** Zoom relative to fitting the stage (1 = fit). The next render() applies it. */
-  setViewZoom(zoom: number): void {
+  /**
+   * Zoom relative to fitting the stage (1 = fit). The next render() applies
+   * it; false when that render would draw the canvas at the size it has.
+   */
+  setViewZoom(zoom: number): boolean {
     this.viewZoom = Math.max(1, zoom);
+    const { width: sourceW, height: sourceH } = this.visibleSize();
+    if (sourceW === 0 || sourceH === 0) return false;
+    return this.drawScaleFor(this.stageFit(sourceW, sourceH), sourceW) !== this.drawScale;
   }
 
   /** From the last render: the stage-fit scale and the scale the canvas is actually drawn at. */
@@ -390,7 +401,27 @@ export class CanvasRenderer {
     return this.fabricCanvas.getElement();
   }
 
-  render(): void {
+  /**
+   * The scale render() draws at. At fit, the fit. Zoomed in, enough for the
+   * zoom, but no more device pixels than the frame has: past that there's no
+   * more detail to show, so the stage magnifies with CSS instead (which also
+   * keeps the per-pixel passes, and canvases, a bounded size). A canvas that
+   * is still sharp enough, and not much bigger than shown, stays; a new one
+   * is drawn ahead of the zoom, so zooming on doesn't redraw at every pause.
+   */
+  private drawScaleFor(stageFit: number, sourceW: number): number {
+    if (this.viewZoom === 1) return stageFit;
+    const detail = this.frameCanvas.width / sourceW / this.fabricCanvas.getRetinaScaling();
+    const cap = Math.max(stageFit, detail);
+    const needed = Math.min(cap, stageFit * this.viewZoom);
+    if (this.drawScale >= needed && this.drawScale <= Math.min(cap, needed * ZOOM_KEEP)) {
+      return this.drawScale;
+    }
+    return Math.min(cap, needed * ZOOM_AHEAD);
+  }
+
+  /** Fit the oriented source within the available area, with a small margin. */
+  private stageFit(sourceW: number, sourceH: number): number {
     // Measure the available area from the parent, not `this.container`: the
     // container is sized by its content (the canvas), so measuring it here would
     // feed each render's canvas size back into the next render's fit scale,
@@ -398,17 +429,15 @@ export class CanvasRenderer {
     const area = this.container.parentElement;
     const availWidth = (area?.clientWidth ?? this.container.clientWidth) || 800;
     const availHeight = (area?.clientHeight ?? this.container.clientHeight) || 600;
+    return Math.min((availWidth * 0.9) / sourceW, (availHeight * 0.9) / sourceH, 1);
+  }
 
+  render(): void {
     const { width: sourceW, height: sourceH } = this.visibleSize();
     if (sourceW === 0 || sourceH === 0) return;
 
-    // Fit the oriented source within the available area, with a small margin.
-    const stageFit = Math.min((availWidth * 0.9) / sourceW, (availHeight * 0.9) / sourceH, 1);
-    // Zoom draws a larger canvas, but only up to the frame's own resolution:
-    // past that there's no more detail to show, so the stage magnifies with
-    // CSS instead (which also keeps canvases inside browser size limits).
-    const detail = this.frameCanvas.width / sourceW;
-    const scale = Math.min(stageFit * this.viewZoom, Math.max(stageFit, detail));
+    const stageFit = this.stageFit(sourceW, sourceH);
+    const scale = this.drawScaleFor(stageFit, sourceW);
     this.fitScale = stageFit;
     this.drawScale = scale;
 

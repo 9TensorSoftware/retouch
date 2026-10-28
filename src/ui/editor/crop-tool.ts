@@ -138,12 +138,26 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     lock: AxisLock | null;
   } | null = null;
 
+  // The cursor a drag starts with stays until it ends: the pointer soon
+  // leaves a 12px handle, and what it passes over has cursors of its own.
+  const html = document.documentElement;
+  function holdCursor(from: Element): void {
+    html.style.setProperty("--rt-drag-cursor", getComputedStyle(from).cursor);
+    html.classList.add("rt-drag-cursor");
+  }
+  function releaseCursor(): void {
+    html.classList.remove("rt-drag-cursor");
+    html.style.removeProperty("--rt-drag-cursor");
+  }
+  signal.addEventListener("abort", releaseCursor);
+
   selection.addEventListener(
     "pointerdown",
     (e) => {
       if ((e.target as HTMLElement).dataset.handle) return;
       e.preventDefault();
       updateLayout(); // re-anchor in case the canvas moved since the last layout
+      holdCursor(selection);
       dragging = {
         id: e.pointerId,
         type: "move",
@@ -163,6 +177,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
         e.preventDefault();
         e.stopPropagation();
         updateLayout();
+        holdCursor(handle);
         dragging = {
           id: e.pointerId,
           type: pos as HandlePosition,
@@ -208,7 +223,9 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
   );
 
   const endDrag = (e: PointerEvent): void => {
-    if (dragging && e.pointerId === dragging.id) dragging = null;
+    if (!dragging || e.pointerId !== dragging.id) return;
+    dragging = null;
+    releaseCursor();
   };
   document.addEventListener("pointerup", endDrag, { signal });
   document.addEventListener("pointercancel", endDrag, { signal });

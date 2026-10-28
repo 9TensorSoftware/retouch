@@ -54,14 +54,22 @@ describe("clampPan", () => {
 });
 
 /**
- * Renderer stand-in with the real draw-scale rule: the canvas is drawn at
- * fit × zoom, capped at the preview's own resolution (`detail`).
+ * Renderer stand-in with the real draw-scale rule: at fit, the fit; zoomed,
+ * fit × zoom capped at the preview's own resolution (`detail`), drawn 1.5×
+ * ahead and kept while sharp enough and at most 2× what is shown.
  */
 function fakeRenderer(fit = 0.5, detail = 1) {
   let zoom = 1;
   let draw = fit;
   let screen = 1;
   let listener: (() => void) | null = null;
+  const next = () => {
+    if (zoom === 1) return fit;
+    const cap = Math.max(fit, detail);
+    const needed = Math.min(cap, fit * zoom);
+    if (draw >= needed && draw <= Math.min(cap, needed * 2)) return draw;
+    return Math.min(cap, needed * 1.5);
+  };
   const renderer = {
     getViewScales: () => ({ fit, draw }),
     getImageRect: () => ({ left: 0, top: 0, width: 1600 * draw, height: 900 * draw }),
@@ -71,9 +79,10 @@ function fakeRenderer(fit = 0.5, detail = 1) {
     getScreenScale: () => screen,
     setViewZoom: vi.fn((z: number) => {
       zoom = z;
+      return next() !== draw;
     }),
     render: vi.fn(() => {
-      draw = Math.min(fit * zoom, Math.max(fit, detail));
+      draw = next();
       listener?.();
     }),
     onRender: (l: (() => void) | null) => {
@@ -139,6 +148,24 @@ describe("stage view", () => {
     // Drawn at the new size: no CSS scale left.
     expect(target.style.transform).toBe("");
     expect(renderer.getScreenScale()).toBe(1);
+    cleanup();
+  });
+
+  it("draws ahead of the zoom, and redraws only when the canvas needs another size", () => {
+    const { target, renderer, view, cleanup } = setup(0.25, 2);
+    view.zoomBy(2); // needs 0.5: drawn at 0.75, shown at two thirds
+    vi.advanceTimersByTime(160);
+    expect(renderer.render).toHaveBeenCalledTimes(1);
+    expect(target.style.transform).toBe(`translate(0px, 0px) scale(${0.5 / 0.75})`);
+
+    view.zoomBy(1.4); // needs 0.7: the canvas is still sharp enough
+    vi.advanceTimersByTime(160);
+    expect(renderer.render).toHaveBeenCalledTimes(1);
+
+    view.zoomBy(0.5); // needs 0.35: the canvas is over twice that, so it shrinks
+    vi.advanceTimersByTime(160);
+    expect(renderer.render).toHaveBeenCalledTimes(2);
+    expect(renderer.getViewScales().draw).toBeCloseTo(0.525);
     cleanup();
   });
 

@@ -184,13 +184,15 @@ export function createStageView(options: StageViewOptions): StageView {
     options.onChange();
   }
 
-  /** Redraw sharp once input pauses (the render itself re-applies via onRender). */
+  /**
+   * Redraw sharp once input pauses, when the canvas needs another size (the
+   * render itself re-applies via onRender).
+   */
   function settle(): void {
     clearTimeout(settleTimer);
     settleTimer = window.setTimeout(() => {
       if (signal.aborted) return;
-      renderer.setViewZoom(zoom);
-      renderer.render();
+      if (renderer.setViewZoom(zoom)) renderer.render();
     }, SETTLE_MS);
   }
 
