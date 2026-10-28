@@ -302,6 +302,23 @@ button {
   color: inherit;
 }
 
+/* A menu in groups: a small title over each, a rule between them. */
+.menu__label {
+  margin: 0;
+  padding: 10px 12px 4px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menu__item + .menu__label {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
 /* ── Type ── */
 
 .eyebrow {
@@ -1318,7 +1335,7 @@ h2.display {
 
 /* ── Narrow phones: four menus and the wordmark only fit without 9Tensor's mark ── */
 
-@media (max-width: 420px) {
+@media (max-width: 359px) {
   .brand__home,
   .brand__slash {
     display: none;
