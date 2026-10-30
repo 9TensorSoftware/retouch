@@ -46,6 +46,8 @@ export type {
   UiChoice,
   UiChoiceOptions,
   UiNote,
+  UiOutput,
+  UiOutputOptions,
   UiSlider,
   UiSliderOptions,
   UiStep,

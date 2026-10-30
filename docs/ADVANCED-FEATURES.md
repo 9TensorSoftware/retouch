@@ -23,6 +23,7 @@ download; bumping a pin is a deliberate, reviewed change.
 | SlimSAM-77 (Xenova ONNX) | Apache-2.0 | ✅ click-to-select (shipped default — 38 MB across encoder+decoder) |
 | DDColor | Apache-2.0 | ⚠️ upstream fine; the only licensed ONNX export is 912 MB fp32, right-sized mirrors carry no license — colorize parked |
 | SCUNet (real-PSNR) | Apache-2.0 | ✅ denoise (shipped default — 3.8 MB graph stub + 73 MB `.onnx.data` sidecar, LICENSE.txt at source) |
+| PP-OCRv4 det + PP-OCRv5 Latin rec (PaddleOCR) | Apache-2.0 | ✅ read text (shipped default — 4.7 MB detector from SWHL/RapidOCR + 7.9 MB recognizer and dictionary from monkt/paddleocr-onnx, both repos Apache-2.0) |
 | GFPGAN | Apache-2.0 | ✅ face restoration |
 | CodeFormer | S-Lab 1.0 | ❌ non-commercial |
 | BRIA RMBG-1.4 / 2.0 | CC non-commercial | ❌ needs paid BRIA agreement |

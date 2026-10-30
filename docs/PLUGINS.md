@@ -161,6 +161,12 @@ const looks = ctx.ui.tiles({
 
 A line of status or hint text. `set(text)` updates it, and screen readers announce the change.
 
+### `output({ label, text })`
+
+A block of read-only text your tool produced, such as the text Read text finds in a photo:
+selectable, scrolling past a few lines, its line breaks kept, hidden while it's empty. `label`
+names it for screen readers; `set(text)` replaces the text.
+
 ### `card(options)` and `steps(options)`
 
 For tools that download or run something; see the next section.

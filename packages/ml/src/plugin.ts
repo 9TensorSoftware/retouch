@@ -41,6 +41,7 @@ import {
   DETECT_ICON,
   ERASE_ICON,
   SELECT_ICON,
+  TEXT_ICON,
   UPSCALE_ICON,
 } from "./icons";
 import {
@@ -51,6 +52,15 @@ import {
   inpaintStrokes,
 } from "./inpaint";
 import { type FetchProgress, isModelCached } from "./model-cache";
+import {
+  DEFAULT_TEXT_DETECTOR_URL,
+  DEFAULT_TEXT_DICTIONARY_URL,
+  DEFAULT_TEXT_RECOGNIZER_URL,
+  linesToText,
+  type OcrOptions,
+  recognizeText,
+  type TextLine,
+} from "./ocr";
 import {
   DEFAULT_SAM_DECODER_URL,
   DEFAULT_SAM_ENCODER_URL,
@@ -71,6 +81,8 @@ export interface MlToolsOptions {
   select?: SamOptions | false;
   depth?: DepthOptions | false;
   denoise?: DenoiseOptions | false;
+  /** Read text: find the lines in a photo, then copy or pixelate them. */
+  text?: OcrOptions | false;
   /**
    * Open gallery results (cutout, upscale) in the editor when they finish,
    * so the outcome is visible immediately. Defaults to true.
@@ -228,9 +240,18 @@ function geometryIsNeutral(edits: ImageEdits): boolean {
 const NEEDS_FRAME =
   "This works on the uncropped, unturned photo. Reset Crop, Transform and Liquify first.";
 
-/** Non-interactive overlay that outlines detected boxes over the preview. */
-function createBoxOverlay(canvasArea: HTMLElement): {
-  draw(boxes: Detection[]): void;
+/** A box to outline: a detection, or a text line with its rotated corners. */
+type OverlayBox = Detection & { quad?: TextLine["quad"] };
+
+/**
+ * Non-interactive overlay that outlines boxes over the preview. Boxes with
+ * a `quad` are drawn rotated; `labels: false` leaves out the label chips.
+ */
+function createBoxOverlay(
+  canvasArea: HTMLElement,
+  { labels = true }: { labels?: boolean } = {},
+): {
+  draw(boxes: OverlayBox[]): void;
   setVisible(visible: boolean): void;
   destroy(): void;
 } {
@@ -240,7 +261,7 @@ function createBoxOverlay(canvasArea: HTMLElement): {
   overlay.style.cssText =
     "position:absolute;left:0;top:0;width:100%;height:100%;z-index:3;pointer-events:none;display:none;";
   container?.appendChild(overlay);
-  let boxes: Detection[] = [];
+  let boxes: OverlayBox[] = [];
 
   function redraw(): void {
     const w = Math.max(1, Math.round(overlay.clientWidth));
@@ -256,7 +277,17 @@ function createBoxOverlay(canvasArea: HTMLElement): {
     ctx.lineWidth = 2;
     ctx.font = "600 11px system-ui, sans-serif";
     for (const b of boxes) {
-      ctx.strokeRect(b.x * w, b.y * h, b.w * w, b.h * h);
+      if (b.quad) {
+        ctx.beginPath();
+        for (const [x, y] of b.quad) ctx.lineTo(x * w, y * h);
+        ctx.closePath();
+        ctx.fillStyle = rgba(KEEP_RGB, 0.14);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(b.x * w, b.y * h, b.w * w, b.h * h);
+      }
+      if (!labels) continue;
       const tag = b.label
         ? `${b.label} ${Math.round(b.score * 100)}%`
         : `${Math.round(b.score * 100)}%`;
@@ -1267,6 +1298,140 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         card.body.append(ctx.ui.row(findFaces.root, findObjects.root), actions, note.root);
+        syncState();
+        return {
+          root: card.root,
+          onActivate() {
+            overlay.setVisible(true);
+          },
+          onDeactivate() {
+            overlay.setVisible(false);
+          },
+          sync: syncState,
+          destroy() {
+            overlay.destroy();
+          },
+        };
+      },
+    });
+  }
+
+  // ── Read text ──
+
+  if (options.text !== false) {
+    const textOptions = options.text ?? {};
+    const model = spec("PP-OCRv4 + PP-OCRv5 Latin", 13, [
+      [textOptions.detectorUrl, DEFAULT_TEXT_DETECTOR_URL],
+      [textOptions.recognizerUrl, DEFAULT_TEXT_RECOGNIZER_URL],
+      [textOptions.dictionaryUrl, DEFAULT_TEXT_DICTIONARY_URL],
+    ]);
+    ctor.registerTool({
+      id: "text",
+      label: "Read text",
+      icon: TEXT_ICON,
+      group: "ai",
+      description: "Find the text in a photo and copy it",
+      badge: "13 MB",
+      kinds: ["image"],
+      mount(ctx: ToolContext) {
+        const note = ctx.ui.note("");
+        const overlay = createBoxOverlay(ctx.canvasArea, { labels: false });
+        const output = ctx.ui.output({ label: "Text in the photo" });
+        let found: TextLine[] = [];
+        let busy = false;
+
+        const run = ctx.ui.button({
+          label: actionLabel("Read the text", model, false),
+          variant: "ai",
+          onClick: () => void read(),
+        });
+        const copy = ctx.ui.button({ label: "Copy text", onClick: () => void copyText() });
+        const pixelate = ctx.ui.button({ label: "Pixelate it", onClick: () => void hideText() });
+        const actions = ctx.ui.row(copy.root, pixelate.root);
+        const { card, refresh } = modelCard(
+          ctx,
+          model,
+          "Finds every line of text in the photo and reads it, in 32 Latin-script languages. Copy what it read, or pixelate it to hide it.",
+          (isCached) => run.setLabel(actionLabel("Read the text", model, isCached)),
+        );
+
+        function syncState(): void {
+          const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
+          run.setDisabled(busy);
+          actions.hidden = found.length === 0;
+          copy.setDisabled(busy);
+          pixelate.setDisabled(busy || !neutral);
+        }
+
+        async function read(): Promise<void> {
+          if (busy || activeRuns.has("text") || ctx.entry.kind !== "image") return;
+          busy = true;
+          activeRuns.add("text");
+          syncState();
+          note.set("Reading…");
+          try {
+            found = await recognizeText(ctx.entry.image, {
+              ...textOptions,
+              onDownloadProgress: (p) => {
+                if (p.total > 0 && p.loaded < p.total) {
+                  note.set(`Downloading the models… ${formatMb(p.loaded)} of ${formatMb(p.total)}`);
+                } else note.set("Reading…");
+                textOptions.onDownloadProgress?.(p);
+              },
+            });
+            overlay.draw(found);
+            output.set(linesToText(found));
+            if (found.length === 0) note.set("No text found.");
+            else {
+              note.set(`${found.length} line${found.length > 1 ? "s" : ""} found.`);
+              if (!geometryIsNeutral(ctx.edits as ImageEdits)) note.set(NEEDS_FRAME);
+            }
+          } catch (error) {
+            note.set(errorText(error, "Reading failed"));
+            console.error(error);
+          } finally {
+            busy = false;
+            activeRuns.delete("text");
+            syncState();
+            void refresh();
+          }
+        }
+
+        async function copyText(): Promise<void> {
+          try {
+            await navigator.clipboard.writeText(linesToText(found));
+            note.set("Copied.");
+          } catch {
+            note.set("Couldn't reach the clipboard. Select the text and copy it instead.");
+          }
+        }
+
+        async function hideText(): Promise<void> {
+          if (busy || activeRuns.has("text") || ctx.entry.kind !== "image") return;
+          busy = true;
+          activeRuns.add("text");
+          syncState();
+          note.set("Pixelating…");
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = ctx.entry.image.naturalWidth;
+            canvas.height = ctx.entry.image.naturalHeight;
+            const cctx = canvas.getContext("2d");
+            if (!cctx) throw new Error("[Retouch ML] Failed to create canvas context");
+            cctx.drawImage(ctx.entry.image, 0, 0);
+            for (const line of found) pixelateRegion(canvas, line);
+            await replacePhoto(ctx, canvas);
+          } catch (error) {
+            note.set(errorText(error, "Pixelate failed"));
+            console.error(error);
+          } finally {
+            busy = false;
+            activeRuns.delete("text");
+            syncState();
+          }
+        }
+
+        card.body.append(run.root, output.root, actions, note.root);
         syncState();
         return {
           root: card.root,

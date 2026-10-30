@@ -139,7 +139,52 @@
               <p class="eyebrow eyebrow--prism">AI, on your device</p>
               <h2 class="display" id="ai-title">AI that never sees a&nbsp;server.</h2>
             </div>
-            <p class="section-head__text" data-reveal>Each model downloads once, then runs on your device. The results below came from Rétouch.</p>
+            <p class="section-head__text" data-reveal>Each model downloads once, then runs on your device. Everything below came from Rétouch's own models, and the first two will run again right here if you ask.</p>
+          </div>
+
+          <div class="labs">
+            <article class="lab" id="detect-lab" data-reveal>
+              <div class="lab__stage">
+                <img src="/photos/london.jpg" width="1600" height="1067" loading="lazy" alt="A black-and-white London junction: a double-decker bus on King's Road, black cabs and a cyclist" />
+                <svg class="lab__marks" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"></svg>
+                <div class="lab__tags" aria-hidden="true"></div>
+              </div>
+              <div class="lab__panel">
+                <div class="lab__head">
+                  <h3>Detect</h3>
+                  <p class="model">YOLOX-nano · 3.5 MB</p>
+                </div>
+                <p class="lab__lede">Finds 80 kinds of things, from buses to teacups, and boxes each one. Then mask them, pixelate them or crop to them.</p>
+                <ol class="lab__list" aria-label="What it found"></ol>
+                <div class="lab__actions">
+                  <button class="lab__run" type="button" data-run="detect"><span data-icon="sparkle" aria-hidden="true"></span><span>Run it on this device</span></button>
+                  <button class="link" type="button" data-edit="london">Open in the editor</button>
+                </div>
+                <p class="lab__status" aria-live="polite"></p>
+              </div>
+            </article>
+
+            <article class="lab lab--flip" id="text-lab" data-reveal>
+              <div class="lab__stage">
+                <img src="/photos/signpost.jpg" width="1600" height="1065" loading="lazy" alt="A striped post in the Ecuadorian highlands, its painted arrows naming volcanoes and their heights" />
+                <svg class="lab__marks" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"></svg>
+                <div class="lab__tags" aria-hidden="true"></div>
+              </div>
+              <div class="lab__panel">
+                <div class="lab__head">
+                  <h3>Read text</h3>
+                  <p class="model">PP-OCR · 13 MB</p>
+                </div>
+                <p class="lab__lede">Finds every line of text, at any angle, and reads it in 32 Latin-script languages, accents and all. Copy it, or pixelate it away.</p>
+                <ol class="lab__list lab__list--text" aria-label="What it read"></ol>
+                <div class="lab__actions">
+                  <button class="lab__run" type="button" data-run="text"><span data-icon="sparkle" aria-hidden="true"></span><span>Run it on this device</span></button>
+                  <button class="lab__copy" type="button" data-copy-text>Copy text</button>
+                  <button class="link" type="button" data-edit="signpost">Open in the editor</button>
+                </div>
+                <p class="lab__status" aria-live="polite"></p>
+              </div>
+            </article>
           </div>
 
           <div class="ai-grid">
@@ -231,7 +276,7 @@
             </article>
           </div>
 
-          <p class="darkroom__more" data-reveal>Also: depth blur, denoise, and face and object detection. <button class="link" type="button" data-edit="corgi">Try them on the corgi</button></p>
+          <p class="darkroom__more" data-reveal>Also: depth blur, denoise and face detection. <button class="link" type="button" data-edit="corgi">Try them on the corgi</button></p>
         </div>
       </section>
 

@@ -184,7 +184,8 @@ transport. Everything is non-destructive until export:
 
 On-device background removal, 4× super-resolution, an object-erase heal
 brush, face and object detection (labeled COCO boxes, masks, privacy
-pixelate, crop-to-subject), **click-to-select** — click any object to
+pixelate, crop-to-subject), **read text** (OCR in 32 Latin-script languages:
+copy it, or pixelate it away), **click-to-select** — click any object to
 segment it, then cut it out or magic-erase it in place — **depth
 bokeh** — click to focus and blur by real estimated depth — and one-click
 **denoise** for grainy photos. No server, no keys. Models run through ONNX Runtime
@@ -202,7 +203,7 @@ photo), and the result wipes in over the photo before it lands:
 ```ts
 import { installMlTools } from "@9tensor/retouch-ml";
 
-installMlTools(retouch); // Cutout, Upscale, Erase, Select, Detect, Depth, Denoise
+installMlTools(retouch); // Cutout, Upscale, Erase, Select, Detect, Read text, Depth, Denoise
 ```
 
 <p align="center">

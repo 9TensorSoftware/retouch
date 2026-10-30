@@ -93,6 +93,19 @@ export interface UiNote {
   set(text: string): void;
 }
 
+/** Options for `ctx.ui.output()`. */
+export interface UiOutputOptions {
+  /** Names the block for assistive tech. */
+  label: string;
+  text?: string;
+}
+
+export interface UiOutput {
+  root: HTMLElement;
+  /** Replace the text; empty hides the block. */
+  set(text: string): void;
+}
+
 /** Options for `ctx.ui.card()`. */
 export interface UiCardOptions {
   /** What the tool does, and where its result goes. */
@@ -186,6 +199,11 @@ export interface ToolUi {
   choice<T extends string>(options: UiChoiceOptions<T>): UiChoice<T>;
   /** A line of status or hint text; updates are announced to screen readers. */
   note(text: string): UiNote;
+  /**
+   * A block of read-only text a tool produced (text read from a photo, say),
+   * selectable and scrollable, its lines kept.
+   */
+  output(options: UiOutputOptions): UiOutput;
   /** Preview tiles to choose between, like the built-in Filters. */
   tiles<T extends string>(options: UiTilesOptions<T>): UiTiles<T>;
   /**
@@ -302,6 +320,27 @@ export function createToolUi(signal?: AbortSignal): ToolUi {
         "span",
         { class: "rt-dock__slider-label rt-dock__status", "aria-live": "polite" },
         text,
+      );
+      return {
+        root,
+        set: (next) => {
+          root.textContent = next;
+        },
+      };
+    },
+    output(options) {
+      // Focusable so keyboard users can scroll it and select from it.
+      const root = h(
+        "div",
+        {
+          class: "rt-output",
+          role: "textbox",
+          "aria-readonly": "true",
+          "aria-multiline": "true",
+          "aria-label": options.label,
+          tabindex: "0",
+        },
+        options.text ?? "",
       );
       return {
         root,

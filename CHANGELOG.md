@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ## Unreleased
 
+### Added
+
+- **Read text**, an AI tool in `@9tensor/retouch-ml`: it finds every line of text in a photo,
+  at any angle, and reads it in 32 Latin-script languages, accents included, with PaddleOCR's
+  PP-OCRv4 detector and PP-OCRv5 Latin recognizer (13 MB together, Apache-2.0). The lines are
+  outlined on the photo and listed in reading order, to copy, or to pixelate in place.
+  `recognizeText(image)` returns them without the editor, and `linesToText()` joins them.
+- `ctx.ui.output()`: a read-only block of text a tool produced, selectable and scrollable.
+
 ### Changed
 
 - A crop waits for an explicit OK. Moving the frame, or picking an aspect, only proposes a crop:

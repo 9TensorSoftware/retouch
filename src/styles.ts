@@ -2949,6 +2949,32 @@ const CSS = /* css */ `
   display: none;
 }
 
+/* Text a tool produced: selectable, its lines kept, scrolling past a few. */
+.rt-output {
+  max-height: 168px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--rt-line);
+  color: var(--rt-text-1);
+  font: 500 var(--rt-type-sm) / 1.55 var(--rt-font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+  overscroll-behavior: contain;
+}
+
+.rt-output:empty {
+  display: none;
+}
+
+.rt-output:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--rt-surface-raised), 0 0 0 4px var(--rt-focus);
+}
+
 /* The run button for a model: the prism ring, with a sparkle. */
 .rt-dock__chip.rt-dock__chip--ai,
 .rt-dock__chip.rt-dock__chip--ai:hover {

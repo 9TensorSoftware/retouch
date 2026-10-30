@@ -62,7 +62,7 @@ describe("ML tool panes", () => {
     useCaches(undefined);
   });
 
-  it("registers seven AI tools, each describing its model before any run", () => {
+  it("registers eight AI tools, each describing its model before any run", () => {
     const tools = register();
     expect([...tools.keys()]).toEqual([
       "cutout",
@@ -70,6 +70,7 @@ describe("ML tool panes", () => {
       "select",
       "depth",
       "detect",
+      "text",
       "upscale",
       "denoise",
     ]);
@@ -97,6 +98,20 @@ describe("ML tool panes", () => {
     await flush();
     expect(label()).toBe("Remove the background");
     expect(pane.root.textContent).toContain("Saved on this device");
+  });
+
+  it("Read text names its download and keeps its output hidden until it has read something", async () => {
+    const text = register().get("text") as EditorToolPlugin;
+    useCaches([]);
+    const pane = text.mount(context());
+    await flush();
+    expect(pane.root.querySelector(".rt-dock__chip--ai")?.textContent).toBe(
+      "Read the text · 13 MB",
+    );
+    const output = pane.root.querySelector(".rt-output");
+    expect(output?.getAttribute("aria-label")).toBe("Text in the photo");
+    expect(output?.textContent).toBe("");
+    pane.destroy?.();
   });
 
   it("keeps Erase's 208 MB in plain sight", async () => {
