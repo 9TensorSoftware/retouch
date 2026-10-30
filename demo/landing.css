@@ -877,6 +877,293 @@ h2.display {
   opacity: 0.75;
 }
 
+/* The labs: a photo with what a model found drawn over it, and the same
+   findings listed beside it. */
+.labs {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.lab {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border-radius: 22px;
+  background: #161618;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.lab--flip {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+}
+
+.lab__stage {
+  position: relative;
+  align-self: start;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #222225;
+}
+
+.lab--flip .lab__stage {
+  order: 2;
+}
+
+.lab__stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lab__marks,
+.lab__tags {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lab__tags {
+  pointer-events: none;
+}
+
+.lab__marks polygon {
+  fill: color-mix(in srgb, var(--c) 12%, transparent);
+  stroke: var(--c);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  cursor: pointer;
+  transition:
+    opacity 0.2s,
+    fill 0.2s;
+}
+
+.lab__marks polygon.is-focus {
+  fill: color-mix(in srgb, var(--c) 32%, transparent);
+}
+
+.lab[data-focus] .lab__marks polygon:not(.is-focus),
+.lab[data-focus] .lab__tag:not(.is-focus) {
+  opacity: 0.15;
+}
+
+.lab__tag {
+  position: absolute;
+  margin-top: -1px;
+  padding: 2px 7px;
+  border-radius: 5px 5px 5px 0;
+  background: var(--c);
+  color: #0b0d12;
+  font: 600 11.5px / 1.35 var(--sans);
+  white-space: nowrap;
+  transform: translateY(-100%);
+  transition: opacity 0.2s;
+}
+
+.lab__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px 12px 10px;
+}
+
+.lab__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.lab h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.lab .model {
+  margin: 0;
+}
+
+.lab__lede {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  text-wrap: pretty;
+}
+
+.lab__list {
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  max-height: 292px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.lab__list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 38px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lab__list li:hover,
+.lab__list li.is-focus {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.lab__list li:focus-visible {
+  outline: 2px solid #5cc8ff;
+  outline-offset: -2px;
+}
+
+.lab__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lab__label::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 10px;
+  border-radius: 2px;
+  background: var(--c);
+  vertical-align: 1px;
+}
+
+.lab__list--text .lab__label {
+  font: 500 13.5px / 1.5 var(--mono);
+}
+
+.lab__meter {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lab__meter::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--v) * 100%);
+  border-radius: inherit;
+  background: var(--c);
+}
+
+.lab__score {
+  color: var(--ink-3);
+  font: 500 12px / 1 var(--mono);
+  text-align: right;
+}
+
+.lab__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: auto;
+}
+
+.lab__actions .link {
+  white-space: nowrap;
+}
+
+/* Runs a model on this device: the prism ring, as on the editor's AI buttons. */
+.lab__run,
+.lab__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font: 600 14px / 1 var(--sans);
+  cursor: pointer;
+}
+
+.lab__run {
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(#1f1f23, #1f1f23) padding-box,
+    var(--prism) border-box;
+  color: #ffffff;
+  transition: box-shadow 0.2s;
+}
+
+.lab__run:hover:not(:disabled) {
+  box-shadow:
+    0 0 0 4px rgba(165, 139, 255, 0.12),
+    0 0 24px rgba(92, 200, 255, 0.18);
+}
+
+.lab__run:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.lab__run [data-icon],
+.lab__run svg {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+}
+
+.lab__copy {
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.lab__copy:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.lab__status {
+  min-height: 1.45em;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13.5px;
+  text-wrap: pretty;
+}
+
+/* A live run's findings arrive one by one. */
+@media (prefers-reduced-motion: no-preference) {
+  .lab.is-live .lab__marks polygon,
+  .lab.is-live .lab__tag,
+  .lab.is-live .lab__list li {
+    animation: lab-in 0.5s var(--ease) both;
+    animation-delay: var(--d);
+  }
+}
+
+@keyframes lab-in {
+  from {
+    opacity: 0;
+  }
+}
+
 .ai-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -931,7 +1218,8 @@ h2.display {
 }
 
 /* Model name and download size, edged with the AI prism. */
-.ai-card__body > .model {
+.ai-card__body > .model,
+.lab .model {
   position: relative;
   justify-self: start;
   margin-top: 4px;
@@ -1351,6 +1639,19 @@ h2.display {
     order: 0;
   }
 
+  .lab,
+  .lab--flip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lab--flip .lab__stage {
+    order: 0;
+  }
+
+  .lab__list {
+    max-height: 248px;
+  }
+
   .hero__aside {
     padding-bottom: 0;
   }
@@ -1416,6 +1717,11 @@ h2.display {
 
   .ai-card__title .seg {
     order: 2;
+  }
+
+  .lab__tag {
+    padding: 1px 5px;
+    font-size: 10px;
   }
 
   .looks {

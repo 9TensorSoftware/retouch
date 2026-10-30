@@ -1,7 +1,7 @@
 {
   "name": "@9tensor/retouch-ml",
   "version": "0.2.0",
-  "description": "Rétouch ML tools — on-device cutout, 4× upscale, erase, click-to-select, depth bokeh, denoise and face/object detection via ONNX Runtime Web",
+  "description": "Rétouch ML tools — on-device cutout, 4× upscale, erase, click-to-select, depth bokeh, denoise, face/object detection and OCR via ONNX Runtime Web",
   "author": "9Tensor (https://9tensor.com)",
   "license": "MIT",
   "homepage": "https://github.com/9tensorsoftware/retouch/tree/main/packages/ml#readme",
@@ -24,7 +24,9 @@
     "inpainting",
     "segment-anything",
     "depth-estimation",
-    "denoise"
+    "denoise",
+    "ocr",
+    "object-detection"
   ],
   "type": "module",
   "sideEffects": false,

@@ -31,6 +31,10 @@ export const DENOISE_ICON = icon(
   '<rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8" cy="8" r="0.9" fill="currentColor" stroke="none"/><circle cx="12.5" cy="6.8" r="0.7" fill="currentColor" stroke="none"/><circle cx="16.8" cy="8.6" r="0.8" fill="currentColor" stroke="none"/><circle cx="7" cy="12.5" r="0.7" fill="currentColor" stroke="none"/><path d="M15.6 12.6l1.1 2.4 2.4 1.1-2.4 1.1-1.1 2.4-1.1-2.4-2.4-1.1 2.4-1.1z"/>',
 );
 
+export const TEXT_ICON = icon(
+  '<path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16"/><path d="M8.5 9h7M12 9v6.5"/>',
+);
+
 export const UPSCALE_ICON = icon(
   '<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M9 15l-4 4M8 19H5v-3M15 9l4-4M16 5h3v3"/>',
 );

@@ -76,6 +76,27 @@ export {
   strokesBoundingBox,
 } from "./inpaint";
 export { clearModelCache, type FetchProgress, fetchModel, isModelCached } from "./model-cache";
+export {
+  boxCorners,
+  charsetFromDictionary,
+  convexHull,
+  ctcDecode,
+  DEFAULT_TEXT_DETECTOR_URL,
+  DEFAULT_TEXT_DICTIONARY_URL,
+  DEFAULT_TEXT_RECOGNIZER_URL,
+  detectorSize,
+  linesToText,
+  minAreaRect,
+  type OcrOptions,
+  type Point,
+  readingOrder,
+  recognizeText,
+  rgbaToDetectorTensor,
+  rgbaToRecognizerTensor,
+  type TextBox,
+  type TextLine,
+  textBoxesFromMap,
+} from "./ocr";
 export { installMlTools, type MlToolsOptions } from "./plugin";
 export { enqueueInference } from "./queue";
 export {

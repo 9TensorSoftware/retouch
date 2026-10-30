@@ -7,7 +7,11 @@ portrait.jpg  Štefan Štefančík    https://unsplash.com/photos/QXevDflbl8A
 corgi.jpg     Alvan Nee           https://unsplash.com/photos/yUSsVoQdjxQ
 beach.jpg     Michael Fischer     https://unsplash.com/photos/t48mPCg5AyQ
 road.jpg      Rachel Reinhardt    https://unsplash.com/photos/RG11_0q94c0
+london.jpg    Bruno BD            https://unsplash.com/photos/9K1W_W2zEZQ
+signpost.jpg  Alexander Schimmeck https://unsplash.com/photos/Aohf8gqa7Zc
 
 The images in ../showcase/ were made from these photos by Rétouch's own AI
 tools: Erase (beach-erased.jpg), Select (corgi-select.webp), Cutout
 (portrait-cutout.webp) and Upscale (corgi-face-4x.jpg, from corgi-face.jpg).
+The boxes and text the page draws over london.jpg and signpost.jpg came from
+Detect and Read text, saved in ../../showcase.ts.

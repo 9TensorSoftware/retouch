@@ -1,4 +1,9 @@
-import { installMlTools } from "../packages/ml/src/index";
+import {
+  detectObjects,
+  installMlTools,
+  linesToText,
+  recognizeText,
+} from "../packages/ml/src/index";
 import type { EditorTool, ToolContext } from "../src/index";
 import { Retouch, VERSION } from "../src/index";
 import {
@@ -13,6 +18,7 @@ import {
   ICON_TOOL_TRIM,
 } from "../src/ui/icons";
 import { mountCompare } from "./compare";
+import { detectionItems, type LabItem, mountLab, textItems, withBounds } from "./labs";
 import {
   describe,
   GALLERY,
@@ -25,6 +31,7 @@ import {
   ROAD_EDIT,
 } from "./photos";
 import { decoded, lookRecipe, recipeEdits, render, toObjectUrl } from "./render";
+import { LONDON_OBJECTS, SIGNPOST_TEXT } from "./showcase";
 
 const BASE = import.meta.env.BASE_URL;
 const photoUrl = (name: PhotoName) => `${BASE}photos/${PHOTOS[name].file}`;
@@ -125,14 +132,31 @@ const OPEN_ON: Record<PhotoName, EditorTool> = {
   portrait: "cutout",
   corgi: "select",
   beach: "erase",
+  london: "detect",
+  signpost: "text",
 };
 
 /** The edits the page shows these photos with, so the sliders explain the picture. */
 const RECIPES: Partial<Record<PhotoName, Recipe>> = { pond: POND_EDIT, road: ROAD_EDIT };
 
+/** The gallery entry for a sample, adding the photo first if the gallery doesn't have it. */
+async function sampleEntry(name: PhotoName): Promise<string | undefined> {
+  const ids = await samples;
+  const known = ids.get(name);
+  if (known && editor.getMedia().some((entry) => entry.id === known)) return known;
+  const response = await fetch(photoUrl(name));
+  if (!response.ok) return undefined;
+  const blob = await response.blob();
+  const before = new Set(editor.getMedia().map((entry) => entry.id));
+  await editor.addFiles([new File([blob], PHOTOS[name].file, { type: blob.type || "image/jpeg" })]);
+  const added = editor.getMedia().find((entry) => !before.has(entry.id));
+  if (added) ids.set(name, added.id);
+  return added?.id;
+}
+
 /** Open a sample in the editor, on its tool and, until it's been edited, its recipe. */
 async function editSample(name: PhotoName): Promise<void> {
-  const id = (await samples).get(name);
+  const id = await sampleEntry(name);
   const entry = editor.getImages().find((e) => e.id === id);
   if (!entry) return;
   const recipe = RECIPES[name];
@@ -254,6 +278,111 @@ for (const id of ["#erase-compare", "#upscale-compare"]) {
     compare.reveal();
   });
 }
+
+// The labs: what Detect and Read text found, saved with the page, and a
+// button that runs the same model again on this device.
+
+const runsOn = "gpu" in navigator ? "WebGPU" : "WebAssembly";
+
+function formatMs(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+function formatMb(bytes: number): string {
+  return `${(bytes / 1e6).toFixed(1)} MB`;
+}
+
+function mountRun(
+  root: HTMLElement,
+  lab: ReturnType<typeof mountLab>,
+  run: (
+    image: HTMLImageElement,
+    onDownload: (loaded: number, total: number) => void,
+  ) => Promise<LabItem[]>,
+  done: (items: LabItem[], time: string) => string,
+): void {
+  const button = root.querySelector<HTMLButtonElement>("[data-run]");
+  const label = button?.querySelector("span:last-child");
+  if (!button || !label) return;
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    let downloaded = 0;
+    lab.status("Starting…");
+    try {
+      const image = await decoded(root.querySelector("img") as HTMLImageElement);
+      const started = performance.now();
+      const items = await run(image, (loaded, total) => {
+        // A saved model reports itself once, already complete.
+        if (loaded < total) downloaded = total;
+        lab.status(
+          loaded < total
+            ? `Downloading the model: ${formatMb(loaded)} of ${formatMb(total)}…`
+            : "Running…",
+        );
+      });
+      const time = formatMs(performance.now() - started);
+      lab.show(items, true);
+      lab.status(
+        done(items, time) +
+          (downloaded > 0 ? " That includes the download; it's saved now, so run it again." : ""),
+      );
+      label.textContent = "Run it again";
+    } catch (error) {
+      lab.status("It didn't run on this browser. The results above are the saved ones.");
+      console.error(error);
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+const detectRoot = $("#detect-lab");
+const detectLab = mountLab(detectRoot, { tags: true });
+detectLab.show(detectionItems(LONDON_OBJECTS));
+detectLab.status("Saved from an earlier run. Run it to watch it find them on your device.");
+mountRun(
+  detectRoot,
+  detectLab,
+  async (image, onDownload) =>
+    detectionItems(
+      await detectObjects(image, {
+        scoreThreshold: 0.4,
+        onDownloadProgress: (p) => onDownload(p.loaded, p.total),
+      }),
+    ),
+  (items, time) => `Found ${items.length} things in ${time}, on this device (${runsOn}).`,
+);
+
+const textRoot = $("#text-lab");
+const textLab = mountLab(textRoot, { tags: false });
+let textLines = SIGNPOST_TEXT.map(withBounds);
+textLab.show(textItems(textLines));
+textLab.status("Saved from an earlier run. Run it to watch it read them on your device.");
+mountRun(
+  textRoot,
+  textLab,
+  async (image, onDownload) => {
+    textLines = (
+      await recognizeText(image, {
+        onDownloadProgress: (p) => onDownload(p.loaded, p.total),
+      })
+    ).map(withBounds);
+    return textItems(textLines);
+  },
+  (items, time) => `Read ${items.length} lines in ${time}, on this device (${runsOn}).`,
+);
+const copyText = $<HTMLButtonElement>("[data-copy-text]");
+copyText.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(linesToText(textLines));
+  } catch {
+    return;
+  }
+  copyText.textContent = "Copied";
+  setTimeout(() => {
+    copyText.textContent = "Copy text";
+  }, 1600);
+});
 
 function segmented(group: string, target: HTMLElement, attribute: string): void {
   const buttons = [...document.querySelectorAll<HTMLButtonElement>(`[data-${group}]`)].filter(

@@ -35,6 +35,11 @@ through the plugin API and ride its edit model.
   (tune it in the Masks tool), **pixelate** for privacy (replaces the image
   in place), or **crop to the detected boxes**. Mask/crop actions ride the
   non-destructive edit model, so they undo like any other edit.
+- **Read text (OCR)** — PaddleOCR's two stages (Apache-2.0, ~13 MB together):
+  PP-OCRv4 finds the lines, at any angle, and PP-OCRv5's Latin recognizer
+  reads them in 32 languages, accents included (é, ñ, ş, ø…). The lines are
+  outlined on the photo and listed in reading order: **Copy text**, or
+  **Pixelate it** to hide every line (replaces the image in place).
 - **Select (click-to-segment)** — SlimSAM-77 (Apache-2.0, ~38 MB in two
   files). Click any object to segment it on-device, refine with more clicks
   (Subtract mode / shift-click removes), then **Cut out** to a transparent
@@ -85,7 +90,7 @@ takes an `HTMLImageElement | HTMLCanvasElement` plus options, and accepts
 ```ts
 import {
   denoiseImage, detectFaces, detectObjects, estimateDepth,
-  inpaintStrokes, removeBackground, upscaleImage,
+  inpaintStrokes, linesToText, recognizeText, removeBackground, upscaleImage,
 } from "@9tensor/retouch-ml";
 
 const cutout = await removeBackground(image, {
@@ -95,6 +100,8 @@ const big = await upscaleImage(image, { onTileProgress: (done, total) => … });
 const clean = await denoiseImage(image);
 const faces = await detectFaces(image);              // [{ x, y, w, h, score }], normalized 0–1
 const things = await detectObjects(image);           // …plus `label` (COCO class)
+const lines = await recognizeText(image);            // [{ text, score, quad, x, y, w, h }], reading order
+linesToText(lines);                                  // "COTOPAXI\nCORAZÓN  4786m\n…"
 const healed = await inpaintStrokes(image, [{ x, y, r }, …]);
 const depth = await estimateDepth(image);            // { width, height, data: Float32Array } (0–1, higher = closer)
 ```
@@ -118,12 +125,13 @@ installMlTools(retouch, {
   detect:  { scoreThreshold: 0.7, iouThreshold: 0.35, // faces (UltraFace)
              objects: { scoreThreshold: 0.35, iouThreshold: 0.45 } }, // YOLOX
   select:  { encoderUrl, decoderUrl },
+  text:    { detectorUrl, recognizerUrl, dictionaryUrl, maxSide: 1280, minScore: 0.5 },
   depth:   { modelUrl },
   openResults: true,
 });
 ```
 
-Any of the seven keys can be `false` to leave that tool out. The tools share
+Any of the eight keys can be `false` to leave that tool out. The tools share
 one AI launcher on the editor's rail, and its menu lists each with a line on
 what it does and its download size. Every option
 group also accepts the runtime options below (`wasmPaths`,
@@ -148,6 +156,11 @@ installMlTools(retouch, {
   },
   select: { encoderUrl: "https://your.cdn/models/sam-encoder.onnx", decoderUrl: "https://your.cdn/models/sam-decoder.onnx" },
   depth: { modelUrl: "https://your.cdn/models/depth-anything-v2-small.onnx" },
+  text: {
+    detectorUrl: "https://your.cdn/models/ppocr-v4-det.onnx",
+    recognizerUrl: "https://your.cdn/models/ppocr-v5-latin-rec.onnx",
+    dictionaryUrl: "https://your.cdn/models/ppocr-v5-latin-dict.txt",
+  },
   denoise: {
     modelUrl: "https://your.cdn/models/scunet.onnx",
     externalDataUrl: "https://your.cdn/models/scunet.onnx.data",
@@ -177,6 +190,7 @@ single-file export — no sidecar is fetched.
 The package is MIT. Default model weights: MODNet (Apache-2.0),
 Real-ESRGAN x4plus (BSD-3-Clause), LaMa (Apache-2.0), UltraFace (MIT),
 YOLOX-nano (Apache-2.0), SlimSAM-77 (Apache-2.0), Depth Anything V2
-Small (Apache-2.0), and SCUNet (Apache-2.0).
+Small (Apache-2.0), SCUNet (Apache-2.0), and PaddleOCR's PP-OCRv4 detector
+and PP-OCRv5 Latin recognizer (Apache-2.0).
 ONNX Runtime Web is MIT. See `docs/ADVANCED-FEATURES.md` in the repo root for the full
 per-model license audit.

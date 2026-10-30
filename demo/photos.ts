@@ -55,11 +55,25 @@ export const PHOTOS = {
     authorUrl: `${unsplash}/@rreinhardt`,
     url: `${unsplash}/photos/RG11_0q94c0`,
   },
+  london: {
+    file: "london.jpg",
+    alt: "A black-and-white London junction: a double-decker bus on King's Road, black cabs and a cyclist",
+    author: "Bruno BD",
+    authorUrl: `${unsplash}/@brunobd`,
+    url: `${unsplash}/photos/9K1W_W2zEZQ`,
+  },
+  signpost: {
+    file: "signpost.jpg",
+    alt: "A striped post in the Ecuadorian highlands, its painted arrows naming volcanoes and their heights",
+    author: "Alexander Schimmeck",
+    authorUrl: `${unsplash}/@alschim`,
+    url: `${unsplash}/photos/Aohf8gqa7Zc`,
+  },
 } satisfies Record<string, Photo>;
 
 export type PhotoName = keyof typeof PHOTOS;
 
-/** The order the photos sit in the gallery. */
+/** The photos the gallery opens with, in order. The others join it when opened. */
 export const GALLERY: PhotoName[] = ["pond", "portrait", "corgi", "road", "beach"];
 
 type Band = keyof ImageEdits["hsl"];
