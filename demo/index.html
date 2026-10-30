@@ -22,7 +22,6 @@
     <meta property="og:image:alt" content="A foggy pond photo, half before and half after an edit in Rétouch" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preload" href="/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/photos/pond.jpg" as="image" fetchpriority="high" />
     <link rel="stylesheet" href="./landing.css" />
   </head>
   <body>
@@ -72,95 +71,64 @@
     </header>
 
     <main>
-      <!-- ─── Hero: a real edit, rendered by Rétouch in this page ─── -->
-      <section class="wrap hero" aria-labelledby="hero-title">
+      <!-- ─── Hero: the editor itself, with five photos already in ─── -->
+      <section class="wrap hero" id="try" aria-labelledby="hero-title">
         <div class="hero__head">
           <div>
             <p class="eyebrow">Photo and video editor · Open source</p>
             <h1 class="display" id="hero-title">A darkroom in your&nbsp;browser.</h1>
           </div>
           <div class="hero__aside">
-            <p class="lede">Crop, adjust, cut out and erase, with AI that runs on your device.</p>
+            <p class="lede">This is the editor, with five photos in. Click one to edit it, or open your own: nothing leaves your device.</p>
             <div class="actions">
-              <button class="btn btn--primary" type="button" data-edit="pond">
-                Edit this photo
+              <button class="btn btn--primary" type="button" data-open-files>
+                Open your photos
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
               </button>
-              <button class="btn btn--ghost" type="button" data-open-files>Open your photos</button>
+              <a class="btn btn--ghost" href="#developers">Add it to your app</a>
             </div>
           </div>
         </div>
 
-        <figure class="compare hero__compare" id="hero-compare" style="--focus: 50% 52%">
-          <div class="compare__frame">
-            <img class="compare__before" id="hero-before" src="/photos/pond.jpg" width="2000" height="1500" alt="Before: a small wooden house among orange bushes on a pond, in thick fog" fetchpriority="high" />
-            <img class="compare__after" id="hero-after" alt="After: the same pond with the fog lifted and the orange bushes glowing" />
-            <span class="compare__tag compare__tag--before" aria-hidden="true">Before</span>
-            <span class="compare__tag compare__tag--after" aria-hidden="true">After</span>
-            <div class="compare__divider">
-              <span class="compare__grip" role="slider" tabindex="0" aria-label="Before and after divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
-              </span>
-            </div>
-          </div>
-          <figcaption class="caption">
-            <span id="hero-recipe"></span>
-            <a href="https://unsplash.com/photos/mysUTgf61cM">Photo: Adrian Eperjessy</a>
-          </figcaption>
-        </figure>
-      </section>
-
-      <!-- ─── The live editor, with the sample photos already in ─── -->
-      <section class="wrap try" id="try" aria-labelledby="try-title">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">Try it</p>
-            <h2 class="display" id="try-title">Your photos stay on your device.</h2>
-          </div>
-          <p class="section-head__text">Start with these, or drop in your own.</p>
-        </div>
-        <div class="try__frame">
+        <div class="try__frame hero__editor">
           <div id="editor"></div>
         </div>
-      </section>
 
-      <!-- ─── Light and color ─── -->
-      <section class="wrap spread" id="features" aria-labelledby="color-title">
-        <div class="spread__text" data-reveal>
-          <p class="eyebrow">Adjust · Curves · Color mix</p>
-          <h2 class="display" id="color-title">Change one color. Leave the rest alone.</h2>
-          <p>Fourteen adjustments, tone curves and an eight-band color mixer.</p>
-          <p class="chips" id="road-recipe"></p>
-        </div>
-        <figure class="compare spread__visual" id="road-compare" style="--ratio: 3 / 2" data-reveal>
-          <div class="compare__frame">
-            <img class="compare__before" id="road-before" src="/photos/road.jpg" width="1600" height="1067" loading="lazy" alt="Before: a road between orange maples and dark pines" />
-            <img class="compare__after" id="road-after" alt="After: the same road with the maples turned crimson" />
-            <span class="compare__tag compare__tag--before" aria-hidden="true">Before</span>
-            <span class="compare__tag compare__tag--after" aria-hidden="true">After</span>
-            <div class="compare__divider">
-              <span class="compare__grip" role="slider" tabindex="0" aria-label="Before and after divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
-              </span>
-            </div>
-          </div>
-          <figcaption class="caption"><span>Color mix only, rendered live</span><a href="https://unsplash.com/photos/RG11_0q94c0">Photo: Rachel Reinhardt</a></figcaption>
-        </figure>
-      </section>
-
-      <!-- ─── Looks ─── -->
-      <section class="wrap spread spread--flip" aria-labelledby="looks-title">
-        <div class="spread__text" data-reveal>
-          <p class="eyebrow">Looks and filters</p>
-          <h2 class="display" id="looks-title">Try a look. Then take it apart.</h2>
-          <p>A look is only settings, so you can keep adjusting it.</p>
-        </div>
-        <figure class="spread__visual" data-reveal>
-          <ul class="looks" id="looks" aria-label="The same portrait in six looks">
-            <li class="looks__tile"><img src="/photos/portrait.jpg" loading="lazy" alt="Original" /><span>Original</span></li>
+        <div class="starts">
+          <p class="starts__label">Or jump straight to what each photo shows off</p>
+          <ul class="starts__list">
+            <li>
+              <button class="start" type="button" data-edit="pond">
+                <img src="/photos/pond.jpg" width="2000" height="1500" alt="" />
+                <span class="start__text"><strong>Lift the fog</strong><span class="start__tool">Adjust · Dehaze</span></span>
+              </button>
+            </li>
+            <li>
+              <button class="start" type="button" data-edit="road">
+                <img src="/photos/road.jpg" width="1600" height="1067" alt="" />
+                <span class="start__text"><strong>Turn the maples red</strong><span class="start__tool">Color mix</span></span>
+              </button>
+            </li>
+            <li>
+              <button class="start" type="button" data-edit="portrait">
+                <img src="/photos/portrait.jpg" width="1068" height="1600" alt="" />
+                <span class="start__text"><strong>Cut out the portrait</strong><span class="start__tool start__tool--ai">AI · Cutout</span></span>
+              </button>
+            </li>
+            <li>
+              <button class="start" type="button" data-edit="corgi">
+                <img src="/photos/corgi.jpg" width="1067" height="1600" alt="" />
+                <span class="start__text"><strong>Select the corgi</strong><span class="start__tool start__tool--ai">AI · Select</span></span>
+              </button>
+            </li>
+            <li>
+              <button class="start" type="button" data-edit="beach">
+                <img src="/photos/beach.jpg" width="1600" height="1067" alt="" />
+                <span class="start__text"><strong>Erase the walker</strong><span class="start__tool start__tool--ai">AI · Erase</span></span>
+              </button>
+            </li>
           </ul>
-          <figcaption class="caption"><span>Each tile rendered live from the original</span><a href="https://unsplash.com/photos/QXevDflbl8A">Photo: Štefan Štefančík</a></figcaption>
-        </figure>
+        </div>
       </section>
 
       <!-- ─── On-device AI ─── -->
@@ -267,6 +235,71 @@
         </div>
       </section>
 
+      <!-- ─── Light: the pond, edited live by the same renderer the editor uses ─── -->
+      <section class="wrap spread" id="features" aria-labelledby="light-title">
+        <div class="spread__text" data-reveal>
+          <p class="eyebrow">Adjust · Curves</p>
+          <h2 class="display" id="light-title">Lift the fog. Keep the mood.</h2>
+          <p>Fourteen adjustments and tone curves. Every one stays adjustable, with undo all the way back.</p>
+          <p class="chips" id="pond-recipe"></p>
+          <p><button class="link" type="button" data-edit="pond">Open these settings in the editor</button></p>
+        </div>
+        <figure class="compare spread__visual" id="pond-compare" style="--ratio: 4 / 3; --focus: 50% 52%" data-reveal>
+          <div class="compare__frame">
+            <img class="compare__before" id="pond-before" src="/photos/pond.jpg" width="2000" height="1500" loading="lazy" alt="Before: a small wooden house among orange bushes on a pond, in thick fog" />
+            <img class="compare__after" id="pond-after" alt="After: the same pond with the fog lifted and the orange bushes glowing" />
+            <span class="compare__tag compare__tag--before" aria-hidden="true">Before</span>
+            <span class="compare__tag compare__tag--after" aria-hidden="true">After</span>
+            <div class="compare__divider">
+              <span class="compare__grip" role="slider" tabindex="0" aria-label="Before and after divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
+              </span>
+            </div>
+          </div>
+          <figcaption class="caption"><span>Rendered live in this page</span><a href="https://unsplash.com/photos/mysUTgf61cM">Photo: Adrian Eperjessy</a></figcaption>
+        </figure>
+      </section>
+
+      <!-- ─── Color ─── -->
+      <section class="wrap spread spread--flip" aria-labelledby="color-title">
+        <div class="spread__text" data-reveal>
+          <p class="eyebrow">Color mix</p>
+          <h2 class="display" id="color-title">Change one color. Leave the rest alone.</h2>
+          <p>An eight-band mixer: shift the hue, saturation and brightness of one color at a time.</p>
+          <p class="chips" id="road-recipe"></p>
+          <p><button class="link" type="button" data-edit="road">Open the mix in the editor</button></p>
+        </div>
+        <figure class="compare spread__visual" id="road-compare" style="--ratio: 3 / 2" data-reveal>
+          <div class="compare__frame">
+            <img class="compare__before" id="road-before" src="/photos/road.jpg" width="1600" height="1067" loading="lazy" alt="Before: a road between orange maples and dark pines" />
+            <img class="compare__after" id="road-after" alt="After: the same road with the maples turned crimson" />
+            <span class="compare__tag compare__tag--before" aria-hidden="true">Before</span>
+            <span class="compare__tag compare__tag--after" aria-hidden="true">After</span>
+            <div class="compare__divider">
+              <span class="compare__grip" role="slider" tabindex="0" aria-label="Before and after divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
+              </span>
+            </div>
+          </div>
+          <figcaption class="caption"><span>Color mix only, rendered live</span><a href="https://unsplash.com/photos/RG11_0q94c0">Photo: Rachel Reinhardt</a></figcaption>
+        </figure>
+      </section>
+
+      <!-- ─── Looks ─── -->
+      <section class="wrap spread" aria-labelledby="looks-title">
+        <div class="spread__text" data-reveal>
+          <p class="eyebrow">Looks and filters</p>
+          <h2 class="display" id="looks-title">Try a look. Then take it apart.</h2>
+          <p>A look is only settings, so you can keep adjusting it.</p>
+        </div>
+        <figure class="spread__visual" data-reveal>
+          <ul class="looks" id="looks" aria-label="The same portrait in six looks">
+            <li class="looks__tile"><img src="/photos/portrait.jpg" loading="lazy" alt="Original" /><span>Original</span></li>
+          </ul>
+          <figcaption class="caption"><span>Each tile rendered live from the original</span><a href="https://unsplash.com/photos/QXevDflbl8A">Photo: Štefan Štefančík</a></figcaption>
+        </figure>
+      </section>
+
       <!-- ─── Everything else ─── -->
       <section class="wrap rest" aria-labelledby="rest-title">
         <div class="section-head">
@@ -274,7 +307,7 @@
             <p class="eyebrow">And the rest</p>
             <h2 class="display" id="rest-title">Everything you'd reach for.</h2>
           </div>
-          <p class="section-head__text" data-reveal>Every edit stays adjustable, with undo all the way back.</p>
+          <p class="section-head__text" data-reveal>All of it is in the editor at the top of this page.</p>
         </div>
         <ul class="tools">
           <li class="tool" data-reveal><span class="tool__icon" data-icon="crop"></span><h3>Crop and straighten</h3><p>Aspect presets, a straighten ruler, turns and flips.</p></li>

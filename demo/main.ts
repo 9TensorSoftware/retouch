@@ -21,6 +21,7 @@ import {
   PHOTOS,
   type PhotoName,
   POND_EDIT,
+  type Recipe,
   ROAD_EDIT,
 } from "./photos";
 import { decoded, lookRecipe, recipeEdits, render, toObjectUrl } from "./render";
@@ -117,18 +118,25 @@ async function loadSamples(): Promise<Map<PhotoName, string>> {
 const samples = loadSamples();
 samples.catch((error) => console.error("[Rétouch demo]", error));
 
-/** The tool each page link opens its photo on. */
-const OPEN_ON: Partial<Record<PhotoName, EditorTool>> = { pond: "adjust", corgi: "depth" };
+/** The tool each photo opens on: the one it shows off. */
+const OPEN_ON: Record<PhotoName, EditorTool> = {
+  pond: "adjust",
+  road: "hsl",
+  portrait: "cutout",
+  corgi: "select",
+  beach: "erase",
+};
 
-/**
- * Open a sample in the editor. The hero photo opens on the settings the page
- * shows it with, so the sliders explain the picture.
- */
+/** The edits the page shows these photos with, so the sliders explain the picture. */
+const RECIPES: Partial<Record<PhotoName, Recipe>> = { pond: POND_EDIT, road: ROAD_EDIT };
+
+/** Open a sample in the editor, on its tool and, until it's been edited, its recipe. */
 async function editSample(name: PhotoName): Promise<void> {
   const id = (await samples).get(name);
   const entry = editor.getImages().find((e) => e.id === id);
   if (!entry) return;
-  if (name === "pond" && !entry.edited) Object.assign(entry.edits, recipeEdits(POND_EDIT));
+  const recipe = RECIPES[name];
+  if (recipe && !entry.edited) Object.assign(entry.edits, recipeEdits(recipe));
   editor.openEditor(entry.id, { tool: OPEN_ON[name] });
 }
 
@@ -167,20 +175,6 @@ function saveAll(blobs: Blob[]): void {
   });
 }
 
-// ── The hero: the pond, edited live by the same renderer the editor uses ──
-
-const heroCompare = mountCompare($("#hero-compare"));
-$("#hero-recipe").textContent = describe(POND_EDIT).join(" · ");
-
-async function showHero(): Promise<void> {
-  const before = await decoded($<HTMLImageElement>("#hero-before"));
-  const after = $<HTMLImageElement>("#hero-after");
-  after.src = await toObjectUrl(render(before, POND_EDIT, 2000));
-  await decoded(after);
-  heroCompare.reveal();
-}
-void showHero();
-
 // ── Sections render when they come near the viewport ────────────────────
 
 function whenNear(element: Element, run: () => void): void {
@@ -204,6 +198,18 @@ function chips(target: HTMLElement, labels: string[]): void {
     }),
   );
 }
+
+// Light on the pond, edited live by the same renderer the editor uses.
+const pondFigure = $("#pond-compare");
+const pondCompare = mountCompare(pondFigure);
+chips($("#pond-recipe"), describe(POND_EDIT));
+whenNear(pondFigure, async () => {
+  const before = await decoded($<HTMLImageElement>("#pond-before"));
+  const after = $<HTMLImageElement>("#pond-after");
+  after.src = await toObjectUrl(render(before, POND_EDIT, 2000));
+  await decoded(after);
+  pondCompare.reveal();
+});
 
 // Color mix on the road.
 const roadFigure = $("#road-compare");
