@@ -398,6 +398,7 @@ h2.display {
   border-radius: 999px;
   font-size: 16px;
   font-weight: 600;
+  text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -479,8 +480,106 @@ h2.display {
   padding-bottom: 10px;
 }
 
-.hero > .hero__compare {
-  margin-top: clamp(34px, 5vw, 60px);
+/* The headline steps down here so the editor starts above the fold. */
+.hero h1.display {
+  font-size: clamp(50px, 6.6vw, 96px);
+}
+
+.hero__editor {
+  margin-top: clamp(28px, 4vw, 48px);
+  scroll-margin-top: 20px;
+}
+
+/* ── Shortcuts: each photo opened on the tool it shows off ── */
+
+.starts {
+  margin-top: 22px;
+}
+
+.starts__label {
+  margin: 0 0 12px;
+  color: var(--ink-3);
+  font: 500 12px / 1.4 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* One row; past the width it scrolls sideways rather than wrapping. */
+.starts__list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(208px, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.starts__list::-webkit-scrollbar {
+  display: none;
+}
+
+.starts__list > li {
+  scroll-snap-align: start;
+}
+
+.start {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 14px 8px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    box-shadow 0.2s;
+}
+
+.start:hover {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.start img {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 9px;
+  object-fit: cover;
+}
+
+.start__text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.start__text strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.start__tool {
+  color: var(--ink-3);
+  font: 500 12px / 1.3 var(--mono);
+}
+
+/* The AI tools get the prism the AI section wears. */
+.start__tool--ai {
+  background: linear-gradient(90deg, #ffc457, #8ce99a, #5cc8ff, #a58bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* ── Before / after ── */
@@ -665,11 +764,6 @@ h2.display {
   color: var(--ink-2);
   font-size: 18px;
   text-wrap: pretty;
-}
-
-.try {
-  margin-top: clamp(88px, 11vw, 160px);
-  scroll-margin-top: 20px;
 }
 
 .try__frame {
@@ -1305,10 +1399,6 @@ h2.display {
 
   .code pre {
     font-size: 12.5px;
-  }
-
-  .hero > .hero__compare {
-    --ratio: 4 / 3;
   }
 
   .compare__frame {
