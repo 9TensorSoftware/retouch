@@ -84,7 +84,7 @@ export interface MlToolsOptions {
   /** Read text: find the lines in a photo, then copy or pixelate them. */
   text?: OcrOptions | false;
   /**
-   * Open gallery results (cutout, upscale) in the editor when they finish,
+   * Open gallery results (upscale, Select's cut-out) in the editor when they finish,
    * so the outcome is visible immediately. Defaults to true.
    */
   openResults?: boolean;
@@ -353,10 +353,12 @@ function pixelateRegion(canvas: HTMLCanvasElement, box: Detection): void {
   ctx.imageSmoothingEnabled = true;
 }
 
+const extensionFor = (type: string): string => (type === "image/png" ? ".png" : ".jpg");
+
 /** Blob → File matching the entry's family: PNG stays PNG, photos go JPEG. */
 function resultFileName(sourceName: string, suffix: string, type: string): string {
   const base = sourceName.replace(/\.[^.]+$/, "");
-  return `${base}-${suffix}.${type === "image/png" ? "png" : "jpg"}`;
+  return `${base}-${suffix}${extensionFor(type)}`;
 }
 
 function encodeCanvas(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
@@ -386,11 +388,22 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
   const typeOf = (ctx: ToolContext): string =>
     ctx.entry.file.type === "image/jpeg" ? "image/jpeg" : "image/png";
 
-  /** Wipe the result in, then replace this photo's pixels with it (the editor remounts). */
-  async function replacePhoto(ctx: ToolContext, result: HTMLCanvasElement): Promise<void> {
-    const type = typeOf(ctx);
+  /**
+   * Wipe the result in, then replace this photo's pixels with it: one undo
+   * step, named `label` in the history (the editor remounts on the same tool).
+   * `type` overrides the entry's own format, as a cutout needs PNG's alpha.
+   */
+  async function replacePhoto(
+    ctx: ToolContext,
+    result: HTMLCanvasElement,
+    label: string,
+    type = typeOf(ctx),
+  ): Promise<void> {
     const [blob] = await Promise.all([encodeCanvas(result, type), ctx.reveal(result)]);
-    await retouch.replaceImageSource(ctx.entry.id, new File([blob], ctx.entry.file.name, { type }));
+    const own = ctx.entry.file.name;
+    const name =
+      type === ctx.entry.file.type ? own : `${own.replace(/\.[^.]+$/, "")}${extensionFor(type)}`;
+    await retouch.replaceImageSource(ctx.entry.id, new File([blob], name, { type }), { label });
   }
 
   /**
@@ -521,12 +534,12 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           id: "cutout",
           model,
           description:
-            "Finds the subject and cuts it out. The cutout lands in your gallery as a new image; this photo stays as it is.",
+            "Finds the subject and clears the background to transparent, as one step you can undo. Saving keeps it as a PNG.",
           action: "Remove the background",
           steps: [
             { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
             { label: "Find the subject", detail: "on this device" },
-            { label: "Add to your gallery", detail: "new image" },
+            { label: "Replace this photo", detail: "Undo takes it back" },
           ],
           run: ({ download }) =>
             ctx.entry.kind === "image"
@@ -538,8 +551,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                   },
                 })
               : Promise.reject(new Error("Cutout needs an image")),
-          finish: (result, steps, note) =>
-            addToGallery(ctx, result, "cutout", "image/png", note, steps),
+          // In place, as PNG so the cleared background stays clear.
+          finish: (result) => replacePhoto(ctx, result, "Remove background", "image/png"),
           failure: (error) => errorText(error, "Cutout failed"),
         });
       },
@@ -566,7 +579,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           steps: [
             { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
             { label: "Fill it in", detail: "on this device" },
-            { label: "Replace this photo", detail: "Reset all undoes it" },
+            { label: "Replace this photo", detail: "Undo takes it back" },
           ],
         });
         steps.root.hidden = true;
@@ -591,7 +604,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const { card, refresh, cached } = modelCard(
           ctx,
           model,
-          "Paint over what should go, then Erase fills it in from its surroundings. It replaces this photo's pixels; Reset all brings the original back.",
+          "Paint over what should go, then Erase fills it in from its surroundings. It replaces this photo's pixels, as one step you can undo.",
           (isCached) => run.setLabel(actionLabel("Erase", model, isCached)),
         );
 
@@ -622,7 +635,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             steps.set(2, "active");
             // In place: the entry keeps its identity, the pixels change, and
             // the editor remounts (rebuilding this pane).
-            await replacePhoto(ctx, result);
+            await replacePhoto(ctx, result, "Erase");
           } catch (error) {
             failSteps(steps);
             note.set(errorText(error, "Erase failed"));
@@ -894,7 +907,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                 selectOptions.onDownloadProgress?.(p);
               },
             });
-            await replacePhoto(ctx, result);
+            await replacePhoto(ctx, result, "Erase selection");
           } catch (error) {
             note.set(errorText(error, "Erase failed"));
             console.error(error);
@@ -1066,6 +1079,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             await replacePhoto(
               ctx,
               renderBokeh(prep, image, depthMap, focus, aperture.value / 100),
+              "Depth blur",
             );
           } catch (error) {
             note.set(errorText(error, "Apply failed"));
@@ -1260,7 +1274,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             if (!cctx) throw new Error("[Retouch ML] Failed to create canvas context");
             cctx.drawImage(ctx.entry.image, 0, 0);
             for (const f of found) pixelateRegion(canvas, f);
-            await replacePhoto(ctx, canvas);
+            await replacePhoto(ctx, canvas, "Pixelate");
           } catch (error) {
             note.set(errorText(error, "Pixelate failed"));
             console.error(error);
@@ -1420,7 +1434,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             if (!cctx) throw new Error("[Retouch ML] Failed to create canvas context");
             cctx.drawImage(ctx.entry.image, 0, 0);
             for (const line of found) pixelateRegion(canvas, line);
-            await replacePhoto(ctx, canvas);
+            await replacePhoto(ctx, canvas, "Pixelate text");
           } catch (error) {
             note.set(errorText(error, "Pixelate failed"));
             console.error(error);
@@ -1533,12 +1547,12 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           id: "denoise",
           model,
           description:
-            "Cleans up sensor noise while keeping detail. It replaces this photo's pixels; Reset all brings the original back.",
+            "Cleans up sensor noise while keeping detail. It replaces this photo's pixels, as one step you can undo.",
           action: "Remove the noise",
           steps: [
             { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
             { label: "Clean it up", detail: "on this device" },
-            { label: "Replace this photo", detail: "Reset all undoes it" },
+            { label: "Replace this photo", detail: "Undo takes it back" },
           ],
           run: ({ download, tile }) =>
             ctx.entry.kind === "image"
@@ -1555,7 +1569,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                 })
               : Promise.reject(new Error("Denoise needs an image")),
           // In place: pixels map 1:1, so crop and mask edits stay valid.
-          finish: (result) => replacePhoto(ctx, result),
+          finish: (result) => replacePhoto(ctx, result, "Denoise"),
           failure: (error) => {
             const message = error instanceof Error ? error.message : "";
             return message.includes("input limit")

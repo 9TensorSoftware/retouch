@@ -17,6 +17,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Changed
 
+- AI tools that change a photo's pixels (Cutout, Erase, Denoise, Depth blur, Pixelate) are now
+  steps in the editor's history: undo takes them back, and the history menu names them.
+  `replaceImageSource(id, file, { label })` adds such a step; the editor stays on the same tool.
+- Cutout clears the background of the photo itself, as a PNG, instead of adding a new image to
+  the gallery, so Compare shows the photo before and after.
 - A crop waits for an explicit OK. Moving the frame, or picking an aspect, only proposes a crop:
   **Apply** (or Enter) crops, and **Cancel** (or Esc) puts the frame back. Leaving Crop for
   another tool, or pressing Done, with a frame that wasn't applied asks first: Apply or Discard,

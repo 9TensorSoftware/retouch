@@ -11,9 +11,12 @@ import {
 import type {
   AiEditOps,
   AiOptions,
+  EditorHistory,
+  EditorStep,
   EditorTool,
   ImageEdits,
   MediaEntry,
+  PhotoState,
   RailOptions,
   VideoEdits,
   ViewHandle,
@@ -169,6 +172,15 @@ export interface EditorOptions {
   originalAligned?: () => boolean;
   /** Restore the pristine original (Reset on a committed image). */
   onRestoreOriginal?: () => void;
+  /** Undo steps carried over from the editor this one replaces. */
+  history?: EditorHistory;
+  /** Images: the pixels on screen now, recorded with each undo step. */
+  photo?: () => PhotoState;
+  /**
+   * Undo or redo reached a step taken on other pixels: put them back and
+   * remount on `history`, whose cursor is already at that step.
+   */
+  onRestorePhoto?: (step: EditorStep, history: EditorHistory) => void;
   onCancel: () => void;
   /** Video only: receives a full-resolution frame canvas and its timestamp. */
   onCaptureFrame?: (canvas: HTMLCanvasElement, time: number) => void;
@@ -187,7 +199,14 @@ export interface EditorOptions {
   onSetPoster?: () => Promise<void>;
 }
 
-export function createEditor(options: EditorOptions): ViewHandle {
+export interface EditorHandle extends ViewHandle {
+  /** The undo stack as it stands (a pending edit is flushed first). */
+  history(): EditorHistory | null;
+  /** The tool open in the inspector. */
+  tool(): EditorTool;
+}
+
+export function createEditor(options: EditorOptions): EditorHandle {
   const { entry, onDone, onCancel } = options;
   const abort = new AbortController();
   const signal = abort.signal;
@@ -198,7 +217,7 @@ export function createEditor(options: EditorOptions): ViewHandle {
   // Undo/redo plumbing. `recordEdit` is wired into every tool's onChange;
   // `suppressRecord` blocks it while we sync the UI from a restored snapshot.
   let suppressRecord = false;
-  let history: HistoryController<ImageEdits | VideoEdits> | null = null;
+  let history: HistoryController<EditorStep> | null = null;
   const recordEdit = (): void => {
     if (!suppressRecord) history?.record();
   };
@@ -1077,9 +1096,27 @@ export function createEditor(options: EditorOptions): ViewHandle {
     suppressRecord = false;
   }
 
-  history = createHistory<ImageEdits | VideoEdits>({
-    snapshot: () => structuredClone(entry.edits),
-    restore: (state) => {
+  const exportHistory = (): EditorHistory | null => {
+    if (!history) return null;
+    history.flush();
+    return { steps: history.entries().slice(), cursor: history.cursor() };
+  };
+
+  history = createHistory<EditorStep>({
+    snapshot: () => ({ edits: structuredClone(entry.edits), photo: options.photo?.() }),
+    same: (a, b) =>
+      a.photo?.image === b.photo?.image && JSON.stringify(a.edits) === JSON.stringify(b.edits),
+    initial: options.history
+      ? { entries: options.history.steps, cursor: options.history.cursor }
+      : undefined,
+    restore: (step) => {
+      if (step.photo && entry.kind === "image" && step.photo.image !== entry.image) {
+        // Other pixels: the host swaps them back in and remounts the editor.
+        const carried = exportHistory();
+        if (carried) queueMicrotask(() => options.onRestorePhoto?.(step, carried));
+        return;
+      }
+      const state = step.edits;
       entry.edits.crop = { ...state.crop };
       entry.edits.rotation = state.rotation;
       entry.edits.keystoneV = state.keystoneV;
@@ -1310,7 +1347,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
     const snaps = history.entries();
     const cursor = history.cursor();
     for (let i = snaps.length - 1; i >= 0; i--) {
-      const label = i === 0 ? "Original" : describeStep(snaps[i - 1], snaps[i]);
+      const label =
+        i === 0 ? "Original" : (snaps[i].label ?? describeStep(snaps[i - 1].edits, snaps[i].edits));
       const item = h(
         "button",
         { class: `rt-history-menu__item${i === cursor ? " rt-history-menu__item--current" : ""}` },
@@ -1924,6 +1962,8 @@ export function createEditor(options: EditorOptions): ViewHandle {
 
   return {
     root,
+    history: exportHistory,
+    tool: () => activeTool,
     destroy({ fade = false } = {}) {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();

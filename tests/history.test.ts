@@ -175,4 +175,32 @@ describe("no-op deduplication", () => {
     expect(history.entries()).toHaveLength(1);
     vi.useRealTimers();
   });
+
+  it("carries on a seeded stack at its cursor", () => {
+    const state = { value: 3 };
+    const history = createHistory({
+      snapshot: () => ({ ...state }),
+      restore: (s) => Object.assign(state, s),
+      initial: { entries: [{ value: 1 }, { value: 2 }, { value: 3 }], cursor: 2 },
+    });
+    expect(history.cursor()).toBe(2);
+    expect(history.undo()).toBe(true);
+    expect(state.value).toBe(2);
+    expect(history.canRedo()).toBe(true);
+  });
+
+  it("asks `same` whether a checkpoint changed anything", () => {
+    vi.useFakeTimers();
+    const state = { value: 1, label: "" };
+    const history = createHistory({
+      snapshot: () => ({ ...state }),
+      restore: (s) => Object.assign(state, s),
+      same: (a, b) => a.value === b.value,
+    });
+    state.label = "ignored";
+    history.record();
+    vi.runAllTimers();
+    expect(history.entries()).toHaveLength(1);
+    vi.useRealTimers();
+  });
 });
