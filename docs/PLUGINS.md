@@ -55,7 +55,7 @@ new Retouch({ target: "#editor", tools: ["crop", "adjust", "golden"] });
 | `id` | `string` | Unique. Also what `tools` and `openEditor`'s `tool` take. |
 | `label` | `string` | The name in tooltips, the inspector title and the expanded rail. |
 | `icon` | `string` | Inline SVG, drawn in `currentColor`. |
-| `group` | `ToolGroup` | `"frame"`, `"tone"`, `"looks"`, `"plugins"` (the default) or `"ai"`. Groups sit on the rail in that order. |
+| `group` | `ToolGroup` | `"frame"`, `"tone"`, `"looks"`, `"plugins"` (the default), `"ai"` or `"about"` (where Info sits). Groups sit on the rail in that order. |
 | `kinds` | `("image" \| "video")[]` | The media the tool applies to. Both by default. |
 | `shortcut` | `string` | One letter. A letter a built-in tool or the editor already uses is ignored (`I` opens the AI menu). |
 | `description` | `string` | For AI tools, one line on what it does, shown in the AI tools menu and the expanded rail. |

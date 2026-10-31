@@ -162,6 +162,7 @@ Opens as a modal overlay: a neutral graphite stage that keeps focus — and colo
 | **Stylize** | Parametric effects, picked from preview tiles drawn from your photo: **tilt-shift** (miniature look with a movable focus band), **duotone** (pick shadow/highlight colors), **posterize**, **pixelate**, **halftone** — each with a strength slider, applied identically at export. |
 | **Filters** | 11 presets — B&W, Sepia, Warm, Cool, Vivid, Vintage, Kodachrome, Technicolor, Polaroid, Brownie, Invert — plus Original, as preview tiles drawn from your photo, with an intensity slider. |
 | **Trim** | Video only. Filmstrip timeline with draggable in/out handles, loop-in-range preview, keyboard nudging (0.1 s, Shift for 1 s), and playback speed in nine steps from 0.25× to 4×. |
+| **Info** | Everything the file says about the photo, read on the device: the file (format, size, pixels, aspect), camera and lens, exposure (shutter, aperture, ISO, focal length, flash…), where it was taken with a map link, caption, keywords, creator and rights, an image generator's prompt and settings, the color profile, and C2PA Content Credentials when present. Then every EXIF, GPS, XMP, IPTC, ICC, PNG and WebP field, raw, with **Copy all**. JPEG, PNG and WebP. Exports are drawn from pixels, so none of it leaves with them. |
 | **Draw** | _Planned._ Freehand drawing and annotation directly on the canvas. |
 | **Text** | _Planned._ Add and position text overlays with font and color controls. |
 | **Sticker** | _Planned._ Place image overlays and shapes onto the canvas. |

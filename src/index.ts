@@ -59,4 +59,13 @@ export type {
   UiTilesOptions,
 } from "./ui/editor/tool-ui";
 export { refreshRangeFill } from "./ui/range-fill";
+export type {
+  FileFacts,
+  InfoRow,
+  InfoSection,
+  MetadataField,
+  MetadataSource,
+  PhotoMetadata,
+} from "./utils/metadata";
+export { describeMetadata, readMetadata } from "./utils/metadata";
 export { isImageEntry, isVideoEntry } from "./utils/video";

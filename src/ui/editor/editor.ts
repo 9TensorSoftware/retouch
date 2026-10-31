@@ -66,6 +66,7 @@ import { createCropTool } from "./crop-tool";
 import { createCurvesTool } from "./curves-tool";
 import { createFiltersTool } from "./filters-tool";
 import { createHslTool } from "./hsl-tool";
+import { createInfoTool } from "./info-tool";
 import { createLiquifyOverlay } from "./liquify-overlay";
 import { createLiquifyTool } from "./liquify-tool";
 import { createMasksOverlay } from "./masks-overlay";
@@ -238,8 +239,20 @@ export function createEditor(options: EditorOptions): EditorHandle {
           "masks",
           "stylize",
           "filters",
+          "info",
         ]
-      : ["crop", "transform", "liquify", "adjust", "curves", "hsl", "masks", "stylize", "filters"];
+      : [
+          "crop",
+          "transform",
+          "liquify",
+          "adjust",
+          "curves",
+          "hsl",
+          "masks",
+          "stylize",
+          "filters",
+          "info",
+        ];
   const allIds: EditorTool[] = [...builtinIds, ...customTools.map((t) => t.id)];
   const tools: EditorTool[] = options.tools
     ? options.tools.filter((id) => allIds.includes(id))
@@ -953,6 +966,11 @@ export function createEditor(options: EditorOptions): EditorHandle {
     const handle = plugin.mount(toolCtx);
     customHandles.set(plugin.id, handle);
     customPanes.push({ id: plugin.id, root: handle.root });
+  }
+  if (tools.includes("info")) {
+    const info = createInfoTool(entry, signal);
+    customHandles.set("info", info);
+    customPanes.push({ id: "info", root: info.root });
   }
 
   // Contextual controls strip (below the canvas)
