@@ -446,7 +446,7 @@ retouch.openEditor(id);
 retouch.openEditor(id, { tool: "adjust" }); // open on a given tool (default: the first)
 retouch.closeEditor(commit);         // true = Done, false = Cancel
 await retouch.restoreOriginal(id);   // bring back the pristine pixels after a bake / destructive tool
-await retouch.replaceImageSource(id, file); // swap an image's pixels in place (ML tools use this)
+await retouch.replaceImageSource(id, file, { label: "Erase" }); // swap pixels in place, as one undo step
 
 await retouch.exportAll();           // Blob[] with edits applied — what Done hands to onDone
 await retouch.done();                // exportAll() + "done" event + onDone

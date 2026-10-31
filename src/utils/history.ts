@@ -5,6 +5,10 @@ export interface HistoryOptions<T> {
   restore: (state: T) => void;
   /** Coalescing window in ms for rapid edits (e.g. slider drags). Default 350. */
   debounceMs?: number;
+  /** True when two snapshots are the same state. Default: equal JSON. */
+  same?: (a: T, b: T) => boolean;
+  /** Carry on an earlier session's checkpoints instead of starting fresh. */
+  initial?: { entries: readonly T[]; cursor: number };
 }
 
 export interface HistoryController<T = unknown> {
@@ -34,8 +38,10 @@ export interface HistoryController<T = unknown> {
  */
 export function createHistory<T>(options: HistoryOptions<T>): HistoryController<T> {
   const debounceMs = options.debounceMs ?? 350;
-  const stack: T[] = [options.snapshot()];
-  let index = 0;
+  const initial = options.initial?.entries.length ? options.initial : null;
+  const stack: T[] = initial ? initial.entries.slice() : [options.snapshot()];
+  let index = initial ? Math.max(0, Math.min(stack.length - 1, initial.cursor)) : 0;
+  const same = options.same ?? ((a: T, b: T) => JSON.stringify(a) === JSON.stringify(b));
   let timer = 0;
   let destroyed = false;
   const listeners = new Set<() => void>();
@@ -50,7 +56,7 @@ export function createHistory<T>(options: HistoryOptions<T>): HistoryController<
     // No-op edits (Reset with nothing to reset, re-picking the active
     // preset) record nothing — otherwise phantom steps pile up in the
     // history panel with no describable change.
-    if (JSON.stringify(next) === JSON.stringify(stack[index])) {
+    if (same(next, stack[index])) {
       notify();
       return;
     }

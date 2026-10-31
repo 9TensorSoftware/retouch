@@ -6,12 +6,16 @@ import { StateMachine } from "./state-machine";
 import { injectStyles } from "./styles";
 import type {
   AppState,
+  EditorHistory,
+  EditorStep,
   EditorTool,
   FileRejectionReason,
   GalleryViewMode,
+  ImageEdits,
   ImageEntry,
   MediaEntry,
   OpenEditorOptions,
+  PhotoState,
   RetouchEventMap,
   RetouchOptions,
   ShellTheme,
@@ -19,7 +23,7 @@ import type {
   ViewHandle,
 } from "./types";
 import { createDropZone } from "./ui/drop-zone";
-import { createEditor } from "./ui/editor/editor";
+import { createEditor, type EditorHandle } from "./ui/editor/editor";
 import type { EditorToolPlugin } from "./ui/editor/tool-registry";
 import { registerEditorTool } from "./ui/editor/tool-registry";
 import type { ExportOverlayHandle } from "./ui/export-overlay";
@@ -155,6 +159,10 @@ export class Retouch {
   };
 
   private currentView: ViewHandle | null = null;
+  /** The open editor, when the current view is one. */
+  private editorView: EditorHandle | null = null;
+  /** Undo steps the next editor mount carries on (a pixel change remounts it). */
+  private carriedHistory: EditorHistory | undefined;
   /** The state the mounted view shows; a step behind `state` while a transition is pending. */
   private viewState: AppState = "idle";
   /** Set just before a state change whose view swap should morph. */
@@ -516,27 +524,74 @@ export class Retouch {
   /**
    * Replace an image entry's pixels in place — the destructive counterpart
    * to the non-destructive edit model, used by tools like ML erase. Edits
-   * are preserved; if the entry is open in the editor, the editor remounts
-   * on the new source (undo history restarts).
+   * are preserved. If the entry is open in the editor, the editor remounts
+   * on the new source with the same tool open, and the change is one undo
+   * step, named by `label`.
    */
-  async replaceImageSource(id: string, file: File): Promise<void> {
+  async replaceImageSource(
+    id: string,
+    file: File,
+    options: { label?: string } = {},
+  ): Promise<void> {
     const entry = this.media.get(id);
     if (!entry || entry.kind !== "image") {
       throw new Error("[Retouch] replaceImageSource needs an existing image entry");
     }
     const image = await loadImage(file);
+    const editing = this.viewState === "editor" && this.editingImageId === id;
+    const before = editing ? this.editorView?.history() : null;
     this.stashOriginal(entry);
     revokeThumbnailUrl(entry.thumbnailUrl);
     entry.file = file;
     entry.image = image;
     entry.thumbnailUrl = createThumbnailUrl(file);
     entry.edited = true;
-    if (this.viewState === "editor" && this.editingImageId === id) {
-      this.unmountCurrentView();
-      this.mountEditor();
+    if (editing) {
+      if (before) {
+        const steps = before.steps.slice(0, before.cursor + 1);
+        steps.push({
+          edits: structuredClone(entry.edits),
+          photo: this.photoState(entry),
+          label: options.label ?? "Replace pixels",
+        });
+        this.carriedHistory = { steps, cursor: steps.length - 1 };
+      }
+      this.remountEditor();
     } else if (this.viewState === "gallery") {
       this.remountGallery();
     }
+  }
+
+  private photoState(entry: ImageEntry): PhotoState {
+    return {
+      file: entry.file,
+      image: entry.image,
+      original: entry.original,
+      reframed: this.reframed.has(entry),
+    };
+  }
+
+  /** Undo or redo crossed a pixel change: put that step's pixels back. */
+  private restorePhoto(entry: ImageEntry, step: EditorStep, history: EditorHistory): void {
+    const photo = step.photo;
+    if (!photo || this.editingImageId !== entry.id) return;
+    entry.file = photo.file;
+    entry.image = photo.image;
+    entry.original = photo.original;
+    if (photo.reframed) this.reframed.add(entry);
+    else this.reframed.delete(entry);
+    entry.edits = structuredClone(step.edits) as ImageEdits;
+    revokeThumbnailUrl(entry.thumbnailUrl);
+    entry.thumbnailUrl = createThumbnailUrl(entry.file);
+    this.carriedHistory = history;
+    this.remountEditor();
+  }
+
+  /** Rebuild the open editor on the entry as it now is, keeping its tool. */
+  private remountEditor(): void {
+    this.openTool = this.editorView?.tool();
+    this.unmountCurrentView();
+    this.mountEditor();
   }
 
   openEditor(id: string, options: OpenEditorOptions = {}): void {
@@ -811,6 +866,7 @@ export class Retouch {
       this.currentView.destroy({ fade });
       this.currentView = null;
     }
+    this.editorView = null;
   }
 
   private acceptAttribute(): string {
@@ -960,8 +1016,15 @@ export class Retouch {
   private mountEditor(): void {
     const entry = this.getEditingEntry();
     if (!entry) return;
+    const history = this.carriedHistory;
+    this.carriedHistory = undefined;
     const view = createEditor({
       entry,
+      history,
+      photo: entry.kind === "image" ? () => this.photoState(entry) : undefined,
+      onRestorePhoto: (step, carried) => {
+        if (entry.kind === "image") this.restorePhoto(entry, step, carried);
+      },
       onDone: () => this.closeEditor(true),
       onCancel: () => this.closeEditor(false),
       hasOriginal: () => entry.kind === "image" && !!entry.original,
@@ -999,6 +1062,7 @@ export class Retouch {
     this.openTool = undefined;
     document.body.appendChild(view.root);
     this.currentView = view;
+    this.editorView = view;
   }
 
   /** Turn a captured video frame into a new image entry carrying the video's visual edits. */

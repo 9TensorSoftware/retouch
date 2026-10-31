@@ -446,3 +446,27 @@ export interface ViewHandle {
   /** Remove the view; with `fade`, it fades out first where it can. */
   destroy(options?: { fade?: boolean }): void;
 }
+
+/** An image's pixels at one point of an editing session. */
+export interface PhotoState {
+  file: File;
+  image: HTMLImageElement;
+  original?: { file: File; image: HTMLImageElement };
+  /** The original no longer lines up with these pixels (a baked crop or turn). */
+  reframed: boolean;
+}
+
+/** One undo step in the editor. */
+export interface EditorStep {
+  edits: ImageEdits | VideoEdits;
+  /** Images: the pixels the step was taken on. */
+  photo?: PhotoState;
+  /** What the step did when its edits don't say (a tool replaced the pixels). */
+  label?: string;
+}
+
+/** The editor's undo stack, carried across the remount a pixel change causes. */
+export interface EditorHistory {
+  steps: EditorStep[];
+  cursor: number;
+}

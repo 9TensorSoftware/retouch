@@ -23,8 +23,8 @@ through the plugin API and ride its edit model.
 
 - **Cutout (background removal)** — MODNet (Apache-2.0, ~25 MB) by default;
   point `modelUrl` at any BiRefNet ONNX export for higher fidelity. Registers
-  a "Cutout" tool in the editor; the result is added to the gallery as a new
-  transparent PNG.
+  a "Cutout" tool in the editor that clears the photo's background to
+  transparent in place (the photo becomes a PNG), as one step you can undo.
 - **Upscale (4× super-resolution)** — Real-ESRGAN x4plus (BSD-3-Clause,
   ~67 MB), run tile-by-tile with overlap so seams never show. WebGPU when the
   device can take it, automatic WASM fallback when a kernel fails mid-run.
@@ -62,8 +62,8 @@ through the plugin API and ride its edit model.
 - **Erase (heal brush)** — LaMa inpainting (Apache-2.0, ~208 MB). Paint over
   an object, hit Erase: a padded square around the strokes runs through the
   network and the fill composites back at full resolution, feathered and
-  masked-pixels-only. The result **replaces the image in place** (the editor
-  remounts; undo history restarts). Needs neutral geometry — reset
+  masked-pixels-only. The result **replaces the image in place**, as one
+  undo step. Needs neutral geometry — reset
   crop/transform/liquify first, or erase before transforming.
 
 ## Usage
@@ -136,7 +136,7 @@ one AI launcher on the editor's rail, and its menu lists each with a line on
 what it does and its download size. Every option
 group also accepts the runtime options below (`wasmPaths`,
 `executionProviders`, `externalDataUrl`, `onDownloadProgress`).
-`openResults` (default `true`) opens results that land in the gallery — Cutout,
+`openResults` (default `true`) opens results that land in the gallery —
 Upscale, and Select's **Cut out** — in the editor as soon as they finish; pass
 `false` to leave them in the gallery quietly.
 
