@@ -49,6 +49,9 @@ export const ICON_TOOL_ADJUST = icon(
 export const ICON_TOOL_FILTERS = icon(
   '<circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/>',
 );
+export const ICON_TOOL_INFO = icon(
+  '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.75" r="0.6" fill="currentColor"/>',
+);
 export const ICON_TOOL_FALLBACK = icon(
   '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6"/>',
 );

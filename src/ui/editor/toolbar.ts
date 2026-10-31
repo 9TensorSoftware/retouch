@@ -56,6 +56,7 @@ const GROUP_LABELS: Record<ToolGroup, string> = {
   looks: "Looks",
   plugins: "Plugins",
   ai: "AI · on this device",
+  about: "Photo",
 };
 
 /**

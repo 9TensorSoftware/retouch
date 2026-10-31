@@ -2975,6 +2975,75 @@ const CSS = /* css */ `
   box-shadow: 0 0 0 2px var(--rt-surface-raised), 0 0 0 4px var(--rt-focus);
 }
 
+/* ── Info: the file's metadata, label beside value ── */
+
+.rt-info__rows {
+  display: grid;
+  grid-template-columns: minmax(84px, auto) minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0 0 10px;
+  font-size: var(--rt-type-sm);
+}
+
+.rt-info__rows dt {
+  color: var(--rt-text-3);
+}
+
+/* Long values (a generator's prompt, a caption) scroll instead of running on. */
+.rt-info__rows dd {
+  max-height: 9.5em;
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--rt-text-1);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.rt-info__rows--raw {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 4px 12px;
+}
+
+.rt-info__rows--raw dt,
+.rt-info__rows--raw dd {
+  font: 500 var(--rt-type-xs) / 1.5 var(--rt-font-mono);
+}
+
+.rt-info__source {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  color: var(--rt-text-2);
+  font-size: var(--rt-type-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rt-info__source:first-child {
+  margin-top: 0;
+}
+
+.rt-info__link {
+  display: inline-block;
+  margin: -2px 0 12px;
+  color: var(--rt-accent);
+  font-size: var(--rt-type-sm);
+  text-decoration: none;
+}
+
+.rt-info__link:hover {
+  text-decoration: underline;
+}
+
+.rt-info__link:focus-visible {
+  outline: 2px solid var(--rt-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* The run button for a model: the prism ring, with a sparkle. */
 .rt-dock__chip.rt-dock__chip--ai,
 .rt-dock__chip.rt-dock__chip--ai:hover {

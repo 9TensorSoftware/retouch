@@ -10,7 +10,8 @@ export type BuiltinEditorTool =
   | "masks"
   | "stylize"
   | "adjust"
-  | "filters";
+  | "filters"
+  | "info";
 
 /** Built-in tool ids plus any id registered via `Retouch.registerTool`. */
 export type EditorTool = BuiltinEditorTool | (string & {});

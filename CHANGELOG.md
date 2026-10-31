@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Added
 
+- **Info**, a built-in tool at the foot of the rail: what the file says about the photo. The
+  file, camera and lens, exposure, location (with a map link), description and rights, an
+  image generator's prompt, color profile and Content Credentials, then every EXIF, GPS, XMP,
+  IPTC, ICC, PNG and WebP field, raw, to read or copy. Read on the device, without
+  dependencies; `readMetadata(file)` and `describeMetadata()` do the same outside the editor.
 - **Read text**, an AI tool in `@9tensor/retouch-ml`: it finds every line of text in a photo,
   at any angle, and reads it in 32 Latin-script languages, accents included, with PaddleOCR's
   PP-OCRv4 detector and PP-OCRv5 Latin recognizer (13 MB together, Apache-2.0). The lines are

@@ -6,6 +6,7 @@ import {
   ICON_TOOL_FALLBACK,
   ICON_TOOL_FILTERS,
   ICON_TOOL_HSL,
+  ICON_TOOL_INFO,
   ICON_TOOL_LIQUIFY,
   ICON_TOOL_MASKS,
   ICON_TOOL_STYLIZE,
@@ -65,9 +66,16 @@ export interface ToolPaneHandle {
  * Where a tool sits in the rail. Groups appear in this order, separated;
  * "ai" tools collapse into one launcher when there are two or more.
  */
-export type ToolGroup = "frame" | "tone" | "looks" | "plugins" | "ai";
+export type ToolGroup = "frame" | "tone" | "looks" | "plugins" | "ai" | "about";
 
-export const TOOL_GROUP_ORDER: readonly ToolGroup[] = ["frame", "tone", "looks", "plugins", "ai"];
+export const TOOL_GROUP_ORDER: readonly ToolGroup[] = [
+  "frame",
+  "tone",
+  "looks",
+  "plugins",
+  "ai",
+  "about",
+];
 
 /**
  * A pluggable editor feature group: a tab in the rail plus a pane in the
@@ -140,6 +148,13 @@ export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
     icon: ICON_TOOL_FILTERS,
     group: "looks",
     shortcut: "f",
+  },
+  info: {
+    id: "info",
+    label: "Info",
+    icon: ICON_TOOL_INFO,
+    group: "about",
+    description: "What the file says about the photo",
   },
 };
 

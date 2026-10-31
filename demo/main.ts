@@ -103,14 +103,23 @@ const editor = new Retouch({
 // ML tools (on-device, lazy model download on first use)
 installMlTools(editor);
 
+/** A fetched photo as a File, dated by the server (Info shows when it was modified). */
+async function photoFile(name: PhotoName, response: Response): Promise<File> {
+  const blob = await response.blob();
+  const stamp = Date.parse(response.headers.get("last-modified") ?? "");
+  return new File([blob], PHOTOS[name].file, {
+    type: blob.type || "image/jpeg",
+    lastModified: Number.isNaN(stamp) ? undefined : stamp,
+  });
+}
+
 /** Fetch the sample photos into the gallery; resolves to each one's entry id. */
 async function loadSamples(): Promise<Map<PhotoName, string>> {
   const files = await Promise.all(
     GALLERY.map(async (name) => {
       const response = await fetch(photoUrl(name));
       if (!response.ok) throw new Error(`Couldn't load ${PHOTOS[name].file}`);
-      const blob = await response.blob();
-      return new File([blob], PHOTOS[name].file, { type: blob.type || "image/jpeg" });
+      return photoFile(name, response);
     }),
   );
   await editor.addFiles(files);
@@ -146,9 +155,9 @@ async function sampleEntry(name: PhotoName): Promise<string | undefined> {
   if (known && editor.getMedia().some((entry) => entry.id === known)) return known;
   const response = await fetch(photoUrl(name));
   if (!response.ok) return undefined;
-  const blob = await response.blob();
+  const file = await photoFile(name, response);
   const before = new Set(editor.getMedia().map((entry) => entry.id));
-  await editor.addFiles([new File([blob], PHOTOS[name].file, { type: blob.type || "image/jpeg" })]);
+  await editor.addFiles([file]);
   const added = editor.getMedia().find((entry) => !before.has(entry.id));
   if (added) ids.set(name, added.id);
   return added?.id;
