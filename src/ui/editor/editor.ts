@@ -419,7 +419,8 @@ export function createEditor(options: EditorOptions): EditorHandle {
    * paints pause.
    */
   function scheduleHistogram(): void {
-    if (!histogramShown()) return;
+    // A closed editor's renderer can still paint once; don't start a timer then.
+    if (signal.aborted || !histogramShown()) return;
     const source = renderer.getCanvasElement();
     if (!source.width || !source.height) return;
     histProbe.width = 128;
@@ -434,6 +435,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
   signal.addEventListener("abort", () => clearTimeout(histTimer));
 
   function drawHistogram(): void {
+    if (signal.aborted) return;
     const width = histCanvas.clientWidth;
     const height = histCanvas.clientHeight;
     const probe = histProbe.getContext("2d", { willReadFrequently: true });
