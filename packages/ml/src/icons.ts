@@ -15,6 +15,10 @@ export const DETECT_ICON = icon(
   '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="10" cy="11" r="2.4"/><path d="M16 14.5c-.9-1.4-2.6-2.3-4.5-2.3s-3.6.9-4.5 2.3"/>',
 );
 
+export const TRACK_ICON = icon(
+  '<rect x="12" y="4" width="8.5" height="10" rx="1.5"/><path d="M3.5 20c3.5 0 6-2 7.5-5.5" stroke-dasharray="1.5 3"/><circle cx="16.25" cy="9" r="1.25"/>',
+);
+
 export const ERASE_ICON = icon(
   '<path d="M14 4l6 6-9 9H7l-4-4 11-11z"/><path d="M9 9l6 6M3 21h18"/>',
 );

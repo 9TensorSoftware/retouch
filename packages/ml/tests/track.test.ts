@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Detection } from "../src/detect";
-import { createTracker } from "../src/track";
+import { createTracker, type TrackedVideo } from "../src/track";
+import { boxesAt, firstShown, trackBounds } from "../src/track-tool";
 
 const det = (x: number, y: number, label = "person", w = 0.1, h = 0.2): Detection => ({
   x,
@@ -94,5 +95,59 @@ describe("createTracker", () => {
     expect(tracker.update([det(0.1, 0.1)], 0)[0].id).toBe(1);
     tracker.reset();
     expect(tracker.update([det(0.5, 0.5)], 0)[0].id).toBe(1);
+  });
+});
+
+describe("Track tool geometry", () => {
+  const box = (id: number, x: number, y = 0.2) => ({
+    id,
+    label: "car",
+    x,
+    y,
+    w: 0.1,
+    h: 0.1,
+    score: 0.9,
+  });
+  const result: TrackedVideo = {
+    fps: 2,
+    frames: [
+      { time: 1, boxes: [box(1, 0.1)] },
+      { time: 1.5, boxes: [box(1, 0.2), box(2, 0.7)] },
+      { time: 2, boxes: [box(2, 0.6, 0.5)] },
+    ],
+    tracks: [],
+  };
+
+  it("glides boxes between the frames it read", () => {
+    const [mid] = boxesAt(result, 1.25);
+    expect(mid.id).toBe(1);
+    expect(mid.x).toBeCloseTo(0.15);
+    // A track that starts between frames shows for the nearer half.
+    expect(boxesAt(result, 1.2).map((b) => b.id)).toEqual([1]);
+    expect(boxesAt(result, 1.3).map((b) => b.id)).toEqual([1, 2]);
+    // One that ends does the same, the other way.
+    expect(boxesAt(result, 1.7).map((b) => b.id)).toEqual([1, 2]);
+    expect(boxesAt(result, 1.8).map((b) => b.id)).toEqual([2]);
+    // Before the first frame and after the last, the nearest frame holds.
+    expect(boxesAt(result, 0).map((b) => b.x)).toEqual([0.1]);
+    expect(boxesAt(result, 9).map((b) => b.y)).toEqual([0.5]);
+    expect(boxesAt({ fps: 6, frames: [], tracks: [] }, 1)).toEqual([]);
+  });
+
+  it("finds the first frame a track is on screen", () => {
+    expect(firstShown(result, 1)).toBe(1);
+    expect(firstShown(result, 2)).toBe(1.5);
+    expect(firstShown(result, 9)).toBeNull();
+  });
+
+  it("bounds everywhere a track went, with room around it", () => {
+    const bounds = trackBounds(result, 2, 0);
+    expect(bounds?.x).toBeCloseTo(0.6);
+    expect(bounds?.y).toBeCloseTo(0.2);
+    expect(bounds?.width).toBeCloseTo(0.2);
+    expect(bounds?.height).toBeCloseTo(0.4);
+    const padded = trackBounds(result, 2);
+    expect(padded?.x).toBeLessThan(0.6);
+    expect(trackBounds(result, 9)).toBeNull();
   });
 });

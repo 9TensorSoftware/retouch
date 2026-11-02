@@ -1,4 +1,4 @@
-import type { TrackBox, TrackedVideo } from "../packages/ml/src/index";
+import { firstShown, type TrackBox, type TrackedVideo } from "../packages/ml/src/index";
 
 // The Track lab: a clip playing with the tracker's boxes over it, each one
 // numbered and trailing where it's been, and a timeline of every track
@@ -78,7 +78,8 @@ export function mountTrackLab(root: HTMLElement): TrackLab {
       rect.addEventListener("click", () => pin(box.id));
       const tag = document.createElement("span");
       tag.className = "lab__tag";
-      tag.textContent = nameOf(box);
+      // The track's one name, not what the vote said by this frame.
+      tag.textContent = nameOf(data?.tracks.find((track) => track.id === box.id) ?? box);
       tag.style.setProperty("--c", color);
       marks.append(trail, rect);
       tags.append(tag);
@@ -216,10 +217,10 @@ export function mountTrackLab(root: HTMLElement): TrackLab {
     row.addEventListener("pointerleave", () => hover(null));
     row.addEventListener("focus", () => hover(track.id));
     row.addEventListener("blur", () => hover(null));
-    // Clicking a track jumps to where it first appears.
+    // Clicking a track jumps to where it's first on screen.
     row.addEventListener("click", () => {
       pin(track.id);
-      video.currentTime = track.firstSeen;
+      if (data) video.currentTime = firstShown(data, track.id) ?? track.firstSeen;
     });
     return row;
   }

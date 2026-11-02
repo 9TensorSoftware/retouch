@@ -14,8 +14,11 @@ import type { Point } from "./ocr";
  */
 
 export interface TrackerOptions {
-  /** Least overlap between a track's predicted box and a detection to match. Defaults to 0.2. */
-  iouThreshold?: number;
+  /**
+   * Least overlap (IoU) between a track's predicted box and a detection to
+   * match. Defaults to 0.2. Not `iouThreshold`, which is the detector's NMS.
+   */
+  matchThreshold?: number;
   /** Frames a track may go unseen before it's dropped. Defaults to 6. */
   maxMissed?: number;
   /** Sightings before a track is confirmed and numbered. Defaults to 3. */
@@ -61,7 +64,7 @@ const CROSS_CLASS_IOU = 0.5;
 const center = (d: Detection): Point => [d.x + d.w / 2, d.y + d.h / 2];
 
 export function createTracker(options: TrackerOptions = {}): Tracker {
-  const threshold = options.iouThreshold ?? 0.2;
+  const threshold = options.matchThreshold ?? 0.2;
   const maxMissed = options.maxMissed ?? 6;
   const minHits = options.minHits ?? 3;
   const trailLength = options.trailLength ?? 30;
@@ -278,10 +281,15 @@ export async function trackVideo(
     frames.push(frame);
     options.onFrame?.(frame, (i + 1) / count);
   }
+  // A track is called what it was seen as most, in every frame, not what
+  // the vote said by then: one name from the frame it enters.
+  const tracks = tracker.tracks();
+  const names = new Map(tracks.map((track) => [track.id, track.label]));
+  for (const frame of frames) for (const box of frame.boxes) box.label = names.get(box.id);
   return {
     fps,
     frames,
-    tracks: tracker.tracks().map(({ id, label, firstSeen, lastSeen, hits }) => ({
+    tracks: tracks.map(({ id, label, firstSeen, lastSeen, hits }) => ({
       id,
       label,
       firstSeen,

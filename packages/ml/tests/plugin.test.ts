@@ -15,7 +15,8 @@ function register(): Map<string, EditorToolPlugin> {
 }
 
 /** A stand-in editor context: real UI kit, a stage with a canvas in it. */
-function context(): ToolContext {
+function context(kind: "image" | "video" = "image"): ToolContext {
+  if (kind === "video") return videoContext();
   const image = new Image();
   Object.defineProperty(image, "naturalWidth", { value: 800 });
   Object.defineProperty(image, "naturalHeight", { value: 600 });
@@ -44,6 +45,30 @@ function context(): ToolContext {
   };
 }
 
+function videoContext(): ToolContext {
+  const base = context();
+  const video = document.createElement("video");
+  const edits = {
+    ...structuredClone(DEFAULT_EDITS),
+    trim: { start: 0, end: 12 },
+    mute: false,
+    speed: 1,
+    deflicker: false,
+  };
+  const entry = {
+    id: "v1",
+    kind: "video",
+    file: new File(["x"], "clip.mp4", { type: "video/mp4" }),
+    video,
+    videoUrl: "blob:clip",
+    duration: 12,
+    width: 960,
+    height: 540,
+    edits,
+  };
+  return { ...base, kind: "video", entry: entry as never, edits };
+}
+
 function useCaches(saved: string[] | undefined): void {
   const value = saved && {
     open: async () => ({
@@ -62,7 +87,7 @@ describe("ML tool panes", () => {
     useCaches(undefined);
   });
 
-  it("registers eight AI tools, each describing its model before any run", () => {
+  it("registers nine AI tools, each describing its model before any run", () => {
     const tools = register();
     expect([...tools.keys()]).toEqual([
       "cutout",
@@ -70,13 +95,14 @@ describe("ML tool panes", () => {
       "select",
       "depth",
       "detect",
+      "track",
       "text",
       "upscale",
       "denoise",
     ]);
     for (const tool of tools.values()) {
       expect(tool.group).toBe("ai");
-      const pane = tool.mount(context());
+      const pane = tool.mount(context(tool.kinds?.[0]));
       const facts = [...pane.root.querySelectorAll("dt")].map((dt) => dt.textContent);
       expect(facts).toContain("Runs on");
       expect(facts.some((f) => f === "Model" || f === "Models")).toBe(true);
@@ -143,5 +169,25 @@ describe("ML tool panes", () => {
     expect(pane.root.textContent).toContain("Start selecting · 38 MB");
     fetchSpy.mockRestore();
     pane.destroy?.();
+  });
+
+  it("Track is for videos: it names its download and shows no tracks before a run", async () => {
+    const track = register().get("track") as EditorToolPlugin;
+    expect(track.kinds).toEqual(["video"]);
+    useCaches([]);
+    const ctx = context("video");
+    const pane = track.mount(ctx);
+    pane.onActivate?.();
+    await flush();
+    expect(pane.root.querySelector(".rt-dock__chip--ai")?.textContent).toBe(
+      "Track objects · 3.5 MB",
+    );
+    expect(pane.root.querySelector<HTMLElement>(".rt-list")?.hidden).toBe(true);
+    expect(
+      [...pane.root.querySelectorAll(".rt-dock__group .rt-dock__chip")].map((b) => b.textContent),
+    ).toEqual(["Everything", "People", "Vehicles", "Animals"]);
+    expect(ctx.canvasArea.querySelector(".rt-ml-track-overlay")).not.toBeNull();
+    pane.destroy?.();
+    expect(ctx.canvasArea.querySelector(".rt-ml-track-overlay")).toBeNull();
   });
 });

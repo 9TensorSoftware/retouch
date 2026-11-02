@@ -1,6 +1,6 @@
 import { h } from "../h";
 import { ICON_SPARKLE } from "../icons";
-import { createCard, createSection, createSteps, createTiles } from "./controls";
+import { createCard, createList, createSection, createSteps, createTiles } from "./controls";
 import { createSlider } from "./slider";
 
 type Content = Node | string;
@@ -106,6 +106,44 @@ export interface UiOutput {
   set(text: string): void;
 }
 
+/** One row of `ctx.ui.list()`. */
+export interface UiListItem<T extends string> {
+  value: T;
+  label: string;
+  /** A note on the right: a count, a duration. */
+  detail?: string;
+  /** A swatch before the label, as any CSS color. */
+  color?: string;
+  /** Where the item sits along a timeline, start and end from 0 to 1, drawn as a bar. */
+  span?: readonly [start: number, end: number];
+}
+
+/** Options for `ctx.ui.list()`. */
+export interface UiListOptions<T extends string> {
+  /** Names the list for assistive tech. */
+  label: string;
+  items: ReadonlyArray<UiListItem<T>>;
+  /** The picked row, or null for none. */
+  value?: T | null;
+  /** A row was clicked: its value, or null when it was already picked (a second click lets go). */
+  onChange: (value: T | null) => void;
+  /** The row under the pointer or keyboard focus, then null when it leaves. */
+  onHover?: (value: T | null) => void;
+}
+
+export interface UiList<T extends string> {
+  root: HTMLElement;
+  readonly value: T | null;
+  /** Pick a row (or none) without firing `onChange`. */
+  set(value: T | null): void;
+  /** Replace the rows; the pick is kept if its row still exists. */
+  setItems(items: ReadonlyArray<UiListItem<T>>): void;
+  /** Light the rows that are current — what's in the frame now, say — without picking them. */
+  setCurrent(values: Iterable<T>): void;
+  /** A playhead across the spans, from 0 to 1; null hides it. */
+  setTime(time: number | null): void;
+}
+
 /** Options for `ctx.ui.card()`. */
 export interface UiCardOptions {
   /** What the tool does, and where its result goes. */
@@ -206,6 +244,11 @@ export interface ToolUi {
   output(options: UiOutputOptions): UiOutput;
   /** Preview tiles to choose between, like the built-in Filters. */
   tiles<T extends string>(options: UiTilesOptions<T>): UiTiles<T>;
+  /**
+   * Rows to pick from — things a tool found, each with a swatch, a note and
+   * optionally a span on a timeline — scrolling past a dozen or so.
+   */
+  list<T extends string>(options: UiListOptions<T>): UiList<T>;
   /**
    * A card for an AI tool: what it does, then facts such as the model, its
    * download size and where it runs, so nobody starts a download blind.
@@ -310,6 +353,8 @@ export function createToolUi(signal?: AbortSignal): ToolUi {
     },
 
     tiles: (options) => createTiles(options, signal),
+
+    list: (options) => createList(options, signal),
 
     card: (options) => createCard(options),
 

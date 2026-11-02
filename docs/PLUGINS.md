@@ -71,7 +71,7 @@ new Retouch({ target: "#editor", tools: ["crop", "adjust", "golden"] });
 | `root` | The pane's element, shown while the tool is active. |
 | `onActivate()` | The tool was picked. Refresh anything that depends on the photo's current state, such as preview tiles. |
 | `onDeactivate()` | Another tool was picked. Hide overlays you put on the stage. |
-| `sync()` | The edits changed outside your controls: undo, redo, a reset, an Ask AI edit, or any tool's `ctx.render()`. Move your controls to match, without firing their callbacks (`slider.set()`, `choice.set()`, `tiles.set()`). |
+| `sync()` | The edits changed outside your controls: undo, redo, a reset, an Ask AI edit, or any tool's `ctx.render()`. Move your controls to match, without firing their callbacks (`slider.set()`, `choice.set()`, `tiles.set()`, `list.set()`). |
 | `destroy()` | The editor closed. Remove listeners and anything you added outside `root`. |
 
 Listeners that `ctx.ui` controls attach are removed with the editor, so `destroy` is only for
@@ -156,6 +156,16 @@ const looks = ctx.ui.tiles({
   onChange: (name) => apply(name),
 });
 ```
+
+### `list(options)`
+
+Rows to pick from, such as the tracks Track follows through a video: `label`, `items`
+(`{ value, label, detail, color, span }[]`, where `detail` is a note on the right, `color` a
+swatch and `span` a `[start, end]` from 0 to 1 drawn as a bar on a timeline), `value` (or
+`null`), `onChange` and `onHover`. A second click on the picked row lets go, so `onChange` gets
+`null`. The handle has `value`, `set()`, `setItems()`, `setCurrent(values)` to light the rows
+that are current without picking them, and `setTime(t)` to draw a playhead across the spans
+(`null` hides it). It scrolls past a dozen or so rows.
 
 ### `note(text)`
 

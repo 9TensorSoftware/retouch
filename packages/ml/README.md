@@ -40,9 +40,14 @@ through the plugin API and ride its edit model.
   leaves under one number. Boxes match by overlap with where each track is
   heading; a class the detector wavers on (bicycle or motorcycle) doesn't
   split a track, a one-frame false positive never gets a number, and a
-  track survives a few missed frames. `trackVideo(video)` seeks through a
-  clip and returns every frame's boxes plus a summary of each track;
-  `createTracker()` takes detections from any source, frame by frame.
+  track survives a few missed frames. Registers a "Track" tool for videos:
+  follow everything, or only people, vehicles or animals, through the
+  trimmed clip; each track plays boxed and numbered with a trail, and is
+  listed with its span on a timeline. Pick one to jump to it, **trim** the
+  video to it or **crop** to where it goes, or save the tracks as JSON.
+  `trackVideo(video)` seeks through a clip and returns every frame's boxes
+  plus a summary of each track; `createTracker()` takes detections from any
+  source, frame by frame.
 - **Read text (OCR)** — PaddleOCR's two stages (Apache-2.0, ~13 MB together):
   PP-OCRv4 finds the lines, at any angle, and PP-OCRv5's Latin recognizer
   reads them in 32 languages, accents included (é, ñ, ş, ø…). The lines are
@@ -128,7 +133,7 @@ your own loop — a live camera, say — feed them to a tracker:
 ```ts
 import { createTracker, detectObjects } from "@9tensor/retouch-ml";
 
-const tracker = createTracker();                     // { iouThreshold, maxMissed, minHits, trailLength }
+const tracker = createTracker();                     // { matchThreshold, maxMissed, minHits, trailLength }
 const tracks = tracker.update(await detectObjects(canvas), video.currentTime);
 // [{ id, label, x, y, w, h, score, firstSeen, lastSeen, hits, missed, trail }]
 ```
@@ -153,12 +158,13 @@ installMlTools(retouch, {
              objects: { scoreThreshold: 0.35, iouThreshold: 0.45 } }, // YOLOX
   select:  { encoderUrl, decoderUrl },
   text:    { detectorUrl, recognizerUrl, dictionaryUrl, maxSide: 1280, minScore: 0.5 },
+  track:   { fps: 6, minSize: 0.04, scoreThreshold: 0.35, matchThreshold: 0.2 }, // YOLOX + tracker
   depth:   { modelUrl },
   openResults: true,
 });
 ```
 
-Any of the eight keys can be `false` to leave that tool out. The tools share
+Any of the nine keys can be `false` to leave that tool out. The tools share
 one AI launcher on the editor's rail, and its menu lists each with a line on
 what it does and its download size. Every option
 group also accepts the runtime options below (`wasmPaths`,
@@ -181,6 +187,7 @@ installMlTools(retouch, {
     modelUrl: "https://your.cdn/models/ultraface-rfb-320.onnx",
     objects: { modelUrl: "https://your.cdn/models/yolox_nano.onnx" },
   },
+  track: { modelUrl: "https://your.cdn/models/yolox_nano.onnx" },
   select: { encoderUrl: "https://your.cdn/models/sam-encoder.onnx", decoderUrl: "https://your.cdn/models/sam-decoder.onnx" },
   depth: { modelUrl: "https://your.cdn/models/depth-anything-v2-small.onnx" },
   text: {

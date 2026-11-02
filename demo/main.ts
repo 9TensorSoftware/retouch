@@ -203,7 +203,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-edit]")
 }
 
 /** Open a clip in the editor on Adjust, graded as the page shows it until it's been edited. */
-async function editClip(name: ClipName): Promise<void> {
+async function editClip(name: ClipName, tool = "adjust"): Promise<void> {
   await samples.catch(() => undefined);
   const file = CLIPS[name].file;
   let entry = editor.getMedia().find((e) => e.kind === "video" && e.file.name === file);
@@ -214,7 +214,7 @@ async function editClip(name: ClipName): Promise<void> {
   }
   if (!entry) return;
   if (name === "foggyHill" && !entry.edited) Object.assign(entry.edits, recipeEdits(FOGGY_EDIT));
-  editor.openEditor(entry.id, { tool: "adjust" });
+  editor.openEditor(entry.id, { tool });
 }
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-edit-clip]")) {
@@ -499,6 +499,8 @@ for (const button of trackRoot.querySelectorAll<HTMLButtonElement>("[data-clip]"
   });
 }
 whenNear(trackRoot, () => showClip(trackClip));
+// The same clip in the editor's own Track tool, where any video can go.
+$("[data-track-editor]").addEventListener("click", () => void editClip(trackClip, "track"));
 
 const TRACKED = ["person", "bicycle", "motorcycle", "car", "bus", "truck", "dog"];
 const trackButton = $<HTMLButtonElement>('[data-run="track"]');

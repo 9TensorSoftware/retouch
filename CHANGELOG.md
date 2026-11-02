@@ -25,9 +25,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   matching for detections from any source. Tracks match by overlap with where each one is
   heading, hold through a class the detector wavers on and a few missed frames, and aren't
   numbered until they've been seen three times.
+- **Track**, an AI tool for videos in `@9tensor/retouch-ml`: it follows everything, or only
+  people, vehicles or animals, through the trimmed clip, then plays each track boxed and
+  numbered with a trail of where it's been, and lists them on a timeline. Pick one to jump to
+  it, trim the video to it or crop to where it goes (each one step you can undo), or save the
+  tracks as JSON.
+- `ctx.ui.list()`: rows to pick from, each with a swatch, a note and optionally a span on a
+  timeline, with a playhead and the current rows lit.
 - The demo page shows video: a **Track** lab that plays two clips with every person and bike
-  followed (and runs the tracker again on the device), a clip graded live as it plays, and a
-  video in the gallery to trim and grade.
+  followed (it runs the tracker again on the device, or opens the clip in the editor's Track
+  tool), a clip graded live as it plays, and a video in the gallery to trim and grade.
 
 ### Changed
 

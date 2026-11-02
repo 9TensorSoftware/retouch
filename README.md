@@ -264,7 +264,7 @@ new Retouch({
 Custom tools write through the same non-destructive edit model as the
 built-ins, so previews, undo/redo, AI ops, and export work unchanged. `ctx.ui`
 builds pane controls that match the built-in tools (rows, sections, sliders,
-buttons, choices, preview tiles, notes, and for AI tools a model card and run
+buttons, choices, preview tiles, lists, notes, and for AI tools a model card and run
 steps), so a tool never styles anything itself; `ctx.preview(edits)` draws the
 photo with a look for a tile, and `ctx.reveal(result)` wipes a result in before
 it's committed. Tools in the `"ai"` group get their own section of the rail and

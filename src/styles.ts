@@ -2975,6 +2975,120 @@ const CSS = /* css */ `
   box-shadow: 0 0 0 2px var(--rt-surface-raised), 0 0 0 4px var(--rt-focus);
 }
 
+/* A list a tool found: swatch, label, span on a timeline, note. */
+.rt-list {
+  display: grid;
+  gap: 2px;
+  max-height: 264px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0 -6px;
+  padding: 2px;
+}
+
+.rt-list__item {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--rt-radius-sm);
+  background: none;
+  color: var(--rt-text-2);
+  font: inherit;
+  font-size: var(--rt-type-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--rt-dur-2) var(--rt-ease), color var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-list__item--plain {
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+}
+
+.rt-list__item:hover {
+  background: var(--rt-control);
+  color: var(--rt-text-1);
+}
+
+.rt-list__item[data-current] {
+  color: var(--rt-text-1);
+}
+
+.rt-list__item[aria-pressed="true"] {
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
+  box-shadow: inset 0 0 0 1px var(--rt-line-loud);
+}
+
+.rt-list__item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--rt-focus);
+}
+
+.rt-list__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rt-text-3);
+  opacity: 0.45;
+  transition: opacity var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-list__item[data-current] .rt-list__swatch,
+.rt-list__item[aria-pressed="true"] .rt-list__swatch {
+  opacity: 1;
+}
+
+.rt-list__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rt-list__span {
+  position: relative;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--rt-control);
+}
+
+.rt-list__span i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--rt-span-a, 0) * 100%);
+  width: max(3px, calc((var(--rt-span-b, 1) - var(--rt-span-a, 0)) * 100%));
+  border-radius: inherit;
+  background: var(--rt-span-c, var(--rt-accent));
+  opacity: 0.55;
+}
+
+.rt-list__item[data-current] .rt-list__span i,
+.rt-list__item[aria-pressed="true"] .rt-list__span i {
+  opacity: 1;
+}
+
+.rt-list[data-time] .rt-list__span::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: calc(var(--rt-list-t, 0) * 100%);
+  width: 1.5px;
+  background: var(--rt-text-1);
+  opacity: 0.6;
+}
+
+.rt-list__detail {
+  color: var(--rt-text-3);
+  font: 500 var(--rt-type-xs) / 1 var(--rt-font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* ── Info: the file's metadata, label beside value ── */
 
 .rt-info__rows {

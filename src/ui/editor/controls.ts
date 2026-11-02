@@ -3,6 +3,9 @@ import { ICON_CHECK, ICON_CHEVRON_DOWN, ICON_CLOSE } from "../icons";
 import type {
   UiCard,
   UiCardOptions,
+  UiList,
+  UiListItem,
+  UiListOptions,
   UiStep,
   UiStepState,
   UiSteps,
@@ -151,6 +154,91 @@ export function createTiles<T extends string>(
     setPreview(value, src) {
       const tile = tiles.get(value);
       if (tile) tile.img.src = src;
+    },
+  };
+}
+
+// ── List ──────────────────────────────────────────────────────────────────
+
+/** Rows to pick from: swatch, label, an optional span on a timeline, a note. */
+export function createList<T extends string>(
+  options: UiListOptions<T>,
+  signal?: AbortSignal,
+): UiList<T> {
+  let current = options.value ?? null;
+  const rows = new Map<T, HTMLButtonElement>();
+  const root = h("div", { class: "rt-list", role: "group", "aria-label": options.label });
+  const listen = signal ? { signal } : undefined;
+
+  const paint = (): void => {
+    for (const [value, row] of rows) row.setAttribute("aria-pressed", String(value === current));
+  };
+
+  function rowFor(item: UiListItem<T>): HTMLButtonElement {
+    const swatch = h("span", { class: "rt-list__swatch", "aria-hidden": "true" });
+    if (item.color) swatch.style.background = item.color;
+    const row = h(
+      "button",
+      { type: "button", class: "rt-list__item" },
+      swatch,
+      h("span", { class: "rt-list__label" }, item.label),
+    );
+    if (item.span) {
+      const [start, end] = item.span;
+      const bar = h("span", { class: "rt-list__span", "aria-hidden": "true" }, h("i"));
+      bar.style.setProperty("--rt-span-a", String(Math.max(0, start)));
+      bar.style.setProperty("--rt-span-b", String(Math.min(1, Math.max(start, end))));
+      if (item.color) bar.style.setProperty("--rt-span-c", item.color);
+      row.appendChild(bar);
+    } else row.classList.add("rt-list__item--plain");
+    row.appendChild(h("span", { class: "rt-list__detail" }, item.detail ?? ""));
+    row.addEventListener(
+      "click",
+      () => {
+        current = current === item.value ? null : item.value;
+        paint();
+        options.onChange(current);
+      },
+      listen,
+    );
+    if (options.onHover) {
+      const enter = () => options.onHover?.(item.value);
+      const leave = () => options.onHover?.(null);
+      row.addEventListener("pointerenter", enter, listen);
+      row.addEventListener("pointerleave", leave, listen);
+      row.addEventListener("focus", enter, listen);
+      row.addEventListener("blur", leave, listen);
+    }
+    return row;
+  }
+
+  function setItems(items: ReadonlyArray<UiListItem<T>>): void {
+    rows.clear();
+    for (const item of items) rows.set(item.value, rowFor(item));
+    root.replaceChildren(...rows.values());
+    if (current !== null && !rows.has(current)) current = null;
+    paint();
+  }
+
+  setItems(options.items);
+  return {
+    root,
+    get value() {
+      return current;
+    },
+    set(value) {
+      current = value;
+      paint();
+    },
+    setItems,
+    setCurrent(values) {
+      const on = new Set(values);
+      for (const [value, row] of rows) row.toggleAttribute("data-current", on.has(value));
+    },
+    setTime(time) {
+      root.toggleAttribute("data-time", time !== null);
+      if (time !== null)
+        root.style.setProperty("--rt-list-t", String(Math.min(1, Math.max(0, time))));
     },
   };
 }

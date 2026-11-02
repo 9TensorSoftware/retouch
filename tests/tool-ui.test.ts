@@ -121,6 +121,56 @@ describe("createToolUi", () => {
     expect(free.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("builds a list that picks, lets go on a second click, and lights current rows", () => {
+    const onChange = vi.fn();
+    const onHover = vi.fn();
+    const list = createToolUi().list<string>({
+      label: "Tracks",
+      items: [
+        { value: "1", label: "person 1", color: "#5cc8ff", span: [0.1, 0.5], detail: "4.0 s" },
+        { value: "2", label: "car 2", detail: "1.2 s" },
+      ],
+      onChange,
+      onHover,
+    });
+    const rows = () => [...list.root.querySelectorAll<HTMLButtonElement>(".rt-list__item")];
+    expect(list.root.getAttribute("aria-label")).toBe("Tracks");
+    expect(rows().map((r) => r.textContent)).toEqual(["person 14.0 s", "car 21.2 s"]);
+    const span = rows()[0].querySelector<HTMLElement>(".rt-list__span");
+    expect(span?.style.getPropertyValue("--rt-span-a")).toBe("0.1");
+    expect(span?.style.getPropertyValue("--rt-span-b")).toBe("0.5");
+    // Without a span, the label takes its room.
+    expect(rows()[1].classList.contains("rt-list__item--plain")).toBe(true);
+
+    rows()[0].click();
+    expect(onChange).toHaveBeenLastCalledWith("1");
+    expect(rows()[0].getAttribute("aria-pressed")).toBe("true");
+    rows()[0].click();
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    expect(list.value).toBeNull();
+
+    rows()[1].dispatchEvent(new Event("pointerenter"));
+    expect(onHover).toHaveBeenLastCalledWith("2");
+    rows()[1].dispatchEvent(new Event("pointerleave"));
+    expect(onHover).toHaveBeenLastCalledWith(null);
+
+    list.setCurrent(["2"]);
+    expect(rows().map((r) => r.hasAttribute("data-current"))).toEqual([false, true]);
+    list.setTime(0.25);
+    expect(list.root.hasAttribute("data-time")).toBe(true);
+    expect(list.root.style.getPropertyValue("--rt-list-t")).toBe("0.25");
+    list.setTime(null);
+    expect(list.root.hasAttribute("data-time")).toBe(false);
+
+    // New rows keep the pick only if it's still there.
+    list.set("2");
+    list.setItems([{ value: "2", label: "car 2" }]);
+    expect(list.value).toBe("2");
+    list.setItems([{ value: "3", label: "dog 3" }]);
+    expect(list.value).toBeNull();
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
   it("builds rows, titled sections and live notes", () => {
     const ui = createToolUi();
     const note = ui.note("Downloading…");

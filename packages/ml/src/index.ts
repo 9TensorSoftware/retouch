@@ -144,6 +144,7 @@ export {
   type TrackVideoOptions,
   trackVideo,
 } from "./track";
+export { boxesAt, firstShown, trackBounds } from "./track-tool";
 export {
   chw01ToRgba,
   DEFAULT_UPSCALE_MODEL_URL,

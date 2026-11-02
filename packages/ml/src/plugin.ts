@@ -7,6 +7,7 @@ import type {
   UiNote,
   UiStep,
   UiSteps,
+  VideoEdits,
 } from "@9tensor/retouch";
 import { composeBokeh, prepareBokeh, renderBokeh, suggestFocus } from "./bokeh";
 import { KEEP_RGB, ON_KEEP, rgba } from "./colors";
@@ -42,6 +43,7 @@ import {
   ERASE_ICON,
   SELECT_ICON,
   TEXT_ICON,
+  TRACK_ICON,
   UPSCALE_ICON,
 } from "./icons";
 import {
@@ -71,6 +73,8 @@ import {
   type SamPoint,
 } from "./sam";
 import { createSelectSurface, isRepeatClick } from "./select-tool";
+import { type TrackedVideo, type TrackVideoOptions, trackVideo } from "./track";
+import { createTrackOverlay, firstShown, trackBounds, trackColor, trackName } from "./track-tool";
 import { DEFAULT_UPSCALE_MODEL_URL, type UpscaleOptions, upscaleImage } from "./upscale";
 
 export interface MlToolsOptions {
@@ -83,6 +87,8 @@ export interface MlToolsOptions {
   denoise?: DenoiseOptions | false;
   /** Read text: find the lines in a photo, then copy or pixelate them. */
   text?: OcrOptions | false;
+  /** Track: follow each object through a video, then trim or crop to one. */
+  track?: Omit<TrackVideoOptions, "start" | "end" | "labels" | "signal" | "onFrame"> | false;
   /**
    * Open gallery results (upscale, Select's cut-out) in the editor when they finish,
    * so the outcome is visible immediately. Defaults to true.
@@ -219,11 +225,12 @@ function errorText(error: unknown, fallback: string): string {
  */
 function geometryIsNeutral(edits: ImageEdits): boolean {
   const c = edits.crop;
+  return c.x === 0 && c.y === 0 && c.width === 1 && c.height === 1 && turnsAreNeutral(edits);
+}
+
+/** No turn, flip or warp: what's on screen is the source, cropped at most. */
+function turnsAreNeutral(edits: ImageEdits): boolean {
   return (
-    c.x === 0 &&
-    c.y === 0 &&
-    c.width === 1 &&
-    c.height === 1 &&
     edits.rotation === 0 &&
     edits.orientation === 0 &&
     !edits.flipH &&
@@ -374,6 +381,19 @@ function encodeCanvas(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
 // Guards runs across editor remounts: a pane's local busy flag dies with
 // the pane, but the underlying run keeps going.
 const activeRuns = new Set<string>();
+
+/** Each video's last tracking, kept while the entry lives: reopening the tool shows it again. */
+const trackResults = new WeakMap<object, TrackedVideo>();
+
+type Follow = "all" | "people" | "vehicles" | "animals";
+
+/** The COCO classes each Track choice follows; everything for "all". */
+const FOLLOW: Record<Follow, readonly string[] | undefined> = {
+  all: undefined,
+  people: ["person"],
+  vehicles: ["bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"],
+  animals: ["bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"],
+};
 
 /**
  * Register the ML feature groups on the editor. Call once, before opening
@@ -1313,6 +1333,272 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
         card.body.append(ctx.ui.row(findFaces.root, findObjects.root), actions, note.root);
         syncState();
+        return {
+          root: card.root,
+          onActivate() {
+            overlay.setVisible(true);
+          },
+          onDeactivate() {
+            overlay.setVisible(false);
+          },
+          sync: syncState,
+          destroy() {
+            overlay.destroy();
+          },
+        };
+      },
+    });
+  }
+
+  // ── Track ──
+
+  if (options.track !== false) {
+    const trackOptions = options.track ?? {};
+    const model = spec("YOLOX-nano", 3.5, [[trackOptions.modelUrl, DEFAULT_OBJECT_MODEL_URL]]);
+    ctor.registerTool({
+      id: "track",
+      label: "Track",
+      icon: TRACK_ICON,
+      group: "ai",
+      description: "Follow each object through the video",
+      badge: "3.5 MB",
+      kinds: ["video"],
+      mount(ctx: ToolContext) {
+        if (ctx.entry.kind !== "video") return { root: ctx.ui.note("Track works on videos.").root };
+        // Narrowed once, so closures keep the video's fields.
+        const entry = ctx.entry;
+        const edits = ctx.edits as VideoEdits;
+        let result = trackResults.get(entry) ?? null;
+        let picked: number | null = null;
+        let follow: Follow = "all";
+        let busy = false;
+        let abort: AbortController | null = null;
+        /** The framing a Trim or Crop to it left, while its note is up. */
+        let applied: string | null = null;
+        const framing = () => JSON.stringify([edits.trim, edits.crop]);
+
+        const note = ctx.ui.note("");
+        const steps = ctx.ui.steps({
+          label: "Progress",
+          steps: [
+            { label: "Download the model", detail: model.mb ? `${model.mb} MB` : "" },
+            { label: "Follow each object", detail: "on this device" },
+          ],
+        });
+        steps.root.hidden = true;
+        const followChoice = ctx.ui.choice<Follow>({
+          label: "What to follow",
+          options: [
+            { value: "all", label: "Everything" },
+            { value: "people", label: "People" },
+            { value: "vehicles", label: "Vehicles" },
+            { value: "animals", label: "Animals" },
+          ],
+          value: follow,
+          onChange: (value) => {
+            follow = value;
+          },
+        });
+        const run = ctx.ui.button({
+          label: actionLabel("Track objects", model, false),
+          variant: "ai",
+          onClick: () => void start(),
+        });
+        const stop = ctx.ui.button({ label: "Stop", onClick: () => abort?.abort() });
+        const { card, refresh, cached } = modelCard(
+          ctx,
+          model,
+          "Follows each person, vehicle and animal through the trimmed video and numbers it, so you can see where it goes, then trim or crop to one.",
+          (isCached) => run.setLabel(actionLabel("Track objects", model, isCached)),
+        );
+
+        const overlay = createTrackOverlay(ctx.canvasArea, entry.video, (time, ids) => {
+          list.setTime(time / entry.duration);
+          list.setCurrent(ids.map(String));
+        });
+        const list = ctx.ui.list<string>({
+          label: "Tracks",
+          items: [],
+          onChange: (value) => pick(value === null ? null : Number(value)),
+          onHover: (value) => overlay.focus(value === null ? picked : Number(value)),
+        });
+        const trimTo = ctx.ui.button({ label: "Trim to it", onClick: () => trimToPicked() });
+        const cropTo = ctx.ui.button({ label: "Crop to it", onClick: () => cropToPicked() });
+        const save = ctx.ui.button({ label: "Save tracks", onClick: () => saveTracks() });
+        const actions = ctx.ui.row(trimTo.root, cropTo.root, save.root);
+
+        const at = (seconds: number) => `${seconds.toFixed(1)} s`;
+        const trackOf = (id: number | null) => result?.tracks.find((t) => t.id === id) ?? null;
+
+        /** What the run found, or why the boxes can't show. */
+        function summary(): string {
+          if (!result) return "";
+          if (!turnsAreNeutral(edits)) {
+            return "Boxes show on the unturned video. Reset Transform to see them.";
+          }
+          const count = result.tracks.length;
+          return count === 0
+            ? "Nothing to follow in this part of the video."
+            : `${count} ${count === 1 ? "track" : "tracks"}. Pick one to trim or crop to it.`;
+        }
+
+        function syncState(): void {
+          // Undo took a Trim or Crop to it back: its note goes with it.
+          if (applied !== null && applied !== framing()) {
+            applied = null;
+            note.set(summary());
+          }
+          const turned = !turnsAreNeutral(edits);
+          // Boxes are in the source frame: they line up through a crop, not a turn.
+          overlay.setFrame(turned ? null : edits.crop);
+          run.setDisabled(busy);
+          stop.root.hidden = !busy;
+          actions.hidden = !result || result.tracks.length === 0;
+          trimTo.setDisabled(busy || picked === null);
+          cropTo.setDisabled(busy || picked === null || turned);
+          save.setDisabled(busy);
+        }
+
+        function showResult(): void {
+          overlay.show(result);
+          picked = null;
+          const tracks = [...(result?.tracks ?? [])].sort(
+            // Longest-lived first: the ones it followed all the way.
+            (a, b) => b.lastSeen - b.firstSeen - (a.lastSeen - a.firstSeen) || a.id - b.id,
+          );
+          list.setItems(
+            tracks.map((t) => ({
+              value: String(t.id),
+              label: trackName(t),
+              color: trackColor(t.id),
+              span: [
+                t.firstSeen / entry.duration,
+                Math.max(t.lastSeen, t.firstSeen + 0.1) / entry.duration,
+              ] as const,
+              detail: at(t.lastSeen - t.firstSeen),
+            })),
+          );
+          list.root.hidden = tracks.length === 0;
+          if (result) note.set(summary());
+          syncState();
+        }
+
+        function pick(id: number | null): void {
+          picked = id;
+          overlay.focus(id);
+          const track = trackOf(id);
+          if (result && track) {
+            // Jump to where it's first on screen, within the trim.
+            const time = firstShown(result, track.id) ?? track.firstSeen;
+            entry.video.currentTime = Math.min(Math.max(time, edits.trim.start), edits.trim.end);
+            note.set(`${trackName(track)}: ${at(track.firstSeen)} to ${at(track.lastSeen)}.`);
+          }
+          syncState();
+        }
+
+        async function start(): Promise<void> {
+          if (busy || activeRuns.has("track")) return;
+          busy = true;
+          activeRuns.add("track");
+          abort = new AbortController();
+          syncState();
+          note.set("");
+          steps.root.hidden = false;
+          beginSteps(steps, cached());
+          // Its own element: the editor's keeps playing while this one seeks.
+          const probe = document.createElement("video");
+          probe.muted = true;
+          probe.playsInline = true;
+          probe.preload = "auto";
+          probe.src = entry.videoUrl;
+          const { start: from, end: to } = edits.trim;
+          try {
+            const tracked = await trackVideo(probe, {
+              ...trackOptions,
+              start: from,
+              end: to,
+              labels: FOLLOW[follow],
+              minSize: trackOptions.minSize ?? 0.04,
+              signal: abort.signal,
+              onDownloadProgress: trackDownload(steps, trackOptions.onDownloadProgress),
+              onFrame: (frame, progress) => {
+                steps.set(1, "active", {
+                  detail: `${at(frame.time - from)} of ${at(to - from)}`,
+                  progress,
+                });
+              },
+            });
+            steps.set(0, "done", { detail: cached() ? "Saved" : undefined });
+            steps.set(1, "done", { detail: `${tracked.frames.length} frames` });
+            result = tracked;
+            trackResults.set(entry, tracked);
+            showResult();
+          } catch (error) {
+            if (abort.signal.aborted) {
+              steps.root.hidden = true;
+              note.set("Stopped.");
+            } else {
+              failSteps(steps);
+              note.set(errorText(error, "Tracking failed"));
+              console.error(error);
+            }
+          } finally {
+            probe.removeAttribute("src");
+            probe.load();
+            busy = false;
+            abort = null;
+            activeRuns.delete("track");
+            syncState();
+            void refresh();
+          }
+        }
+
+        function trimToPicked(): void {
+          const track = trackOf(picked);
+          if (!track) return;
+          // A beat either side, so it doesn't start or end mid-step.
+          const start = Math.max(0, track.firstSeen - 0.25);
+          const end = Math.min(entry.duration, Math.max(track.lastSeen + 0.25, start + 0.5));
+          edits.trim = { start, end };
+          applied = framing();
+          ctx.render();
+          ctx.record();
+          entry.video.currentTime = start;
+          note.set(`Trimmed to ${trackName(track)}. Undo to go back.`);
+        }
+
+        function cropToPicked(): void {
+          const track = trackOf(picked);
+          const bounds = result && track ? trackBounds(result, track.id) : null;
+          if (!track || !bounds) return;
+          edits.crop = bounds;
+          applied = framing();
+          ctx.render();
+          ctx.record();
+          syncState();
+          note.set(`Cropped to where ${trackName(track)} goes. Undo to go back.`);
+        }
+
+        function saveTracks(): void {
+          if (!result) return;
+          const blob = new Blob([JSON.stringify(result)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${entry.file.name.replace(/\.[^.]+$/, "")}-tracks.json`;
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        card.body.append(
+          followChoice.root,
+          ctx.ui.row(run.root, stop.root),
+          steps.root,
+          note.root,
+          list.root,
+          actions,
+        );
+        showResult();
         return {
           root: card.root,
           onActivate() {
