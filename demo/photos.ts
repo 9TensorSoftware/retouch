@@ -73,6 +73,49 @@ export const PHOTOS = {
 
 export type PhotoName = keyof typeof PHOTOS;
 
+export interface Clip {
+  /** File name under public/videos/, with a poster beside it as .jpg. */
+  file: string;
+  alt: string;
+  author: string;
+  /** The clip's Pexels page. */
+  url: string;
+  width: number;
+  height: number;
+}
+
+const pexels = "https://www.pexels.com/video";
+
+/** Clips from Pexels (Pexels License), trimmed and re-encoded for the page. */
+export const CLIPS = {
+  hydePark: {
+    file: "hyde-park.mp4",
+    alt: "Hyde Park in autumn: people walking past a row of hire bikes, and a cyclist riding through",
+    author: "George Morina",
+    url: `${pexels}/people-walking-on-the-park-5877158/`,
+    width: 960,
+    height: 540,
+  },
+  parkWalk: {
+    file: "park-walk.mp4",
+    alt: "People walking along a path in a city park, one man carrying a child",
+    author: "Altaf Shah",
+    url: `${pexels}/people-walking-in-a-city-park-15558347/`,
+    width: 960,
+    height: 540,
+  },
+  foggyHill: {
+    file: "foggy-hill.mp4",
+    alt: "Morning fog rolling over a frosted, forested hill at sunrise",
+    author: "Pixabay",
+    url: `${pexels}/foggy-mountain-855615/`,
+    width: 1280,
+    height: 720,
+  },
+} satisfies Record<string, Clip>;
+
+export type ClipName = keyof typeof CLIPS;
+
 /** The photos the gallery opens with, in order. The others join it when opened. */
 export const GALLERY: PhotoName[] = ["pond", "portrait", "corgi", "road", "beach"];
 
@@ -110,6 +153,23 @@ export const POND_EDIT: Recipe = {
     { x: 1, y: 1 },
   ],
   hsl: { orange: { s: 20 }, yellow: { s: 10 } },
+};
+
+/** The foggy hill, graded as it plays: the haze cut, the sunrise warmed. */
+export const FOGGY_EDIT: Recipe = {
+  adjustments: {
+    dehaze: 35,
+    contrast: 112,
+    vibrance: 35,
+    temperature: 18,
+    vignette: 15,
+  },
+  curve: [
+    { x: 0, y: 0 },
+    { x: 0.28, y: 0.22 },
+    { x: 0.72, y: 0.78 },
+    { x: 1, y: 1 },
+  ],
 };
 
 /** Color mix only: the maples go crimson, nothing else moves. */

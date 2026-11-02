@@ -185,7 +185,8 @@ transport. Everything is non-destructive until export:
 
 On-device background removal, 4× super-resolution, an object-erase heal
 brush, face and object detection (labeled COCO boxes, masks, privacy
-pixelate, crop-to-subject), **read text** (OCR in 32 Latin-script languages:
+pixelate, crop-to-subject), **object tracking** through video (each thing
+followed under one number, frame to frame), **read text** (OCR in 32 Latin-script languages:
 copy it, or pixelate it away), **click-to-select** — click any object to
 segment it, then cut it out or magic-erase it in place — **depth
 bokeh** — click to focus and blur by real estimated depth — and one-click

@@ -133,6 +133,18 @@ export {
 } from "./select-tool";
 export { computeTileGrid, type Tile } from "./tiles";
 export {
+  createTracker,
+  type Track,
+  type TrackBox,
+  type TrackedFrame,
+  type TrackedVideo,
+  type Tracker,
+  type TrackerOptions,
+  type TrackSummary,
+  type TrackVideoOptions,
+  trackVideo,
+} from "./track";
+export {
   chw01ToRgba,
   DEFAULT_UPSCALE_MODEL_URL,
   rgbaToChw01,

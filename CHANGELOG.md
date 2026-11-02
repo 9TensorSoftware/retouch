@@ -19,6 +19,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   outlined on the photo and listed in reading order, to copy, or to pixelate in place.
   `recognizeText(image)` returns them without the editor, and `linesToText()` joins them.
 - `ctx.ui.output()`: a read-only block of text a tool produced, selectable and scrollable.
+- **Object tracking** in `@9tensor/retouch-ml`: `trackVideo(video)` runs YOLOX-nano on a clip's
+  frames and follows each object from the frame it enters to the frame it leaves under one
+  number, returning every frame's boxes and a summary of each track. `createTracker()` does the
+  matching for detections from any source. Tracks match by overlap with where each one is
+  heading, hold through a class the detector wavers on and a few missed frames, and aren't
+  numbered until they've been seen three times.
+- The demo page shows video: a **Track** lab that plays two clips with every person and bike
+  followed (and runs the tracker again on the device), a clip graded live as it plays, and a
+  video in the gallery to trim and grade.
 
 ### Changed
 

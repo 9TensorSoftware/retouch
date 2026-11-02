@@ -35,6 +35,14 @@ through the plugin API and ride its edit model.
   (tune it in the Masks tool), **pixelate** for privacy (replaces the image
   in place), or **crop to the detected boxes**. Mask/crop actions ride the
   non-destructive edit model, so they undo like any other edit.
+- **Track (video)** — the same YOLOX-nano, run on a video's frames, with a
+  tracker that follows each object from the frame it enters to the frame it
+  leaves under one number. Boxes match by overlap with where each track is
+  heading; a class the detector wavers on (bicycle or motorcycle) doesn't
+  split a track, a one-frame false positive never gets a number, and a
+  track survives a few missed frames. `trackVideo(video)` seeks through a
+  clip and returns every frame's boxes plus a summary of each track;
+  `createTracker()` takes detections from any source, frame by frame.
 - **Read text (OCR)** — PaddleOCR's two stages (Apache-2.0, ~13 MB together):
   PP-OCRv4 finds the lines, at any angle, and PP-OCRv5's Latin recognizer
   reads them in 32 languages, accents included (é, ñ, ş, ø…). The lines are
@@ -90,7 +98,8 @@ takes an `HTMLImageElement | HTMLCanvasElement` plus options, and accepts
 ```ts
 import {
   denoiseImage, detectFaces, detectObjects, estimateDepth,
-  inpaintStrokes, linesToText, recognizeText, removeBackground, upscaleImage,
+  inpaintStrokes, linesToText, recognizeText, removeBackground, trackVideo,
+  upscaleImage,
 } from "@9tensor/retouch-ml";
 
 const cutout = await removeBackground(image, {
@@ -104,6 +113,24 @@ const lines = await recognizeText(image);            // [{ text, score, quad, x,
 linesToText(lines);                                  // "COTOPAXI\nCORAZÓN  4786m\n…"
 const healed = await inpaintStrokes(image, [{ x, y, r }, …]);
 const depth = await estimateDepth(image);            // { width, height, data: Float32Array } (0–1, higher = closer)
+const tracked = await trackVideo(video, {            // an HTMLVideoElement; it seeks through it
+  fps: 6,                                            // frames read per second of video
+  labels: ["person", "bicycle", "car"],              // optional: only these classes
+  onFrame: (frame, progress) => …,
+});                                                  // { fps, frames: [{ time, boxes: [{ id, label, x, y, w, h, score }] }],
+                                                     //   tracks: [{ id, label, firstSeen, lastSeen, hits }] }
+```
+
+`trackVideo` reads frames at up to 640 px (`maxSize`) and ignores boxes
+smaller than `minSize` (a fraction of the frame). To track detections from
+your own loop — a live camera, say — feed them to a tracker:
+
+```ts
+import { createTracker, detectObjects } from "@9tensor/retouch-ml";
+
+const tracker = createTracker();                     // { iouThreshold, maxMissed, minHits, trailLength }
+const tracks = tracker.update(await detectObjects(canvas), video.currentTime);
+// [{ id, label, x, y, w, h, score, firstSeen, lastSeen, hits, missed, trail }]
 ```
 
 For your own bokeh UI: `prepareBokeh(image, depth)` once, then

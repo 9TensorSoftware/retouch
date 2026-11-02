@@ -508,7 +508,7 @@ h2.display {
 .starts__list {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(208px, 1fr);
+  grid-auto-columns: minmax(188px, 1fr);
   gap: 10px;
   margin: 0;
   padding: 0;
@@ -605,7 +605,9 @@ h2.display {
   user-select: none;
 }
 
-.compare__frame img {
+.compare__frame img,
+.compare__frame video,
+.compare__frame canvas {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -1146,6 +1148,125 @@ h2.display {
   color: var(--ink-3);
   font-size: 13.5px;
   text-wrap: pretty;
+}
+
+/* The Track lab: boxes are rects that follow the video, each with the
+   trail of where it's been; the list is a timeline of every track. */
+.track-lab .lab__stage video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: var(--ratio, 16 / 9);
+  object-fit: cover;
+}
+
+.lab__marks rect {
+  fill: color-mix(in srgb, var(--c) 10%, transparent);
+  stroke: var(--c);
+  stroke-width: 2;
+  cursor: pointer;
+  transition:
+    opacity 0.2s,
+    fill 0.2s;
+}
+
+.lab__marks rect.is-focus {
+  fill: color-mix(in srgb, var(--c) 30%, transparent);
+}
+
+.lab__marks polyline {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 5;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.lab__marks .is-gone,
+.lab__tags .is-gone {
+  visibility: hidden;
+}
+
+.lab[data-focus] .lab__marks rect:not(.is-focus),
+.lab[data-focus] .lab__marks polyline:not(.is-focus) {
+  opacity: 0.15;
+}
+
+.track-lab__play {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(11, 13, 18, 0.62);
+  color: #ffffff;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.track-lab__play svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.track-lab__play[aria-label="Pause"] .track-lab__icon-play,
+.track-lab__play[aria-label="Play"] .track-lab__icon-pause {
+  display: none;
+}
+
+.lab__actions .model {
+  margin-left: auto;
+}
+
+.track-lab .lab__list li {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+}
+
+.track-lab .lab__score {
+  white-space: nowrap;
+}
+
+/* When each track was on screen, over the clip's length, with the playhead. */
+.track-lab__span {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.track-lab__span::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--a) * 100%);
+  width: calc((var(--b) - var(--a)) * 100%);
+  border-radius: inherit;
+  background: var(--c);
+  opacity: 0.45;
+  transition: opacity 0.2s;
+}
+
+.track-lab .lab__list li.is-on .track-lab__span::before {
+  opacity: 1;
+}
+
+.track-lab__span::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: calc(var(--t, 0) * 100%);
+  width: 1.5px;
+  background: rgba(255, 255, 255, 0.75);
 }
 
 /* A live run's findings arrive one by one. */

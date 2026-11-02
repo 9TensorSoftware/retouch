@@ -3,6 +3,8 @@ import {
   installMlTools,
   linesToText,
   recognizeText,
+  type TrackedVideo,
+  trackVideo,
 } from "../packages/ml/src/index";
 import type { EditorTool, ToolContext } from "../src/index";
 import { Retouch, VERSION } from "../src/index";
@@ -20,7 +22,10 @@ import {
 import { mountCompare } from "./compare";
 import { detectionItems, type LabItem, mountLab, textItems, withBounds } from "./labs";
 import {
+  CLIPS,
+  type ClipName,
   describe,
+  FOGGY_EDIT,
   GALLERY,
   LOOKS,
   type Look,
@@ -32,9 +37,13 @@ import {
 } from "./photos";
 import { decoded, lookRecipe, recipeEdits, render, toObjectUrl } from "./render";
 import { LONDON_OBJECTS, SIGNPOST_TEXT } from "./showcase";
+import { mountTrackLab } from "./track-lab";
+import { mountVideoGrade } from "./video-grade";
 
 const BASE = import.meta.env.BASE_URL;
 const photoUrl = (name: PhotoName) => `${BASE}photos/${PHOTOS[name].file}`;
+const clipUrl = (name: ClipName, ext = "mp4") =>
+  `${BASE}videos/${CLIPS[name].file.replace(/\.mp4$/, `.${ext}`)}`;
 
 function $<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -113,15 +122,31 @@ async function photoFile(name: PhotoName, response: Response): Promise<File> {
   });
 }
 
+/** A fetched clip as a File, dated by the server like the photos. */
+async function clipFile(name: ClipName): Promise<File> {
+  const response = await fetch(clipUrl(name));
+  if (!response.ok) throw new Error(`Couldn't load ${CLIPS[name].file}`);
+  const blob = await response.blob();
+  const stamp = Date.parse(response.headers.get("last-modified") ?? "");
+  return new File([blob], CLIPS[name].file, {
+    type: "video/mp4",
+    lastModified: Number.isNaN(stamp) ? undefined : stamp,
+  });
+}
+
+/** The clip the gallery opens with, after the photos. */
+const GALLERY_CLIP: ClipName = "foggyHill";
+
 /** Fetch the sample photos into the gallery; resolves to each one's entry id. */
 async function loadSamples(): Promise<Map<PhotoName, string>> {
-  const files = await Promise.all(
-    GALLERY.map(async (name) => {
+  const files = await Promise.all([
+    ...GALLERY.map(async (name) => {
       const response = await fetch(photoUrl(name));
       if (!response.ok) throw new Error(`Couldn't load ${PHOTOS[name].file}`);
       return photoFile(name, response);
     }),
-  );
+    clipFile(GALLERY_CLIP),
+  ]);
   await editor.addFiles(files);
   const ids = new Map<PhotoName, string>();
   for (const entry of editor.getMedia()) {
@@ -175,6 +200,25 @@ async function editSample(name: PhotoName): Promise<void> {
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-edit]")) {
   button.addEventListener("click", () => void editSample(button.dataset.edit as PhotoName));
+}
+
+/** Open a clip in the editor on Adjust, graded as the page shows it until it's been edited. */
+async function editClip(name: ClipName): Promise<void> {
+  await samples.catch(() => undefined);
+  const file = CLIPS[name].file;
+  let entry = editor.getMedia().find((e) => e.kind === "video" && e.file.name === file);
+  if (!entry) {
+    const before = new Set(editor.getMedia().map((e) => e.id));
+    await editor.addFiles([await clipFile(name)]);
+    entry = editor.getMedia().find((e) => !before.has(e.id));
+  }
+  if (!entry) return;
+  if (name === "foggyHill" && !entry.edited) Object.assign(entry.edits, recipeEdits(FOGGY_EDIT));
+  editor.openEditor(entry.id, { tool: "adjust" });
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-edit-clip]")) {
+  button.addEventListener("click", () => void editClip(button.dataset.editClip as ClipName));
 }
 
 // "Open your photos": one photo goes straight into the editor, more land in
@@ -254,6 +298,19 @@ whenNear(roadFigure, async () => {
   after.src = await toObjectUrl(render(before, ROAD_EDIT, 1600));
   await decoded(after);
   roadCompare.reveal();
+});
+
+// The foggy hill, graded live while it plays, by the same renderer.
+const foggyFigure = $("#foggy-compare");
+const foggyCompare = mountCompare(foggyFigure);
+chips($("#foggy-recipe"), describe(FOGGY_EDIT));
+whenNear(foggyFigure, async () => {
+  mountVideoGrade(
+    $<HTMLVideoElement>("#foggy-before"),
+    $<HTMLCanvasElement>("#foggy-after"),
+    FOGGY_EDIT,
+    () => foggyCompare.reveal(),
+  );
 });
 
 // The portrait in each look the Looks plugin offers.
@@ -393,6 +450,106 @@ copyText.addEventListener("click", async () => {
   }, 1600);
 });
 
+// Track: what the tracker followed through each clip, saved with the page,
+// and the same run again on this device.
+const trackRoot = $("#track-lab");
+const trackLab = mountTrackLab(trackRoot);
+let trackClip: ClipName = "hydePark";
+const trackRuns = new Map<ClipName, TrackedVideo>();
+
+async function savedTracks(name: ClipName): Promise<TrackedVideo | null> {
+  const response = await fetch(clipUrl(name, "tracks.json")).catch(() => null);
+  return response?.ok ? response.json().catch(() => null) : null;
+}
+
+function trackSummary(result: TrackedVideo): string {
+  return `Followed ${result.tracks.length} things through ${result.frames.length} frames`;
+}
+
+async function showClip(name: ClipName): Promise<void> {
+  trackClip = name;
+  const { video } = trackLab;
+  const clip = CLIPS[name];
+  if (!video.src.endsWith(clipUrl(name))) {
+    video.poster = clipUrl(name, "jpg");
+    video.src = clipUrl(name);
+    video.setAttribute("aria-label", clip.alt);
+  }
+  const run = trackRuns.get(name);
+  const result = run ?? (await savedTracks(name));
+  if (trackClip !== name) return;
+  if (!result) {
+    trackLab.status("Run it to watch it follow them on your device.");
+    return;
+  }
+  trackLab.show(result);
+  trackLab.status(
+    run
+      ? `${trackSummary(result)}, on this device (${runsOn}).`
+      : "Saved from an earlier run. Run it to watch it follow them on your device.",
+  );
+}
+
+for (const button of trackRoot.querySelectorAll<HTMLButtonElement>("[data-clip]")) {
+  button.addEventListener("click", () => {
+    for (const other of trackRoot.querySelectorAll("[data-clip]")) {
+      other.setAttribute("aria-pressed", String(other === button));
+    }
+    void showClip(button.dataset.clip as ClipName);
+  });
+}
+whenNear(trackRoot, () => showClip(trackClip));
+
+const TRACKED = ["person", "bicycle", "motorcycle", "car", "bus", "truck", "dog"];
+const trackButton = $<HTMLButtonElement>('[data-run="track"]');
+trackButton.addEventListener("click", async () => {
+  const name = trackClip;
+  const label = trackButton.querySelector("span:last-child");
+  trackButton.disabled = true;
+  trackLab.status("Starting…");
+  // A video of its own to seek through, so the one on the page keeps playing.
+  const video = document.createElement("video");
+  video.muted = true;
+  video.preload = "auto";
+  video.src = clipUrl(name);
+  let downloaded = 0;
+  const started = performance.now();
+  try {
+    const result = await trackVideo(video, {
+      fps: 6,
+      scoreThreshold: 0.4,
+      // People, bikes and traffic; the people in the distance come and go,
+      // so it follows the ones in the scene.
+      labels: TRACKED,
+      minSize: 0.1,
+      onDownloadProgress: (p) => {
+        if (p.loaded < p.total) downloaded = p.total;
+        if (p.loaded < p.total) {
+          trackLab.status(`Downloading the model: ${formatMb(p.loaded)} of ${formatMb(p.total)}…`);
+        }
+      },
+      onFrame: (_frame, progress) => {
+        if (trackClip === name) trackLab.status(`Following… ${Math.round(progress * 100)}%`);
+      },
+    });
+    trackRuns.set(name, result);
+    if (trackClip !== name) return;
+    trackLab.show(result);
+    trackLab.status(
+      `${trackSummary(result)} in ${formatMs(performance.now() - started)}, on this device (${runsOn}).` +
+        (downloaded > 0 ? " That includes the download; it's saved now, so run it again." : ""),
+    );
+    if (label) label.textContent = "Run it again";
+  } catch (error) {
+    trackLab.status("It didn't run on this browser. The tracks above are the saved ones.");
+    console.error(error);
+  } finally {
+    trackButton.disabled = false;
+    video.removeAttribute("src");
+    video.load();
+  }
+});
+
 function segmented(group: string, target: HTMLElement, attribute: string): void {
   const buttons = [...document.querySelectorAll<HTMLButtonElement>(`[data-${group}]`)].filter(
     (button) => button.tagName === "BUTTON",
@@ -452,6 +609,17 @@ $("#credits").replaceChildren(
     const link = document.createElement("a");
     link.href = photo.authorUrl;
     link.textContent = photo.author;
+    const joiner = i === all.length - 1 ? "" : i === all.length - 2 ? " and " : ", ";
+    return [link, joiner];
+  }),
+);
+
+$("#clip-credits").replaceChildren(
+  ...[...new Set(Object.values(CLIPS).map((clip) => clip.author))].flatMap((author, i, all) => {
+    const clip = Object.values(CLIPS).find((c) => c.author === author) as (typeof CLIPS)[ClipName];
+    const link = document.createElement("a");
+    link.href = clip.url;
+    link.textContent = author;
     const joiner = i === all.length - 1 ? "" : i === all.length - 2 ? " and " : ", ";
     return [link, joiner];
   }),
