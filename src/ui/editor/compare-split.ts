@@ -1,6 +1,29 @@
 import { h } from "../h";
 import type { CanvasRenderer } from "./canvas-renderer";
 
+/** How Compare shows the before and after: across a divider, or side by side. */
+export type CompareView = "split" | "side";
+
+const VIEW_KEY = "rt-compare-view";
+
+/** The view this browser's user picked, or nothing yet (or storage is blocked). */
+export function loadCompareView(): CompareView | null {
+  try {
+    const view = localStorage.getItem(VIEW_KEY);
+    return view === "split" || view === "side" ? view : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCompareView(view: CompareView): void {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // Storage unavailable: the pick lasts for this editor only.
+  }
+}
+
 export interface CompareSplitOptions {
   /** The canvas container; the divider lives inside it, so it zooms and pans with the photo. */
   container: HTMLElement;

@@ -30,6 +30,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   numbered with a trail of where it's been, and lists them on a timeline. Pick one to jump to
   it, trim the video to it or crop to where it goes (each one step you can undo), or save the
   tracks as JSON.
+- Compare offers a choice of view once it's on, **Divider** or **Side by side**, and the browser
+  remembers it.
 - `ctx.ui.list()`: rows to pick from, each with a swatch, a note and optionally a span on a
   timeline, with a playhead and the current rows lit.
 - The demo page shows video: a **Track** lab that plays two clips with every person and bike
@@ -57,6 +59,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- Compare did nothing you could see in Crop, and after only a crop or turn, where both sides of
+  the divider are framed alike. Crop now shows the two side by side, and so does Compare after a
+  change of framing, until you pick a view.
 - The photo no longer flashes during a Liquify drag. Each stroke resized the canvas to the size
   it already had, which blanked it until the next frame; it now resizes only when the size changes.
 - Pinch and ⌘/Ctrl + wheel zoom no longer stall on edited photos. Zoomed in, the canvas is drawn

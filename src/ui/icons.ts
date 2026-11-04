@@ -63,6 +63,12 @@ export const ICON_REDO = icon('<path d="M15 7l5 5-5 5M20 12H9a5 5 0 000 10h1"/>'
 export const ICON_EYE = icon(
   '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
 );
+export const ICON_COMPARE_DIVIDER = icon(
+  '<rect x="4" y="6" width="16" height="12" rx="2"/><path d="M12 3v18"/>',
+);
+export const ICON_COMPARE_SIDE = icon(
+  '<rect x="3" y="6" width="8" height="12" rx="1.5"/><rect x="13" y="6" width="8" height="12" rx="1.5"/>',
+);
 export const ICON_HISTORY = icon(
   '<path d="M3.5 12a8.5 8.5 0 108.5-8.5A8.8 8.8 0 005.6 6.1L3.5 8.2"/><path d="M3.5 3.5v4.7h4.7"/><path d="M12 7.5V12l3.2 1.9"/>',
 );

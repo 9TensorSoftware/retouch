@@ -2353,6 +2353,12 @@ const CSS = /* css */ `
   flex: none;
 }
 
+/* Below the panes' headers, so it doesn't cover "Edited". */
+.rt-editor__canvas-area--split .rt-ai {
+  top: 64px;
+  right: 36px;
+}
+
 /* 90%: the same fit margin the renderer gives the edited side. */
 .rt-compare-pane canvas {
   max-width: 90%;
@@ -2392,6 +2398,53 @@ const CSS = /* css */ `
   background: var(--rt-accent);
   border-color: var(--rt-accent);
   color: var(--rt-on-accent);
+}
+
+.rt-editor__compare-views {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--rt-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--rt-line);
+}
+
+.rt-editor__compare-views[hidden] {
+  display: none;
+}
+
+.rt-editor__compare-view {
+  width: 34px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--rt-text-3);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-editor__compare-view svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-editor__compare-view:hover:not([disabled]) {
+  color: var(--rt-text-1);
+}
+
+.rt-editor__compare-view[aria-pressed="true"] {
+  background: var(--rt-surface-overlay);
+  color: var(--rt-text-1);
+  box-shadow: var(--rt-shadow-sm), inset 0 0 0 1px var(--rt-line);
+}
+
+.rt-editor__compare-view[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* Sized by its canvas, so zooming can grow it past the stage (which clips
@@ -5650,6 +5703,11 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
 @media (max-width: 560px) {
   .rt-editor__topbar {
     padding: 0 8px;
+  }
+  /* Too narrow for two photos across: one above the other. */
+  .rt-editor__canvas-area--split {
+    flex-direction: column;
+    gap: 8px;
   }
   .rt-editor__topbar-title {
     display: none;

@@ -90,20 +90,91 @@ describe("editor inspector", () => {
     expect(document.querySelector(".rt-ruler__value")?.textContent).toBe("0.0°");
   });
 
-  it("toggles the before/after divider with Compare and \\, hiding it in Crop", () => {
-    const compare = document.querySelector(".rt-editor__compare-btn") as HTMLButtonElement;
+  describe("Compare", () => {
+    const compare = () => document.querySelector(".rt-editor__compare-btn") as HTMLButtonElement;
     const split = () => document.querySelector(".rt-split") as HTMLElement;
-    tool("Adjust");
-    compare.click();
-    expect(compare.getAttribute("aria-pressed")).toBe("true");
-    expect(split().hidden).toBe(false);
-    tool("Crop");
-    expect(split().hidden).toBe(true);
-    tool("Filters");
-    expect(split().hidden).toBe(false);
-    key("\\");
-    expect(compare.getAttribute("aria-pressed")).toBe("false");
-    expect(split().hidden).toBe(true);
+    const pane = () => document.querySelector(".rt-compare-pane");
+    const views = () => document.querySelector(".rt-editor__compare-views") as HTMLElement;
+    const view = (label: string) =>
+      document.querySelector(
+        `.rt-editor__compare-view[aria-label="${label}"]`,
+      ) as HTMLButtonElement;
+
+    beforeEach(() => localStorage.removeItem("rt-compare-view"));
+    afterEach(() => localStorage.removeItem("rt-compare-view"));
+
+    it("toggles the divider with the button and \\, offering the views while on", () => {
+      tool("Adjust");
+      expect(views().hidden).toBe(true);
+      compare().click();
+      expect(compare().getAttribute("aria-pressed")).toBe("true");
+      expect(split().hidden).toBe(false);
+      expect(pane()).toBeNull();
+      expect(views().hidden).toBe(false);
+      expect(view("Divider").getAttribute("aria-pressed")).toBe("true");
+      key("\\");
+      expect(compare().getAttribute("aria-pressed")).toBe("false");
+      expect(split().hidden).toBe(true);
+      expect(views().hidden).toBe(true);
+    });
+
+    it("switches between the divider and side by side", () => {
+      tool("Adjust");
+      compare().click();
+      view("Side by side").click();
+      expect(pane()).not.toBeNull();
+      expect(split().hidden).toBe(true);
+      expect(view("Side by side").getAttribute("aria-pressed")).toBe("true");
+      view("Divider").click();
+      expect(pane()).toBeNull();
+      expect(split().hidden).toBe(false);
+      key("\\");
+      view("Side by side").click();
+      key("\\");
+      expect(pane()).not.toBeNull();
+      key("\\");
+      expect(pane()).toBeNull();
+    });
+
+    it("has only side by side in Crop, and comes back to the divider after", () => {
+      tool("Adjust");
+      compare().click();
+      tool("Crop");
+      expect(pane()).not.toBeNull();
+      expect(split().hidden).toBe(true);
+      expect(view("Divider").disabled).toBe(true);
+      expect(view("Side by side").getAttribute("aria-pressed")).toBe("true");
+      tool("Filters");
+      expect(pane()).toBeNull();
+      expect(split().hidden).toBe(false);
+      expect(view("Divider").disabled).toBe(false);
+    });
+
+    it("starts side by side when the framing changed, until a view is picked", () => {
+      tool("Adjust");
+      entry.edits.orientation = 90;
+      compare().click();
+      expect(pane()).not.toBeNull();
+      view("Divider").click();
+      expect(split().hidden).toBe(false);
+      key("\\");
+      key("\\");
+      expect(split().hidden).toBe(false);
+    });
+
+    it("remembers the picked view for the next editor", () => {
+      tool("Adjust");
+      compare().click();
+      view("Side by side").click();
+      editor.destroy();
+      document.body.innerHTML = "";
+      entry = makeImageEntry();
+      editor = createEditor({ entry, onDone: vi.fn(), onCancel: vi.fn() });
+      document.body.appendChild(editor.root);
+      tool("Adjust");
+      compare().click();
+      expect(pane()).not.toBeNull();
+    });
   });
 
   it("falls back to side by side when the original no longer lines up", () => {
@@ -122,6 +193,10 @@ describe("editor inspector", () => {
     key("\\");
     expect(document.querySelector(".rt-compare-pane")).not.toBeNull();
     expect((document.querySelector(".rt-split") as HTMLElement).hidden).toBe(true);
+    const divider = document.querySelector(
+      '.rt-editor__compare-view[aria-label="Divider"]',
+    ) as HTMLButtonElement;
+    expect(divider.disabled).toBe(true);
     key("\\");
     expect(document.querySelector(".rt-compare-pane")).toBeNull();
   });

@@ -371,13 +371,17 @@ Shift for ten); a dot marks a slider that's off neutral, and double-clicking
 the label or the track resets it. The inspector's **Reset** clears the active
 tool's edits; the top bar's **Reset all** clears every edit.
 
-**Compare** (or `\`) lays a before/after divider across the photo: drag the
-grip, or move it with the arrow keys. Left of it is the photo without its
-look edits (tone, color, filters, effects, masks, liquify), still framed the
-same way, so the two sides line up even when zoomed. Once edits have been
-committed, the before is the pristine original; if a committed crop or turn
-means it can't line up, Compare shows "Original" and "Edited" side by side
-instead. Videos keep the momentary hold-to-compare gesture. **Toasts**
+**Compare** (or `\`) shows the photo before and after, and the buttons beside
+it choose how; this browser remembers the choice. The **divider** lies across
+the photo: drag the grip, or move it with the arrow keys. Left of it is the
+photo without its look edits (tone, color, filters, effects, masks, liquify),
+still framed the same way, so the two sides line up even when zoomed. **Side by
+side** shows the "Original", untouched, next to the "Edited" photo, crop and
+turns included. Until you choose, Compare starts side by side when the framing
+has changed, since the divider wouldn't show that. Side by side is the only
+view in Crop, and when a committed crop or turn means the original can't line
+up; otherwise, once edits have been committed, the before is the pristine
+original. Videos keep the momentary hold-to-compare gesture. **Toasts**
 announce rejected files and failed exports (the `file:rejected` and
 `export:error` events still fire for custom handling), each with a line on
 what to do about it.

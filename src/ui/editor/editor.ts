@@ -45,6 +45,8 @@ import { h } from "../h";
 import {
   ICON_CAMERA,
   ICON_CHECK,
+  ICON_COMPARE_DIVIDER,
+  ICON_COMPARE_SIDE,
   ICON_EYE,
   ICON_HISTORY,
   ICON_POSTER,
@@ -58,7 +60,12 @@ import type { AiChatHandle } from "./ai-chat";
 import { createAiChat, getStoredAiKey } from "./ai-chat";
 import { CanvasRenderer } from "./canvas-renderer";
 import { listChanges } from "./changes";
-import { createCompareSplit } from "./compare-split";
+import {
+  type CompareView,
+  createCompareSplit,
+  loadCompareView,
+  saveCompareView,
+} from "./compare-split";
 import { createConfirm } from "./confirm";
 import type { TransformOp } from "./context-dock";
 import { createContextDock } from "./context-dock";
@@ -300,6 +307,39 @@ export function createEditor(options: EditorOptions): EditorHandle {
     "aria-label": "Compare with original",
   });
   compareBtn.innerHTML = `${EYE_ICON}<span>Compare</span>`;
+  // How Compare shows the two, once it's on. Sits left of the button, so
+  // the button stays put when this appears.
+  const compareViewBtns = (
+    [
+      ["split", "Divider", ICON_COMPARE_DIVIDER],
+      ["side", "Side by side", ICON_COMPARE_SIDE],
+    ] as const
+  ).map(([view, label, svg]) => {
+    const btn = h("button", {
+      type: "button",
+      class: "rt-editor__compare-view",
+      "aria-label": label,
+      title: label,
+      "aria-pressed": "false",
+    });
+    btn.innerHTML = svg;
+    btn.addEventListener(
+      "click",
+      () => {
+        compareView = view;
+        saveCompareView(view);
+        syncCompare();
+      },
+      { signal },
+    );
+    return { view, label, btn };
+  });
+  const compareViews = h(
+    "div",
+    { class: "rt-editor__compare-views", role: "group", "aria-label": "Compare view" },
+    ...compareViewBtns.map(({ btn }) => btn),
+  );
+  compareViews.hidden = true;
   // On phones the label folds away and the icon stays.
   const resetBtn = h("button", {
     class: "rt-editor__text-btn",
@@ -313,6 +353,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
     "div",
     { class: "rt-editor__topbar-right" },
     historyGroup,
+    ...(entry.kind === "image" ? [compareViews] : []),
     compareBtn,
     resetBtn,
   );
@@ -391,7 +432,10 @@ export function createEditor(options: EditorOptions): EditorHandle {
   );
   const compareSplit = createCompareSplit({ container: canvasContainer, renderer, signal });
   // Declared up here: the first tool selection (below) already reads it.
-  let compareMode: "off" | "split" | "side" = "off";
+  let compareOn = false;
+  let compareMode: "off" | CompareView = "off";
+  // The view this browser's user picked; until they do, the one that shows a difference.
+  let compareView = loadCompareView();
   // The inspector as a bottom sheet on phones; made once the panel exists.
   let sheet: SheetHandle | null = null;
 
@@ -1044,7 +1088,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
       cropTool.refresh();
       syncCropButtons();
     }
-    syncSplitVisibility();
+    syncCompare();
   }
 
   // Tool rail (left). Pins and names are the user's, remembered per browser.
@@ -1450,10 +1494,11 @@ export function createEditor(options: EditorOptions): EditorHandle {
     cropTool.setVisible(activeTool === "crop");
     if (activeTool === "crop") cropTool.refresh();
   }
-  // ── Compare (images): the eye toggles a before/after divider on the
-  // photo. When the before can't line up with the after (a committed image
-  // whose crop or turn was baked in), it shows the original side by side
-  // instead. Videos keep the momentary hold-compare. ──
+  // ── Compare (images): the eye shows the photo before and after, across a
+  // divider or side by side. The divider needs the before to line up with
+  // the after, so a committed image whose crop or turn was baked in, and the
+  // Crop tool with its whole frame and marquee, only have side by side.
+  // Videos keep the momentary hold-compare. ──
 
   let beforePane: HTMLElement | null = null;
 
@@ -1472,11 +1517,6 @@ export function createEditor(options: EditorOptions): EditorHandle {
       Math.abs(shape(original) - shape(entry.image)) < 0.005 &&
       !carvedCanvas;
     return { aligned, image: aligned ? original : null };
-  }
-
-  /** The crop tool shows the whole frame and its marquee; the divider waits. */
-  function syncSplitVisibility(): void {
-    compareSplit.setVisible(compareMode === "split" && activeTool !== "crop");
   }
 
   function buildBeforePane(): HTMLElement {
@@ -1517,21 +1557,42 @@ export function createEditor(options: EditorOptions): EditorHandle {
     if (activeTool === "masks") masksOverlay.refresh();
   }
 
-  function setCompare(on: boolean): void {
-    if (entry.kind !== "image" || on === (compareMode !== "off")) return;
-    if (on) {
-      const before = splitBefore();
-      compareMode = before.aligned ? "split" : "side";
-      if (compareMode === "split") renderer.setBeforeSource(before.image);
-      else setSideBySide(true);
-    } else {
+  /** Bring the stage, the divider, and the view buttons in line with Compare's state. */
+  function syncCompare(): void {
+    if (entry.kind !== "image") return;
+    const before = splitBefore();
+    const inCrop = activeTool === "crop";
+    const canDivide = before.aligned && !inCrop;
+    // The divider keeps both sides framed alike, so a change of framing
+    // alone wouldn't show across it. Liquify does: only the after has it.
+    const framed = !framingIsNeutral({ ...entry.edits, liquify: null });
+    const wanted = compareView ?? (framed ? "side" : "split");
+    const next = !compareOn ? "off" : canDivide ? wanted : "side";
+    if (next !== compareMode) {
       if (compareMode === "side") setSideBySide(false);
-      compareMode = "off";
-      renderer.setBeforeSource(null);
+      if (next === "side") setSideBySide(true);
+      compareMode = next;
     }
-    syncSplitVisibility();
-    compareBtn.classList.toggle("rt-editor__compare-btn--active", on);
-    compareBtn.setAttribute("aria-pressed", String(on));
+    renderer.setBeforeSource(next === "split" ? before.image : null);
+    compareSplit.setVisible(next === "split");
+    compareBtn.classList.toggle("rt-editor__compare-btn--active", compareOn);
+    compareBtn.setAttribute("aria-pressed", String(compareOn));
+    compareViews.hidden = !compareOn;
+    for (const { view, label, btn } of compareViewBtns) {
+      btn.setAttribute("aria-pressed", String(next === view));
+      btn.disabled = view === "split" && !canDivide;
+      btn.title = !btn.disabled
+        ? label
+        : inCrop
+          ? "Crop shows the whole frame, so only side by side"
+          : "The original no longer lines up with this photo, so only side by side";
+    }
+  }
+
+  function setCompare(on: boolean): void {
+    if (entry.kind !== "image" || on === compareOn) return;
+    compareOn = on;
+    syncCompare();
   }
 
   if (entry.kind === "image") {
@@ -1539,7 +1600,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
     compareBtn.setAttribute("aria-label", "Compare before and after");
     compareBtn.setAttribute("aria-pressed", "false");
     compareBtn.setAttribute("aria-keyshortcuts", "\\");
-    compareBtn.addEventListener("click", () => setCompare(compareMode === "off"), { signal });
+    compareBtn.addEventListener("click", () => setCompare(!compareOn), { signal });
   } else {
     compareBtn.addEventListener(
       "pointerdown",
@@ -1904,7 +1965,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
       if (e.altKey) return;
       if (e.key === "\\" && entry.kind === "image") {
         e.preventDefault();
-        setCompare(compareMode === "off");
+        setCompare(!compareOn);
         return;
       }
       if (activeTool === "liquify" && (e.key === "[" || e.key === "]")) {

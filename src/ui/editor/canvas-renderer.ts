@@ -522,6 +522,7 @@ export class CanvasRenderer {
 
   /** Draw the "before" side from this image instead of the source (same aspect ratio). */
   setBeforeSource(image: HTMLImageElement | null): void {
+    if (image === this.beforeSource) return;
     this.beforeSource = image;
     if (this.split !== null) {
       this.drawBeforeFrame();
