@@ -83,7 +83,7 @@ import { createPreviewBase, renderLook, renderLookToCanvas } from "./preview";
 import { loadRailLayout, saveRailLayout } from "./rail-layout";
 import type { SheetHandle } from "./sheet";
 import { createSheet } from "./sheet";
-import { createStageView, wheelCanScroll } from "./stage-view";
+import { createStageView } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools, resolveToolDef } from "./tool-registry";
@@ -1875,6 +1875,12 @@ export function createEditor(options: EditorOptions): EditorHandle {
     signal,
   });
   canvasArea.appendChild(stageView.root);
+  // The page locks behind the modal (styles.ts); this keeps its width as its scroll bar goes.
+  if (!document.querySelector("body > .rt-editor-overlay")) {
+    const page = document.documentElement;
+    const bar = Math.max(0, window.innerWidth - page.clientWidth);
+    page.style.setProperty("--rt-page-scrollbar", `${bar}px`);
+  }
   const root = h(
     "div",
     {
@@ -1900,15 +1906,6 @@ export function createEditor(options: EditorOptions): EditorHandle {
       if (leave) onDone();
     });
   }
-
-  // The page behind the modal stays put: a wheel moves only what can scroll in here.
-  root.addEventListener(
-    "wheel",
-    (e) => {
-      if (!e.defaultPrevented && !e.ctrlKey && !wheelCanScroll(e, root)) e.preventDefault();
-    },
-    { passive: false, signal },
-  );
 
   cancelBtn.addEventListener("click", cancel, { signal });
   doneBtn.addEventListener("click", finish, { signal });

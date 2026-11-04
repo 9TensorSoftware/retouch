@@ -1,5 +1,6 @@
 import { h } from "../h";
 import { ICON_MINUS, ICON_PLUS } from "../icons";
+import { motionOK } from "../motion";
 import type { CanvasRenderer } from "./canvas-renderer";
 
 export interface Point {
@@ -18,6 +19,14 @@ const MAX_MAGNIFICATION = 8;
 const STEP = 1.25;
 /** Quiet time before re-rendering sharp at the new zoom. */
 const SETTLE_MS = 160;
+/** The same for a wheel, whose notches come further apart than a pinch's events. */
+const WHEEL_SETTLE_MS = 320;
+/** Most notches one wheel event counts for, however fast it spins. */
+const MAX_WHEEL_NOTCHES = 2;
+/** How quickly a notch's zoom eases in (time constant, ms). */
+const GLIDE_MS = 40;
+/** Zoom per pixel of continuous scroll or pinch. */
+const ZOOM_PER_PX = 0.0025;
 /** Double-tap zooms in by this much (and a double-tap when zoomed fits). */
 const TAP_ZOOM = 2.5;
 /** Two taps this close in time (ms) and space (px) make a double-tap. */
@@ -34,14 +43,13 @@ function wheelDeltaYOf(e: WheelEvent): number | undefined {
 }
 
 /**
- * Whether a wheel event is a trackpad's two-finger scroll and not a wheel
- * turning. Browsers don't say, so this reads the signature: a wheel moves one
- * axis, and only a trackpad's wheelDeltaY tracks deltaY. Anything unclear
- * counts as a wheel.
+ * Whether a wheel event looks like continuous scrolling (a trackpad, or a
+ * smooth-scrolling mouse) and not a wheel turning notch by notch. Browsers
+ * don't say, so this reads the signature: only there does wheelDeltaY track
+ * deltaY. It sets the zoom's speed, so a wrong guess costs little.
  */
-export function isTrackpadScroll(e: WheelEvent): boolean {
+export function isContinuousScroll(e: WheelEvent): boolean {
   if (e.deltaMode !== 0) return false;
-  if (e.deltaX !== 0) return true;
   const legacy = wheelDeltaYOf(e);
   return legacy !== undefined && Math.abs(legacy + 3 * e.deltaY) < 1;
 }
@@ -54,25 +62,6 @@ export function wheelNotches(e: WheelEvent): number {
   if (e.deltaMode !== 0) return -e.deltaY / 3;
   const legacy = wheelDeltaYOf(e);
   return legacy ? legacy / 120 : -e.deltaY / 100;
-}
-
-/** Whether a wheel event has something to scroll, from its target up to `within`. */
-export function wheelCanScroll(e: WheelEvent, within: Element): boolean {
-  for (let el = e.target as Element | null; el; el = el.parentElement) {
-    const style = getComputedStyle(el);
-    if (
-      (e.deltaY !== 0 &&
-        /auto|scroll/.test(style.overflowY) &&
-        (e.deltaY < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1)) ||
-      (e.deltaX !== 0 &&
-        /auto|scroll/.test(style.overflowX) &&
-        (e.deltaX < 0 ? el.scrollLeft > 0 : el.scrollLeft + el.clientWidth < el.scrollWidth - 1))
-    ) {
-      return true;
-    }
-    if (el === within) break;
-  }
-  return false;
 }
 
 /**
@@ -146,9 +135,9 @@ export interface StageView {
  * Zoom and pan for the editor stage. Changes apply instantly as a CSS
  * transform on the canvas container, then the renderer redraws sharp at the
  * new size once input settles; past the preview's own resolution the CSS
- * scale simply stays. Zoom with the wheel, ⌘/Ctrl + wheel (trackpad pinch), the
- * keys, or the controls; pan with a two-finger trackpad scroll, middle-drag, or
- * Space-drag. On touch: pinch to zoom, two fingers to pan, one finger on the
+ * scale simply stays. Zoom with the wheel, a trackpad's scroll or pinch, the
+ * keys, or the controls; pan with a sideways scroll, middle-drag, or Space-drag.
+ * On touch: pinch to zoom, two fingers to pan, one finger on the
  * photo to pan once zoomed in, and double-tap to zoom in or back to fit.
  */
 export function createStageView(options: StageViewOptions): StageView {
@@ -235,25 +224,69 @@ export function createStageView(options: StageViewOptions): StageView {
    * Redraw sharp once input pauses, when the canvas needs another size (the
    * render itself re-applies via onRender).
    */
-  function settle(): void {
+  function settle(delay = SETTLE_MS): void {
     clearTimeout(settleTimer);
+    // Until then the stage only rescales what's already painted, on its own layer.
+    target.style.willChange = "transform";
     settleTimer = window.setTimeout(() => {
       if (signal.aborted) return;
+      target.style.willChange = "";
       if (renderer.setViewZoom(zoom)) renderer.render();
-    }, SETTLE_MS);
+    }, delay);
   }
 
-  function setZoom(next: number, around: Point = { x: 0, y: 0 }): void {
+  function setZoom(next: number, around: Point = { x: 0, y: 0 }, delay = SETTLE_MS): void {
     if (!enabled) return;
     const clamped = Math.min(maxZoom(), Math.max(1, next));
     if (clamped === zoom) return;
     pan = clamped === 1 ? { x: 0, y: 0 } : zoomAround(pan, around, zoom, clamped);
     zoom = clamped;
     apply();
-    settle();
+    settle(delay);
+  }
+
+  /** A notch's zoom, eased in over a few frames, so turning the wheel doesn't jump. */
+  let glide: { to: number; around: Point; last: number; frame: number } | null = null;
+
+  function stopGlide(): void {
+    if (glide) cancelAnimationFrame(glide.frame);
+    glide = null;
+  }
+
+  function glideStep(now: number): void {
+    if (!glide) return;
+    const eased = 1 - Math.exp(-Math.max(0, now - glide.last) / GLIDE_MS);
+    glide.last = now;
+    const { to, around } = glide;
+    const next = zoom * (to / zoom) ** eased;
+    if (Math.abs(next / to - 1) < 0.005) {
+      glide = null;
+      setZoom(to, around, WHEEL_SETTLE_MS);
+    } else {
+      setZoom(next, around, WHEEL_SETTLE_MS);
+      glide.frame = requestAnimationFrame(glideStep);
+    }
+  }
+
+  function glideZoom(factor: number, around: Point): void {
+    const to = Math.min(maxZoom(), Math.max(1, (glide?.to ?? zoom) * factor));
+    if (glide) {
+      glide.to = to;
+      glide.around = around;
+    } else if (!motionOK()) {
+      setZoom(to, around, WHEEL_SETTLE_MS);
+    } else {
+      glide = {
+        to,
+        around,
+        last: performance.now(),
+        frame: requestAnimationFrame(glideStep),
+      };
+    }
   }
 
   const fitToScreen = (): void => {
+    stopGlide();
     pan = { x: 0, y: 0 };
     const wasZoomed = zoom !== 1;
     zoom = 1;
@@ -270,26 +303,28 @@ export function createStageView(options: StageViewOptions): StageView {
   renderer.onRender(apply);
   signal.addEventListener("abort", () => {
     clearTimeout(settleTimer);
+    stopGlide();
     renderer.onRender(null);
   });
 
-  // ── Wheel: turning it, ⌘/Ctrl and trackpad pinch zoom at the cursor; a trackpad scroll pans ──
+  // ── Wheel: up and down zoom at the cursor; sideways pans when zoomed ──
 
   area.addEventListener(
     "wheel",
     (e) => {
       if (!enabled || (e.target as Element).closest(".rt-ai")) return;
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const perUnit = e.deltaMode === 1 ? 0.05 : 0.0025;
-        setZoom(zoom * Math.exp(-e.deltaY * perUnit), offsetOf(e));
-      } else if (!isTrackpadScroll(e)) {
-        e.preventDefault();
-        setZoom(zoom * STEP ** wheelNotches(e), offsetOf(e));
-      } else if (zoom > 1) {
-        e.preventDefault();
-        pan = { x: pan.x - e.deltaX, y: pan.y - e.deltaY };
-        apply();
+      e.preventDefault();
+      if (!e.ctrlKey && !e.metaKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        if (zoom > 1) {
+          pan = { x: pan.x - e.deltaX, y: pan.y };
+          apply();
+        }
+      } else if (e.ctrlKey || e.metaKey || isContinuousScroll(e)) {
+        const perUnit = e.deltaMode === 1 ? 0.05 : ZOOM_PER_PX;
+        setZoom(zoom * Math.exp(-e.deltaY * perUnit), offsetOf(e), WHEEL_SETTLE_MS);
+      } else {
+        const notches = Math.max(-MAX_WHEEL_NOTCHES, Math.min(MAX_WHEEL_NOTCHES, wheelNotches(e)));
+        glideZoom(STEP ** notches, offsetOf(e));
       }
     },
     { passive: false, signal },

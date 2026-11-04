@@ -1326,6 +1326,15 @@ const CSS = /* css */ `
 
 /* The darkroom: floating panels (top bar, tool rail, stage, inspector) on a
    graphite ground, so the photo is the brightest thing on screen. */
+/* Nothing behind the modal scrolls, or shows a scroll bar. */
+html:has(> body > .rt-editor-overlay) {
+  overflow: hidden;
+}
+
+body:has(> .rt-editor-overlay) {
+  padding-right: var(--rt-page-scrollbar, 0px);
+}
+
 .rt-editor-overlay {
   position: fixed;
   inset: 0;
@@ -2459,6 +2468,12 @@ const CSS = /* css */ `
   border-radius: var(--rt-radius-sm);
   box-shadow: var(--rt-shadow-lg);
   overflow: hidden;
+}
+
+/* Zoomed in, the frame's shadows are off the stage, and costly to scale. */
+.rt-stage--zoomed .rt-editor__canvas-container,
+.rt-stage--zoomed .rt-editor__canvas-container .canvas-container {
+  box-shadow: none;
 }
 
 .rt-editor__canvas-container .canvas-container canvas {

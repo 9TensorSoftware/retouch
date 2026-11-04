@@ -64,9 +64,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
-- The mouse wheel zooms the photo at the pointer, one step a notch. It used to scroll the page
-  behind the editor, which now stays put wherever the wheel turns. A two-finger trackpad scroll
-  still pans when zoomed in.
+- The mouse wheel zooms the photo at the pointer, easing in a step a notch. It used to scroll
+  the page behind the editor. A trackpad's up-and-down scroll now zooms too; a sideways scroll, or
+  Space or middle-button drag, pans.
+- The page behind the editor is locked while it's open, and its scroll bar is gone.
 - Scrolling over a value in Info moves the panel. Each value was its own scroll box, which kept
   the wheel from reaching the panel; long ones now fold, with **Show all**.
 - Compare did nothing you could see in Crop, and after only a crop or turn, where both sides of

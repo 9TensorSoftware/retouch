@@ -1,11 +1,5 @@
 import type { CanvasRenderer } from "../src/ui/editor/canvas-renderer";
-import {
-  clampPan,
-  createStageView,
-  pinchView,
-  wheelCanScroll,
-  zoomAround,
-} from "../src/ui/editor/stage-view";
+import { clampPan, createStageView, pinchView, zoomAround } from "../src/ui/editor/stage-view";
 
 describe("zoomAround", () => {
   it("keeps the point under the cursor still", () => {
@@ -239,62 +233,70 @@ describe("stage view", () => {
 
   it("zooms a step for each notch of a mouse wheel, however few pixels it reports", () => {
     const { area, label, cleanup } = setup(0.5);
+    const notch = (init: WheelEventInit & { wheelDeltaY?: number }): WheelEvent => {
+      const e = wheelOn(area, init);
+      vi.advanceTimersByTime(1000);
+      return e;
+    };
     // A Mac reports a slow notch as about 4 px; elsewhere it's 100, or lines.
-    expect(wheelOn(area, { deltaY: -4.000244, wheelDeltaY: 120 }).defaultPrevented).toBe(true);
+    expect(notch({ deltaY: -4.000244, wheelDeltaY: 120 }).defaultPrevented).toBe(true);
     expect(label()).toBe("63%");
-    wheelOn(area, { deltaY: -100, wheelDeltaY: 120 });
+    notch({ deltaY: -100, wheelDeltaY: 120 });
     expect(label()).toBe("78%");
-    wheelOn(area, { deltaY: 3, deltaMode: 1 });
+    notch({ deltaY: 3, deltaMode: 1 });
     expect(label()).toBe("63%");
-    wheelOn(area, { deltaY: 100 });
+    notch({ deltaY: 100 });
     expect(label()).toBe("50%");
-    // At fit, a further notch out does nothing, and the page still doesn't scroll.
-    expect(wheelOn(area, { deltaY: 100, wheelDeltaY: -120 }).defaultPrevented).toBe(true);
+    expect(notch({ deltaY: 100, wheelDeltaY: -120 }).defaultPrevented).toBe(true);
     expect(label()).toBe("50%");
     cleanup();
   });
 
-  it("pans with a trackpad scroll when zoomed, and doesn't zoom", () => {
-    const { view, area, target, label, cleanup } = setup(0.5);
-    expect(wheelOn(area, { deltaY: 40, wheelDeltaY: -120 }).defaultPrevented).toBe(false);
+  it("adds up notches that land while the last one is still easing in", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    const { area, label, cleanup } = setup(0.5);
+    wheelOn(area, { deltaY: -4, wheelDeltaY: 120 });
+    wheelOn(area, { deltaY: -4, wheelDeltaY: 120 });
     expect(label()).toBe("50%");
+    vi.advanceTimersByTime(1000);
+    expect(label()).toBe("78%");
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("zooms for any vertical scroll, smooth-scrolling mice and trackpads included", () => {
+    const { area, label, cleanup } = setup(0.5);
+    expect(wheelOn(area, { deltaY: -40, wheelDeltaY: 120 }).defaultPrevented).toBe(true);
+    const once = label();
+    expect(once).not.toBe("50%");
+    wheelOn(area, { deltaY: -40.4, wheelDeltaY: 120 });
+    vi.advanceTimersByTime(1000);
+    expect(label()).not.toBe(once);
+    cleanup();
+  });
+
+  it("pans for a sideways scroll, and only when zoomed", () => {
+    const { view, area, target, label, cleanup } = setup(0.5);
+    wheelOn(area, { deltaX: 30, deltaY: 1 });
+    expect(label()).toBe("50%");
+    expect(target.style.transform).toBe("");
     view.zoomBy(2);
     vi.advanceTimersByTime(160);
     const zoomed = label();
     const before = target.style.transform;
-    expect(wheelOn(area, { deltaY: 30, wheelDeltaY: -90 }).defaultPrevented).toBe(true);
+    expect(wheelOn(area, { deltaX: 30, deltaY: 1 }).defaultPrevented).toBe(true);
     expect(target.style.transform).not.toBe(before);
-    const panned = target.style.transform;
-    expect(wheelOn(area, { deltaX: 30, deltaY: 0 }).defaultPrevented).toBe(true);
-    expect(target.style.transform).not.toBe(panned);
     expect(label()).toBe(zoomed);
     cleanup();
   });
 
-  it("tells whether a wheel has anything to scroll", () => {
-    const within = document.createElement("div");
-    const list = document.createElement("div");
-    const item = document.createElement("div");
-    list.style.overflowY = "auto";
-    list.append(item);
-    within.append(list);
-    document.body.append(within);
-    Object.defineProperties(list, {
-      clientHeight: { value: 100 },
-      scrollHeight: { value: 300 },
-    });
-    const can = (el: Element, deltaY: number): boolean => {
-      const e = new WheelEvent("wheel", { bubbles: true, deltaY });
-      el.dispatchEvent(e);
-      return wheelCanScroll(e, within);
-    };
-    expect(can(item, 10)).toBe(true);
-    expect(can(item, -10)).toBe(false);
-    list.scrollTop = 200;
-    expect(can(item, 10)).toBe(false);
-    expect(can(item, -10)).toBe(true);
-    expect(can(within, 10)).toBe(false);
-    within.remove();
+  it("holds the stage on its own layer until the zoom settles", () => {
+    const { view, target, cleanup } = setup(0.5);
+    view.zoomBy(2);
+    expect(target.style.willChange).toBe("transform");
+    vi.advanceTimersByTime(160);
+    expect(target.style.willChange).toBe("");
+    cleanup();
   });
 
   it("turns off (back to fit) while disabled", () => {
