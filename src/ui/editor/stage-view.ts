@@ -28,6 +28,53 @@ const DOUBLE_TAP_PX = 30;
 const BACKGROUND =
   ".rt-editor__canvas-area, .rt-editor__canvas-pane, .rt-editor__pane-content, .rt-editor__canvas-container, .canvas-container, .lower-canvas, .upper-canvas";
 
+/** The wheel's legacy field: notches × 120, or -3 × deltaY on a trackpad. Not in every browser. */
+function wheelDeltaYOf(e: WheelEvent): number | undefined {
+  return (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+}
+
+/**
+ * Whether a wheel event is a trackpad's two-finger scroll and not a wheel
+ * turning. Browsers don't say, so this reads the signature: a wheel moves one
+ * axis, and only a trackpad's wheelDeltaY tracks deltaY. Anything unclear
+ * counts as a wheel.
+ */
+export function isTrackpadScroll(e: WheelEvent): boolean {
+  if (e.deltaMode !== 0) return false;
+  if (e.deltaX !== 0) return true;
+  const legacy = wheelDeltaYOf(e);
+  return legacy !== undefined && Math.abs(legacy + 3 * e.deltaY) < 1;
+}
+
+/**
+ * How many notches a wheel turned, up positive. deltaY can't say on its own:
+ * one notch is 4 px or more on a Mac, depending on speed, and 100 elsewhere.
+ */
+export function wheelNotches(e: WheelEvent): number {
+  if (e.deltaMode !== 0) return -e.deltaY / 3;
+  const legacy = wheelDeltaYOf(e);
+  return legacy ? legacy / 120 : -e.deltaY / 100;
+}
+
+/** Whether a wheel event has something to scroll, from its target up to `within`. */
+export function wheelCanScroll(e: WheelEvent, within: Element): boolean {
+  for (let el = e.target as Element | null; el; el = el.parentElement) {
+    const style = getComputedStyle(el);
+    if (
+      (e.deltaY !== 0 &&
+        /auto|scroll/.test(style.overflowY) &&
+        (e.deltaY < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1)) ||
+      (e.deltaX !== 0 &&
+        /auto|scroll/.test(style.overflowX) &&
+        (e.deltaX < 0 ? el.scrollLeft > 0 : el.scrollLeft + el.clientWidth < el.scrollWidth - 1))
+    ) {
+      return true;
+    }
+    if (el === within) break;
+  }
+  return false;
+}
+
 /**
  * Zoom and pan for a pinch: the zoom scales with the spread of the two
  * fingers, and the photo point that started under their midpoint stays
@@ -99,9 +146,9 @@ export interface StageView {
  * Zoom and pan for the editor stage. Changes apply instantly as a CSS
  * transform on the canvas container, then the renderer redraws sharp at the
  * new size once input settles; past the preview's own resolution the CSS
- * scale simply stays. Pan with the wheel or trackpad, middle-drag, or
- * Space-drag; zoom with ⌘/Ctrl + wheel (trackpad pinch), the keys, or the
- * controls. On touch: pinch to zoom, two fingers to pan, one finger on the
+ * scale simply stays. Zoom with the wheel, ⌘/Ctrl + wheel (trackpad pinch), the
+ * keys, or the controls; pan with a two-finger trackpad scroll, middle-drag, or
+ * Space-drag. On touch: pinch to zoom, two fingers to pan, one finger on the
  * photo to pan once zoomed in, and double-tap to zoom in or back to fit.
  */
 export function createStageView(options: StageViewOptions): StageView {
@@ -226,7 +273,7 @@ export function createStageView(options: StageViewOptions): StageView {
     renderer.onRender(null);
   });
 
-  // ── Wheel: ⌘/Ctrl (and trackpad pinch) zooms at the cursor; otherwise pans ──
+  // ── Wheel: turning it, ⌘/Ctrl and trackpad pinch zoom at the cursor; a trackpad scroll pans ──
 
   area.addEventListener(
     "wheel",
@@ -236,6 +283,9 @@ export function createStageView(options: StageViewOptions): StageView {
         e.preventDefault();
         const perUnit = e.deltaMode === 1 ? 0.05 : 0.0025;
         setZoom(zoom * Math.exp(-e.deltaY * perUnit), offsetOf(e));
+      } else if (!isTrackpadScroll(e)) {
+        e.preventDefault();
+        setZoom(zoom * STEP ** wheelNotches(e), offsetOf(e));
       } else if (zoom > 1) {
         e.preventDefault();
         pan = { x: pan.x - e.deltaX, y: pan.y - e.deltaY };
