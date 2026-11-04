@@ -109,6 +109,8 @@ export class CanvasRenderer {
   /** Source px → CSS px: the stage fit, and the scale the canvas is drawn at. */
   private fitScale = 1;
   private drawScale = 1;
+  /** The size and pixel ratio the fabric canvas was last given. */
+  private canvasSize = "";
   /** CSS magnification the stage adds on top of the drawn canvas. */
   private screenScale = 1;
   /** Post passes on the GPU: undefined until first needed, null when unavailable. */
@@ -430,8 +432,14 @@ export class CanvasRenderer {
     const drawW = Math.round(sourceW * scale);
     const drawH = Math.round(sourceH * scale);
 
-    // Size the fabric canvas to the drawn image dimensions
-    this.fabricCanvas.setDimensions({ width: drawW, height: drawH });
+    // Size the fabric canvas to the drawn image dimensions. Only on a change:
+    // resizing blanks the canvas until the next paint, which a render made
+    // inside an animation frame (a Liquify stroke) would put on screen.
+    const canvasSize = `${drawW}x${drawH}@${this.fabricCanvas.getRetinaScaling()}`;
+    if (canvasSize !== this.canvasSize) {
+      this.canvasSize = canvasSize;
+      this.fabricCanvas.setDimensions({ width: drawW, height: drawH });
+    }
 
     // Straighten fills the frame: zoom by the inverse of the largest
     // inscribed same-aspect rect so rotation never exposes the background.

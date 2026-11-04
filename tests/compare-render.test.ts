@@ -8,7 +8,11 @@ vi.mock("../src/utils/detail", async (importOriginal) => {
   return { ...actual, applyDetailToContext: vi.fn() };
 });
 
-type FabricCanvas = { renderAll(): void; requestRenderAll(): void };
+type FabricCanvas = {
+  renderAll(): void;
+  requestRenderAll(): void;
+  setDimensions(size: { width: number; height: number }): void;
+};
 
 function setup() {
   const container = document.createElement("div");
@@ -53,5 +57,27 @@ describe("compare divider rendering", () => {
     renderer.setAdjustments({ ...edits.adjustments, dehaze: 60 });
     renderer.render();
     expect(request).toHaveBeenCalled();
+  });
+});
+
+describe("canvas sizing", () => {
+  // Resizing a canvas blanks it until the next paint, so an edit that keeps
+  // the size mustn't resize: a Liquify stroke would flash the stage through.
+  it("resizes the canvas only when its size changes", () => {
+    const { renderer, fabric, edits } = setup();
+    const resize = vi.spyOn(fabric, "setDimensions");
+    renderer.render();
+    expect(resize).toHaveBeenCalledTimes(1);
+    expect(resize).toHaveBeenLastCalledWith({ width: 400, height: 300 });
+
+    renderer.setAdjustments({ ...edits.adjustments, dehaze: 60 });
+    renderer.render();
+    renderer.render();
+    expect(resize).toHaveBeenCalledTimes(1);
+
+    renderer.setCrop({ x: 0, y: 0, width: 0.5, height: 1 });
+    renderer.render();
+    expect(resize).toHaveBeenCalledTimes(2);
+    expect(resize).toHaveBeenLastCalledWith({ width: 200, height: 300 });
   });
 });

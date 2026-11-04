@@ -57,6 +57,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- The photo no longer flashes during a Liquify drag. Each stroke resized the canvas to the size
+  it already had, which blanked it until the next frame; it now resizes only when the size changes.
 - Pinch and ⌘/Ctrl + wheel zoom no longer stall on edited photos. Zoomed in, the canvas is drawn
   with no more device pixels than the preview has (on a 2× screen it was drawn at four times
   that), and it's redrawn only when it needs another size, ahead of the zoom.
