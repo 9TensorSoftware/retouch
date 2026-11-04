@@ -13,6 +13,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   image generator's prompt, color profile and Content Credentials, then every EXIF, GPS, XMP,
   IPTC, ICC, PNG and WebP field, raw, to read or copy. Read on the device, without
   dependencies; `readMetadata(file)` and `describeMetadata()` do the same outside the editor.
+- Info edits metadata. The name, camera and lens, date and exposure, location, title, caption,
+  keywords, creator, copyright, license, source, rating and place change where they stand, and
+  empty rows can be filled in. Each change is one undo step, and Esc puts a value back. Exports
+  carry what you changed, as EXIF and XMP (and text chunks in a PNG), in JPEG, PNG and WebP, and
+  only that: the rest of the file's metadata, location included, still stays out.
 - **Read text**, an AI tool in `@9tensor/retouch-ml`: it finds every line of text in a photo,
   at any angle, and reads it in 32 Latin-script languages, accents included, with PaddleOCR's
   PP-OCRv4 detector and PP-OCRv5 Latin recognizer (13 MB together, Apache-2.0). The lines are
@@ -59,6 +64,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- Scrolling over a value in Info moves the panel. Each value was its own scroll box, which kept
+  the wheel from reaching the panel; long ones now fold, with **Show all**.
 - Compare did nothing you could see in Crop, and after only a crop or turn, where both sides of
   the divider are framed alike. Crop now shows the two side by side, and so does Compare after a
   change of framing, until you pick a view.

@@ -1,6 +1,7 @@
-import type { Adjustments, ImageEdits, StylizeKind, VideoEdits } from "../../types";
+import type { Adjustments, ImageEdits, MetadataKey, StylizeKind, VideoEdits } from "../../types";
 import { FILTER_PRESETS } from "../../utils/filters";
 import { HSL_BANDS } from "../../utils/hsl";
+import { EDITABLE, metadataLabel } from "../../utils/metadata-edit";
 import { formatDuration } from "../../utils/video";
 import { signed } from "./slider";
 
@@ -95,6 +96,11 @@ export function listChanges(
     out.push("Lens");
   }
   if (next.seamWidth !== prev.seamWidth) out.push(`Width ${next.seamWidth}%`);
+  for (const key of Object.keys(EDITABLE) as MetadataKey[]) {
+    if ((next.metadata?.[key] ?? null) !== (prev.metadata?.[key] ?? null)) {
+      out.push(metadataLabel(key));
+    }
+  }
 
   if ("trim" in next && "trim" in prev) {
     if (!same(next.trim, prev.trim)) {

@@ -51,9 +51,11 @@ describe("readMetadata (JPEG)", () => {
     const sections = describeMetadata(meta, facts);
     const row = (title: string, label: string) =>
       sections.find((s) => s.title === title)?.rows.find((r) => r.label === label)?.value;
-    expect(row("Camera", "Camera")).toBe("FUJIFILM X-T5");
+    expect(row("Camera", "Make")).toBe("FUJIFILM");
+    expect(row("Camera", "Model")).toBe("X-T5");
     expect(row("Camera", "Lens")).toBe("FUJIFILM XF33mmF1.4 R LM WR");
-    expect(row("Exposure", "Focal length")).toBe("33 mm (50 mm full-frame)");
+    expect(row("Exposure", "Focal length")).toBe("33 mm");
+    expect(row("Exposure", "35mm equivalent")).toBe("50 mm");
     expect(row("Exposure", "Taken")).toContain("2024");
     expect(row("Exposure", "Taken")).toContain("UTC+02:00");
     expect(row("Location", "Coordinates")).toBe("41.00820° N, 28.97840° E");

@@ -8,6 +8,7 @@ import { applyHslToContext, buildHueTable, hslIsNeutral } from "./hsl";
 import { applyLensToCanvas, hasLens } from "./lens";
 import { applyLiquifyToCanvas, liquifyIsNeutral } from "./liquify";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "./masks";
+import { embedMetadata } from "./metadata-edit";
 import { applyKeystone, hasKeystone } from "./perspective";
 import { carveWidthSync } from "./seam";
 import { applyStylizeToContext, stylizeIsNeutral } from "./stylize";
@@ -343,5 +344,5 @@ export async function exportImage(
     outCanvas.toBlob(resolve, `image/${format}`, options.quality ?? 0.92),
   );
   if (!blob) throw new Error("[Retouch] Failed to export image");
-  return blob;
+  return embedMetadata(blob, edits.metadata);
 }

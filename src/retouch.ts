@@ -474,17 +474,19 @@ export class Retouch {
     const edits = structuredClone(entry.edits);
     const type = entry.file.type === "image/jpeg" ? "jpeg" : "png";
     try {
-      const blob = await exportImage(entry.image, edits, {
-        format: type as "jpeg" | "png",
-        quality: 0.95,
-      });
+      // Metadata edits aren't pixels: they stay edits, and go in on export.
+      const blob = await exportImage(
+        entry.image,
+        { ...edits, metadata: {} },
+        { format: type as "jpeg" | "png", quality: 0.95 },
+      );
       const file = new File([blob], entry.file.name, { type: `image/${type}` });
       const image = await loadImage(file);
       this.stashOriginal(entry);
       if (!framingIsNeutral(edits)) this.reframed.add(entry);
       entry.file = file;
       entry.image = image;
-      entry.edits = structuredClone(DEFAULT_EDITS);
+      entry.edits = { ...structuredClone(DEFAULT_EDITS), metadata: edits.metadata };
       await this.refreshThumbnail(entry);
       this.emitter.emit("image:commit", { id: entry.id });
       if (this.viewState === "gallery") this.remountGallery();
@@ -618,6 +620,13 @@ export class Retouch {
     let thumbnail: Promise<void> | undefined;
     if (commit && entry) {
       entry.edited = true;
+      // A new name lives on the file itself from here, so everything sees it.
+      const name = entry.edits.metadata?.fileName;
+      if (name && entry.edits.metadata) {
+        const { file } = entry;
+        entry.file = new File([file], name, { type: file.type, lastModified: file.lastModified });
+        delete entry.edits.metadata.fileName;
+      }
       thumbnail = this.refreshThumbnail(entry);
       this.emitter.emit("editor:done", { id, edits: entry.edits });
       if (

@@ -106,6 +106,7 @@ export const DEFAULT_EDITS: ImageEdits = {
   stylize: createDefaultStylize(),
   filter: "none",
   filterStrength: 100,
+  metadata: {},
 };
 
 export function createDefaultVideoEdits(duration: number): VideoEdits {

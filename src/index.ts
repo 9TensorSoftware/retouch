@@ -20,6 +20,8 @@ export type {
   ImageExportOptions,
   MediaEntry,
   MediaKind,
+  MetadataEdits,
+  MetadataKey,
   OpenEditorOptions,
   Orientation,
   RailOptions,

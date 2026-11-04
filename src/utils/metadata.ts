@@ -4,6 +4,8 @@
 // no dependencies. Everything is collected as raw fields, grouped by where
 // it came from, and `describeMetadata` turns that into readable sections.
 
+import type { MetadataEdits, MetadataKey } from "../types";
+
 export type MetadataSource =
   | "file"
   | "exif"
@@ -425,7 +427,7 @@ function num(v: TagValue | undefined): number | undefined {
   return undefined;
 }
 
-const trimNumber = (n: number, digits = 2): string =>
+export const trimNumber = (n: number, digits = 2): string =>
   Number.isInteger(n) ? String(n) : n.toFixed(digits).replace(/\.?0+$/, "");
 
 /** "1/250 s", "2.5 s" */
@@ -1062,7 +1064,22 @@ export async function readMetadata(file: Blob | Uint8Array): Promise<PhotoMetada
 export interface InfoRow {
   label: string;
   value: string;
+  /** The field to change, when this row can be edited. */
+  key?: MetadataKey;
+  /** What to edit, when the value is shown some other way ("★★★★☆" for 4). */
+  input?: string;
 }
+
+export interface DescribeOptions {
+  /** Edits made so far, for a panel that can make them: it also offers the empty rows. */
+  edits?: MetadataEdits;
+}
+
+type RowSpec = [
+  label: string,
+  value: string | undefined,
+  spec?: { key: MetadataKey; blank?: boolean; input?: string },
+];
 
 export interface InfoSection {
   title: string;
@@ -1167,7 +1184,11 @@ export function fieldLabel(name: string): string {
  * The panel's sections: the file, then camera, exposure, location,
  * description and color, each only when there's something to say.
  */
-export function describeMetadata(meta: PhotoMetadata, file: FileFacts): InfoSection[] {
+export function describeMetadata(
+  meta: PhotoMetadata,
+  file: FileFacts,
+  options: DescribeOptions = {},
+): InfoSection[] {
   const first = (...names: string[]): string | undefined => {
     for (const name of names) {
       const f = meta.fields.find((x) => x.name === name);
@@ -1176,16 +1197,27 @@ export function describeMetadata(meta: PhotoMetadata, file: FileFacts): InfoSect
     return undefined;
   };
   const sections: InfoSection[] = [];
-  const add = (title: string, rows: Array<[string, string | undefined]>) => {
+  const editable = !!options.edits;
+  const add = (title: string, rows: RowSpec[]) => {
     const kept = rows
-      .filter((r): r is [string, string] => !!r[1])
-      .map(([label, value]) => ({ label, value }));
+      .filter(([, value, spec]) => {
+        if (value) return true;
+        if (!editable || !spec?.key) return false;
+        // Empty rows to fill in, and any you've just emptied.
+        return !!spec.blank || spec.key in (options.edits ?? {});
+      })
+      .map(([label, value, spec]) => {
+        const row: InfoRow = { label, value: value ?? "" };
+        if (spec?.key) row.key = spec.key;
+        if (spec?.input !== undefined) row.input = spec.input;
+        return row;
+      });
     if (kept.length) sections.push({ title, rows: kept });
   };
 
   const mp = (file.width * file.height) / 1e6;
   add("File", [
-    ["Name", file.name],
+    ["Name", file.name, { key: "fileName" }],
     // The file on screen now (a cutout turns a JPEG into a PNG); the metadata may be the original's.
     [
       "Format",
@@ -1199,16 +1231,11 @@ export function describeMetadata(meta: PhotoMetadata, file: FileFacts): InfoSect
     ["Modified", file.lastModified ? new Date(file.lastModified).toLocaleString() : undefined],
   ]);
 
-  const make = first("Make", "tiff:Make");
-  const model = first("Model", "tiff:Model");
-  const camera =
-    model && make && !model.toLowerCase().startsWith(make.toLowerCase().split(" ")[0])
-      ? `${make} ${model}`
-      : (model ?? make);
   const lensModel = first("LensModel", "aux:Lens", "exifEX:LensModel");
   const lensMake = first("LensMake");
   add("Camera", [
-    ["Camera", camera],
+    ["Make", first("Make", "tiff:Make"), { key: "make" }],
+    ["Model", first("Model", "tiff:Model"), { key: "model" }],
     [
       "Lens",
       lensModel
@@ -1216,32 +1243,35 @@ export function describeMetadata(meta: PhotoMetadata, file: FileFacts): InfoSect
           ? `${lensMake} ${lensModel}`
           : lensModel
         : first("LensSpecification"),
+      { key: "lens" },
     ],
-    ["Serial number", first("BodySerialNumber", "aux:SerialNumber")],
-    ["Owner", first("OwnerName", "aux:OwnerName")],
-    ["Software", first("Software", "xmp:CreatorTool")],
+    ["Serial number", first("BodySerialNumber", "aux:SerialNumber"), { key: "serial" }],
+    ["Owner", first("OwnerName", "aux:OwnerName"), { key: "owner" }],
+    ["Software", first("Software", "xmp:CreatorTool"), { key: "software" }],
   ]);
 
-  const focal = first("FocalLength");
-  const focal35 = first("FocalLengthIn35mmFormat");
+  const taken = first("DateTimeOriginal", "DateTimeDigitized", "DateTime");
+  const takenOffset = first("OffsetTimeOriginal", "OffsetTime");
   add("Exposure", [
     [
       "Taken",
-      (() => {
-        const d = first("DateTimeOriginal", "DateTimeDigitized", "DateTime");
-        return d
-          ? formatExifDate(d, first("OffsetTimeOriginal", "OffsetTime"))
-          : first("xmp:CreateDate", "photoshop:DateCreated", "DateCreated");
-      })(),
+      taken
+        ? formatExifDate(taken, takenOffset)
+        : first("xmp:CreateDate", "photoshop:DateCreated", "DateCreated"),
+      {
+        key: "taken",
+        // Typed the same way everywhere, whatever the display locale says.
+        input: taken
+          ? `${taken.replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3")}${takenOffset ? ` ${takenOffset}` : ""}`
+          : undefined,
+      },
     ],
-    ["Shutter", first("ExposureTime", "ShutterSpeedValue")],
-    ["Aperture", first("FNumber", "ApertureValue")],
-    ["ISO", first("ISO")],
-    [
-      "Focal length",
-      focal ? (focal35 && focal35 !== focal ? `${focal} (${focal35} full-frame)` : focal) : focal35,
-    ],
-    ["Exposure bias", first("ExposureBiasValue")],
+    ["Shutter", first("ExposureTime", "ShutterSpeedValue"), { key: "shutter" }],
+    ["Aperture", first("FNumber", "ApertureValue"), { key: "aperture" }],
+    ["ISO", first("ISO"), { key: "iso" }],
+    ["Focal length", first("FocalLength"), { key: "focal" }],
+    ["35mm equivalent", first("FocalLengthIn35mmFormat"), { key: "focal35" }],
+    ["Exposure bias", first("ExposureBiasValue"), { key: "bias" }],
     ["Program", first("ExposureProgram")],
     ["Metering", first("MeteringMode")],
     ["Flash", first("Flash")],
@@ -1249,25 +1279,33 @@ export function describeMetadata(meta: PhotoMetadata, file: FileFacts): InfoSect
     ["Scene", first("SceneCaptureType")],
   ]);
 
-  if (meta.gps) {
-    const { latitude, longitude, altitude } = meta.gps;
-    const coord = (v: number, pos: string, neg: string) =>
-      `${Math.abs(v).toFixed(5)}° ${v >= 0 ? pos : neg}`;
-    add("Location", [
-      ["Coordinates", `${coord(latitude, "N", "S")}, ${coord(longitude, "E", "W")}`],
-      ["Altitude", altitude === undefined ? undefined : `${trimNumber(altitude, 0)} m`],
-      [
-        "Facing",
-        (() => {
-          const dir = first("GPSImgDirection");
-          return dir ? `${Math.round(Number.parseFloat(dir))}°` : undefined;
-        })(),
-      ],
-    ]);
-  }
+  const coord = (v: number, pos: string, neg: string) =>
+    `${Math.abs(v).toFixed(5)}° ${v >= 0 ? pos : neg}`;
+  const gps = meta.gps;
+  add("Location", [
+    [
+      "Coordinates",
+      gps ? `${coord(gps.latitude, "N", "S")}, ${coord(gps.longitude, "E", "W")}` : undefined,
+      { key: "coordinates", blank: true },
+    ],
+    [
+      "Altitude",
+      gps?.altitude === undefined ? undefined : `${trimNumber(gps.altitude, 0)} m`,
+      gps ? { key: "altitude", blank: true } : undefined,
+    ],
+    [
+      "Facing",
+      (() => {
+        const dir = first("GPSImgDirection");
+        return dir && gps ? `${Math.round(Number.parseFloat(dir))}°` : undefined;
+      })(),
+      gps ? { key: "facing", blank: true } : undefined,
+    ],
+  ]);
 
+  const rating = Number.parseInt(first("xmp:Rating", "Rating") ?? "", 10);
   add("Description", [
-    ["Title", first("dc:title", "ObjectName", "XPTitle", "Title")],
+    ["Title", first("dc:title", "ObjectName", "XPTitle", "Title"), { key: "title", blank: true }],
     [
       "Caption",
       first(
@@ -1279,28 +1317,36 @@ export function describeMetadata(meta: PhotoMetadata, file: FileFacts): InfoSect
         "UserComment",
         "Comment",
       ),
+      { key: "caption", blank: true },
     ],
-    ["Keywords", first("dc:subject", "Keywords", "XPKeywords")],
-    ["Creator", first("Artist", "dc:creator", "By-line", "XPAuthor", "Author")],
-    ["Copyright", first("Copyright", "dc:rights", "CopyrightNotice")],
-    ["License", first("xmpRights:WebStatement")],
-    ["Source", first("dc:source", "Source")],
+    ["Keywords", first("dc:subject", "Keywords", "XPKeywords"), { key: "keywords", blank: true }],
+    [
+      "Creator",
+      first("Artist", "dc:creator", "By-line", "XPAuthor", "Author"),
+      { key: "creator", blank: true },
+    ],
+    [
+      "Copyright",
+      first("Copyright", "dc:rights", "CopyrightNotice"),
+      { key: "copyright", blank: true },
+    ],
+    ["License", first("xmpRights:WebStatement"), { key: "license", blank: true }],
+    ["Source", first("dc:source", "Source"), { key: "source", blank: true }],
     [
       "Rating",
-      (() => {
-        const r = Number.parseInt(first("xmp:Rating", "Rating") ?? "", 10);
-        return r > 0 && r <= 5 ? "★".repeat(r) + "☆".repeat(5 - r) : undefined;
-      })(),
+      rating > 0 && rating <= 5 ? "★".repeat(rating) + "☆".repeat(5 - rating) : undefined,
+      { key: "rating", blank: true, input: rating > 0 && rating <= 5 ? String(rating) : undefined },
     ],
     [
-      "Place",
-      [
-        first("City", "photoshop:City", "Iptc4xmpCore:Location"),
-        first("Province-State", "photoshop:State"),
-        first("Country-PrimaryLocationName", "photoshop:Country"),
-      ]
-        .filter(Boolean)
-        .join(", ") || undefined,
+      "City",
+      first("City", "photoshop:City", "Iptc4xmpCore:Location"),
+      { key: "city", blank: true },
+    ],
+    ["State", first("Province-State", "photoshop:State"), { key: "state", blank: true }],
+    [
+      "Country",
+      first("Country-PrimaryLocationName", "photoshop:Country"),
+      { key: "country", blank: true },
     ],
   ]);
 

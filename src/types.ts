@@ -336,6 +336,40 @@ export interface Curves {
   b: CurvePoint[];
 }
 
+/** A piece of a file's metadata that can be changed. */
+export type MetadataKey =
+  | "fileName"
+  | "make"
+  | "model"
+  | "lens"
+  | "serial"
+  | "owner"
+  | "software"
+  | "taken"
+  | "shutter"
+  | "aperture"
+  | "iso"
+  | "focal"
+  | "focal35"
+  | "bias"
+  | "coordinates"
+  | "altitude"
+  | "facing"
+  | "title"
+  | "caption"
+  | "keywords"
+  | "creator"
+  | "copyright"
+  | "license"
+  | "source"
+  | "rating"
+  | "city"
+  | "state"
+  | "country";
+
+/** Each changed field's new value; "" clears it. A field left out stays as the file has it. */
+export type MetadataEdits = Partial<Record<MetadataKey, string>>;
+
 export interface ImageEdits {
   /** Normalized over the oriented (rotated/flipped) source. */
   crop: CropRect;
@@ -372,6 +406,8 @@ export interface ImageEdits {
   filter: FilterPreset;
   /** Preset intensity, 0–100. */
   filterStrength: number;
+  /** Changes to the file's metadata, written into exports. Images, bar the file name. */
+  metadata?: MetadataEdits;
 }
 
 export interface VideoEdits extends ImageEdits {

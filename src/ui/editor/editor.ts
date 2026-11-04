@@ -30,6 +30,7 @@ import { hslIsNeutral } from "../../utils/hsl";
 import { applyBrushStroke, createWarpField, liquifyIsNeutral } from "../../utils/liquify";
 import { masksAreNeutral } from "../../utils/masks";
 import { clamp } from "../../utils/math";
+import { metadataEdited } from "../../utils/metadata-edit";
 import { carveWidthAsync } from "../../utils/seam";
 import { stylizeIsNeutral } from "../../utils/stylize";
 import {
@@ -122,6 +123,8 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
     parts.push("Lens");
   }
   if (next.seamWidth !== prev.seamWidth) parts.push("Content-aware scale");
+  if (JSON.stringify(next.metadata ?? {}) !== JSON.stringify(prev.metadata ?? {}))
+    parts.push("Info");
   if (JSON.stringify(next.liquify) !== JSON.stringify(prev.liquify)) parts.push("Liquify");
   if (JSON.stringify(next.curves) !== JSON.stringify(prev.curves)) parts.push("Curves");
   if (JSON.stringify(next.hsl) !== JSON.stringify(prev.hsl)) parts.push("Color mix");
@@ -270,6 +273,9 @@ export function createEditor(options: EditorOptions): EditorHandle {
 
   // Top bar
   const filenameEl = h("span", { class: "rt-editor__filename" }, entry.file.name);
+  function syncFilename(): void {
+    filenameEl.textContent = entry.edits.metadata?.fileName ?? entry.file.name;
+  }
   const dimsText =
     entry.kind === "video"
       ? `${entry.width} × ${entry.height} · ${formatDuration(entry.duration)}`
@@ -1014,7 +1020,11 @@ export function createEditor(options: EditorOptions): EditorHandle {
     customPanes.push({ id: plugin.id, root: handle.root });
   }
   if (tools.includes("info")) {
-    const info = createInfoTool(entry, signal);
+    const info = createInfoTool(entry, signal, () => {
+      syncFilename();
+      history?.record();
+      syncHeadReset();
+    });
     customHandles.set("info", info);
     customPanes.push({ id: "info", root: info.root });
   }
@@ -1152,6 +1162,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
       trimTool?.setDeflicker(entry.edits.deflicker);
     }
     for (const handle of customHandles.values()) handle.sync?.();
+    syncFilename();
     renderer.render();
     cropTool.resetSelection();
     cropTool.refresh();
@@ -1199,6 +1210,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
       entry.edits.stylize = { ...state.stylize };
       entry.edits.filter = state.filter;
       entry.edits.filterStrength = state.filterStrength;
+      entry.edits.metadata = { ...state.metadata };
       if (entry.kind === "video" && "trim" in state) {
         const v = entry.edits as VideoEdits;
         v.trim = { ...state.trim };
@@ -1353,6 +1365,13 @@ export function createEditor(options: EditorOptions): EditorHandle {
           touched: () => toolTouched("stylize"),
           reset: () => {
             e.stylize = createDefaultStylize();
+          },
+        };
+      case "info":
+        return {
+          touched: () => metadataEdited(e.metadata),
+          reset: () => {
+            e.metadata = {};
           },
         };
       case "filters":
@@ -1872,6 +1891,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
   // Button handlers
   function cancel(): void {
     Object.assign(entry.edits, editSnapshot);
+    entry.edits.metadata = editSnapshot.metadata;
     onCancel();
   }
   /** Done, once a crop frame nobody applied is applied or discarded. */

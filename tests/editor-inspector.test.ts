@@ -201,6 +201,134 @@ describe("editor inspector", () => {
     expect(document.querySelector(".rt-compare-pane")).toBeNull();
   });
 
+  describe("Info", () => {
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const open = async () => {
+      // jsdom's File can't be read; an empty one has nothing to say.
+      entry.file.arrayBuffer = async () => new ArrayBuffer(0);
+      tool("Info");
+      await vi.waitFor(() => expect(input("Title")).not.toBeNull());
+    };
+    const input = (label: string) =>
+      document.querySelector<HTMLTextAreaElement>(`.rt-info textarea[aria-label="${label}"]`);
+    const type = async (label: string, text: string) => {
+      const area = input(label) as HTMLTextAreaElement;
+      area.focus();
+      area.value = text;
+      area.dispatchEvent(new Event("input"));
+      area.blur();
+      await flush();
+    };
+    const undo = () => document.querySelector<HTMLButtonElement>('[aria-label="Undo"]');
+
+    it("edits a value where it stands, as one undo step", async () => {
+      await open();
+      expect(entry.edits.metadata?.title).toBeUndefined();
+      await type("Title", "Pond");
+      expect(entry.edits.metadata?.title).toBe("Pond");
+      expect(input("Title")?.value).toBe("Pond");
+      expect(reset().hidden).toBe(false);
+      undo()?.click();
+      await flush();
+      expect(entry.edits.metadata?.title).toBeUndefined();
+      expect(input("Title")?.value).toBe("");
+    });
+
+    it("turns down what it can't read, and keeps what's there", async () => {
+      await open();
+      await type("Coordinates", "somewhere");
+      expect(entry.edits.metadata?.coordinates).toBeUndefined();
+      expect(input("Coordinates")?.getAttribute("aria-invalid")).toBe("true");
+      expect(document.querySelector(".rt-info__hint")?.textContent).toContain("41.0082");
+      await type("Coordinates", "41, 29");
+      expect(entry.edits.metadata?.coordinates).toBe("41.000000, 29.000000");
+      expect(document.querySelector(".rt-info__hint")).toBeNull();
+      expect(document.querySelector(".rt-info__link")).not.toBeNull();
+    });
+
+    it("finishes on Enter and puts the value back on Esc", async () => {
+      await open();
+      const area = input("Title") as HTMLTextAreaElement;
+      area.focus();
+      area.value = "Thrown away";
+      area.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await flush();
+      expect(entry.edits.metadata?.title).toBeUndefined();
+      expect(input("Title")?.value).toBe("");
+      const again = input("Title") as HTMLTextAreaElement;
+      again.focus();
+      again.value = "Kept";
+      again.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await flush();
+      expect(entry.edits.metadata?.title).toBe("Kept");
+    });
+
+    it("leaves no edit when a value goes back to what the file says", async () => {
+      await open();
+      await type("Title", "Pond");
+      await type("Title", "");
+      expect(entry.edits.metadata).toEqual({});
+    });
+
+    it("renames, keeping the extension, in the top bar too", async () => {
+      await open();
+      const before = entry.file.name;
+      const extension = before.slice(before.lastIndexOf("."));
+      await type("Name", "Renamed");
+      expect(entry.edits.metadata?.fileName).toBe(`Renamed${extension}`);
+      expect(document.querySelector(".rt-editor__filename")?.textContent).toBe(
+        `Renamed${extension}`,
+      );
+      expect(entry.file.name).toBe(before);
+    });
+
+    it("keeps the next field's focus through the redraw", async () => {
+      await open();
+      const title = input("Title") as HTMLTextAreaElement;
+      title.focus();
+      title.value = "Pond";
+      title.dispatchEvent(new Event("input"));
+      (input("Caption") as HTMLTextAreaElement).focus();
+      await flush();
+      expect(document.activeElement).toBe(input("Caption"));
+    });
+
+    it("folds a long value to read, with no scrolling of its own", async () => {
+      // A PNG's IHDR, then a long text chunk; the reader doesn't check the CRC.
+      const long = `parameters\0${"word ".repeat(200)}`;
+      const data = new TextEncoder().encode(long);
+      const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+      const ihdr = [0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0];
+      const head = new Uint8Array([...signature, ...ihdr, 0, 0, 0, 0]);
+      const size = new Uint8Array(8);
+      new DataView(size.buffer).setUint32(0, data.length);
+      size.set([0x74, 0x45, 0x58, 0x74], 4);
+      const bytes = new Uint8Array([...head, ...size, ...data, 0, 0, 0, 0]);
+      entry.file.arrayBuffer = async () => bytes.buffer as ArrayBuffer;
+      tool("Info");
+      await vi.waitFor(() =>
+        expect(document.querySelector(".rt-info__long")?.textContent).toContain("word"),
+      );
+      const fold = document.querySelector(".rt-info__long") as HTMLElement;
+      const more = document.querySelector(".rt-info__more") as HTMLButtonElement;
+      expect(more.textContent).toBe("Show all");
+      more.click();
+      expect(fold.classList.contains("rt-info__long")).toBe(false);
+      expect(more.textContent).toBe("Show less");
+    });
+
+    it("drops the edits on Cancel", async () => {
+      await open();
+      await type("Title", "Pond");
+      document.querySelector<HTMLButtonElement>(".rt-editor__btn-cancel")?.click();
+      await flush();
+      document
+        .querySelector<HTMLButtonElement>(".rt-confirm button:last-child, .rt-confirm__discard")
+        ?.click();
+      expect(entry.edits.metadata?.title).toBeUndefined();
+    });
+  });
+
   it("resizes the liquify brush with [ and ]", () => {
     tool("Liquify");
     const size = () =>

@@ -3156,17 +3156,117 @@ const CSS = /* css */ `
   color: var(--rt-text-3);
 }
 
-/* Long values (a generator's prompt, a caption) scroll instead of running on. */
+/* No scroll box of their own: a wheel over a value moves the panel. */
 .rt-info__rows dd {
-  max-height: 9.5em;
   margin: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  min-width: 0;
   color: var(--rt-text-1);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   user-select: text;
   -webkit-user-select: text;
+}
+
+/* A generator's prompt or workflow can run to pages: folded, with a way in. */
+.rt-info__long {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+}
+
+.rt-info__more {
+  display: block;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--rt-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rt-info__more:hover {
+  text-decoration: underline;
+}
+
+.rt-info__more:focus-visible {
+  outline: 2px solid var(--rt-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* An editable value reads as text until you reach for it. The hidden copy
+   sizes the field to its content, so it never scrolls inside itself. */
+.rt-info__rows dd.rt-info__field {
+  display: grid;
+  margin: -2px -5px;
+}
+
+.rt-info__field::after {
+  content: attr(data-value) " ";
+  grid-area: 1 / 1;
+  padding: 2px 5px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  visibility: hidden;
+}
+
+.rt-info__input {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 4px;
+  outline: 0;
+  overflow: hidden;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+  transition: background-color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-info__input::placeholder {
+  color: var(--rt-text-3);
+}
+
+.rt-info__input:hover {
+  background: var(--rt-control-hover);
+}
+
+.rt-info__input:focus {
+  background: var(--rt-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--rt-focus);
+}
+
+.rt-info__input[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1px var(--rt-danger);
+}
+
+.rt-info__hint {
+  grid-row: 2;
+  padding: 2px 5px 0;
+  color: var(--rt-danger-text);
+  font-size: var(--rt-type-xs);
+  white-space: normal;
+}
+
+/* The same dot a slider off neutral shows. */
+.rt-info__rows dt.rt-info__edited::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--rt-accent);
+  vertical-align: middle;
 }
 
 .rt-info__rows--raw {
@@ -5895,6 +5995,7 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   }
   /* iOS zooms the page in on any field set under 16 px. */
   .rt-editor-overlay input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+  .rt-info__field::after,
   .rt-editor-overlay textarea {
     font-size: 16px;
   }
