@@ -2239,6 +2239,9 @@ body:has(> .rt-editor-overlay) {
   background:
     radial-gradient(65% 60% at 50% 45%, var(--rt-surface-wash), transparent 72%),
     var(--rt-surface-subtle);
+  /* A drag here moves the view or the tool: it never selects what's on the stage. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Zoomed in, a drag on the photo or around it moves the view. */
@@ -5271,6 +5274,8 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
 /* Vertical chat panel, anchored to the trigger corner */
 
 .rt-ai__panel {
+  user-select: text;
+  -webkit-user-select: text;
   display: none;
   flex-direction: column;
   width: min(400px, 86vw);
@@ -5993,7 +5998,6 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
     padding-bottom: 12px;
     touch-action: none;
     -webkit-touch-callout: none;
-    user-select: none;
   }
   .rt-zoom button {
     height: 40px;

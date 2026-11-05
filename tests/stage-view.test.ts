@@ -337,6 +337,24 @@ describe("stage view", () => {
       cleanup();
     });
 
+    it("never lets the browser start its own drag on the stage", () => {
+      const { view, area, target, cleanup } = setup(0.5);
+      const photo = onStage(target, "lower-canvas");
+      const chat = onStage(area, "rt-ai");
+      const dragStart = (from: Node): boolean => {
+        const e = new Event("dragstart", { bubbles: true, cancelable: true });
+        from.dispatchEvent(e);
+        return e.defaultPrevented;
+      };
+      view.zoomBy(2);
+
+      expect(dragStart(photo)).toBe(true);
+      // A selection's drag comes from its text.
+      expect(dragStart(photo.appendChild(document.createTextNode("23%")))).toBe(true);
+      expect(dragStart(chat.appendChild(document.createTextNode("a reply")))).toBe(false);
+      cleanup();
+    });
+
     it("does nothing at fit", () => {
       const { area, target, cleanup } = setup(0.5);
       mouse(onStage(target, "lower-canvas"), "pointerdown", 100, 100);

@@ -432,6 +432,16 @@ export function createStageView(options: StageViewOptions): StageView {
   };
   area.addEventListener("pointerup", endDrag, { signal });
   area.addEventListener("pointercancel", endDrag, { signal });
+  // The browser's own drag, of a text selection say, would cancel the pointer and end the pan.
+  area.addEventListener(
+    "dragstart",
+    (e) => {
+      const node = e.target as Node;
+      const el = node instanceof Element ? node : node.parentElement;
+      if (!el?.closest(".rt-ai")) e.preventDefault();
+    },
+    { capture: true, signal },
+  );
 
   // ── Touch: pinch, two-finger pan, one-finger pan when zoomed, double-tap ──
 
