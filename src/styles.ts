@@ -2440,6 +2440,26 @@ body:has(> .rt-editor-overlay) {
 }
 
 /* The mouse's lines across the stage, and which pixel it's on. */
+.rt-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.rt-outline__dim {
+  fill: var(--rt-scrim);
+  fill-rule: evenodd;
+}
+
+.rt-outline__edge {
+  fill: none;
+  stroke: var(--rt-on-media);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
 .rt-guides {
   position: absolute;
   inset: 0;

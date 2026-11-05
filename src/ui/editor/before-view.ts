@@ -1,9 +1,12 @@
+import type { Point } from "../../utils/framing";
 import { h } from "../h";
 import { createPixelGuides, type GuidesSwitch } from "./pixel-guides";
 import { createStageView, type StageRenderer, type StageView } from "./stage-view";
 
 /** The longest side the original is drawn at, however far it's zoomed. */
 const MAX_SIDE = 8192;
+
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 export interface BeforeViewOptions {
   /** The photo as it was, before any edits. */
@@ -19,6 +22,51 @@ export interface BeforeView {
   stage: StageView;
   /** Fit the original to the pane, as it stands now. */
   render(): void;
+  /** Trace where the result comes from, in fractions of the original; null for nothing. */
+  setOutline(points: Point[] | null): void;
+}
+
+/**
+ * The result's edge over the original, with what it left out dimmed. It's
+ * drawn over the pane rather than inside the zoomed canvas, so the line stays
+ * the same weight at any zoom; the inner svg clips it to the photo.
+ */
+function createOutline(content: HTMLElement, canvas: HTMLElement) {
+  const root = document.createElementNS(SVG_NS, "svg");
+  const photo = document.createElementNS(SVG_NS, "svg");
+  const dim = document.createElementNS(SVG_NS, "path");
+  const edge = document.createElementNS(SVG_NS, "path");
+  root.setAttribute("class", "rt-outline");
+  root.setAttribute("aria-hidden", "true");
+  dim.setAttribute("class", "rt-outline__dim");
+  edge.setAttribute("class", "rt-outline__edge");
+  photo.append(dim, edge);
+  root.append(photo);
+  content.append(root);
+
+  let points: Point[] | null = null;
+
+  function draw(): void {
+    root.style.display = points ? "" : "none";
+    if (!points) return;
+    const box = content.getBoundingClientRect();
+    const shown = canvas.getBoundingClientRect();
+    photo.setAttribute("x", String(shown.left - box.left));
+    photo.setAttribute("y", String(shown.top - box.top));
+    photo.setAttribute("width", String(shown.width));
+    photo.setAttribute("height", String(shown.height));
+    const line = `M${points.map((p) => `${p.x * shown.width} ${p.y * shown.height}`).join("L")}Z`;
+    dim.setAttribute("d", `M0 0H${shown.width}V${shown.height}H0Z${line}`);
+    edge.setAttribute("d", line);
+  }
+
+  return {
+    draw,
+    set(next: Point[] | null) {
+      points = next;
+      draw();
+    },
+  };
 }
 
 /**
@@ -38,6 +86,7 @@ export function createBeforeView(options: BeforeViewOptions): BeforeView {
     h("div", { class: "rt-compare-header" }, "Original"),
     content,
   );
+  const outline = createOutline(content, canvas);
 
   let fit = 1;
   let viewZoom = 1;
@@ -98,7 +147,10 @@ export function createBeforeView(options: BeforeViewOptions): BeforeView {
     target: canvas,
     renderer,
     spacePan: true,
-    onChange: () => guides.refresh(),
+    onChange: () => {
+      guides.refresh();
+      outline.draw();
+    },
     onView: options.onView,
     signal,
   });
@@ -111,5 +163,5 @@ export function createBeforeView(options: BeforeViewOptions): BeforeView {
     signal.addEventListener("abort", () => observer.disconnect(), { once: true });
   }
 
-  return { pane, stage, render: () => renderer.render() };
+  return { pane, stage, render: () => renderer.render(), setOutline: outline.set };
 }

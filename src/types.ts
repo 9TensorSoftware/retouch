@@ -484,6 +484,20 @@ export interface ViewHandle {
   destroy(options?: { fade?: boolean }): void;
 }
 
+/** What one set of edits did to the frame of the pixels it worked on. */
+export interface Framing {
+  width: number;
+  height: number;
+  crop: CropRect;
+  rotation: number;
+  keystoneV: number;
+  keystoneH: number;
+  lensDistortion: number;
+  orientation: Orientation;
+  flipH: boolean;
+  flipV: boolean;
+}
+
 /** An image's pixels at one point of an editing session. */
 export interface PhotoState {
   file: File;
@@ -491,6 +505,8 @@ export interface PhotoState {
   original?: { file: File; image: HTMLImageElement };
   /** The original no longer lines up with these pixels (a baked crop or turn). */
   reframed: boolean;
+  /** How each bake framed the pixels before it, oldest first. */
+  framings: Framing[];
 }
 
 /** One undo step in the editor. */

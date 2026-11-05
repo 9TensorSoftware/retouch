@@ -10,6 +10,7 @@ import type {
   EditorStep,
   EditorTool,
   FileRejectionReason,
+  Framing,
   GalleryViewMode,
   ImageEdits,
   ImageEntry,
@@ -37,6 +38,7 @@ import { createToastHost, rejectionDetail, rejectionMessage, rejectionSummary } 
 import { filesFromPaste, readClipboardFiles } from "./utils/clipboard";
 import { framingIsNeutral, imageEditsAreNeutral } from "./utils/edits";
 import { formatNames } from "./utils/formats";
+import { framingOf } from "./utils/framing";
 import {
   createThumbnailUrl,
   exportImage,
@@ -456,6 +458,9 @@ export class Retouch {
    */
   private readonly reframed = new WeakSet<ImageEntry>();
 
+  /** How each bake framed the pixels before it, to trace the result on the original. */
+  private readonly framings = new WeakMap<ImageEntry, Framing[]>();
+
   /** Keep the pristine source around the first time pixels get replaced. */
   private stashOriginal(entry: ImageEntry): void {
     if (!entry.original) {
@@ -483,7 +488,13 @@ export class Retouch {
       const file = new File([blob], entry.file.name, { type: `image/${type}` });
       const image = await loadImage(file);
       this.stashOriginal(entry);
-      if (!framingIsNeutral(edits)) this.reframed.add(entry);
+      if (!framingIsNeutral(edits)) {
+        this.reframed.add(entry);
+        this.framings.set(entry, [
+          ...(this.framings.get(entry) ?? []),
+          framingOf(edits, entry.image.naturalWidth, entry.image.naturalHeight),
+        ]);
+      }
       entry.file = file;
       entry.image = image;
       entry.edits = { ...structuredClone(DEFAULT_EDITS), metadata: edits.metadata };
@@ -510,6 +521,7 @@ export class Retouch {
     entry.image = entry.original.image;
     entry.original = undefined;
     this.reframed.delete(entry);
+    this.framings.delete(entry);
     entry.edits = structuredClone(DEFAULT_EDITS);
     entry.edited = false;
     revokeThumbnailUrl(entry.thumbnailUrl);
@@ -570,6 +582,7 @@ export class Retouch {
       image: entry.image,
       original: entry.original,
       reframed: this.reframed.has(entry),
+      framings: this.framings.get(entry) ?? [],
     };
   }
 
@@ -582,6 +595,7 @@ export class Retouch {
     entry.original = photo.original;
     if (photo.reframed) this.reframed.add(entry);
     else this.reframed.delete(entry);
+    this.framings.set(entry, photo.framings);
     entry.edits = structuredClone(step.edits) as ImageEdits;
     revokeThumbnailUrl(entry.thumbnailUrl);
     entry.thumbnailUrl = createThumbnailUrl(entry.file);
@@ -1039,6 +1053,7 @@ export class Retouch {
       hasOriginal: () => entry.kind === "image" && !!entry.original,
       originalAligned: () =>
         entry.kind === "image" && !!entry.original && !this.reframed.has(entry),
+      bakedFramings: () => (entry.kind === "image" ? (this.framings.get(entry) ?? []) : []),
       onRestoreOriginal: () => void this.restoreOriginal(entry.id),
       onCaptureFrame:
         entry.kind === "video"

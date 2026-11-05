@@ -71,6 +71,25 @@ export function remapLensData(
   return out;
 }
 
+/**
+ * Where a point of the corrected frame was sampled from, in fractions of a
+ * width×height frame: the same radial model as `remapLensData`.
+ */
+export function lensSourcePoint(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  distortion: number,
+): { x: number; y: number } {
+  const k = (distortion / 100) * MAX_K;
+  const dx = (x - 0.5) * width;
+  const dy = (y - 0.5) * height;
+  const r2 = (dx * dx + dy * dy) / ((width * width + height * height) / 4);
+  const scale = 1 + k * r2;
+  return { x: 0.5 + (x - 0.5) * scale, y: 0.5 + (y - 0.5) * scale };
+}
+
 /** Warp `src` into `dst` (same dimensions) through the lens model. */
 export function applyLensToCanvas(
   src: HTMLCanvasElement,

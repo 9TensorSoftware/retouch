@@ -15,6 +15,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   sharp as it zooms. A lock between the panes keeps them zooming and moving together. It's on by
   default, and remembered. Where a crop or turn has given them different frames, they keep the
   same zoom and relative position, not the same pixel.
+- Side by side outlines the result on the original, and dims what it left out: a box for a crop,
+  tilted for a straighten, bent for perspective and lens corrections. It follows edits as they're
+  made, and crops and turns already baked in with Done. Liquify and content-aware width don't
+  move it.
 - Zoomed in, drag the photo to move around it, with a mouse as with a finger. In Crop that works
   while the frame still covers the whole photo, and around it after. Tools that draw on the photo
   keep the drag, and say once how to move instead: Space or the middle button. A sideways scroll

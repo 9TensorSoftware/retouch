@@ -11,9 +11,11 @@ import {
 import type {
   AiEditOps,
   AiOptions,
+  CropRect,
   EditorHistory,
   EditorStep,
   EditorTool,
+  Framing,
   ImageEdits,
   MediaEntry,
   PhotoState,
@@ -24,6 +26,7 @@ import type {
 import { createCanvas } from "../../utils/canvas";
 import { curvesAreIdentity } from "../../utils/curves";
 import { framingIsNeutral } from "../../utils/edits";
+import { framingOf, outlineOf } from "../../utils/framing";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
 import { hslIsNeutral } from "../../utils/hsl";
@@ -189,6 +192,8 @@ export interface EditorOptions {
    * was baked in moved nothing), so Compare can show it across the divider.
    */
   originalAligned?: () => boolean;
+  /** How each bake framed the pixels before it, oldest first. */
+  bakedFramings?: () => Framing[];
   /** Restore the pristine original (Reset on a committed image). */
   onRestoreOriginal?: () => void;
   /** Undo steps carried over from the editor this one replaces. */
@@ -450,6 +455,8 @@ export function createEditor(options: EditorOptions): EditorHandle {
   const guidesSwitch = createGuidesSwitch();
   // Declared up here: the first tool selection (below) already reads it.
   let compareOn = false;
+  let beforeView: BeforeView | null = null;
+  let beforeAbort: AbortController | null = null;
   let compareMode: "off" | CompareView = "off";
   // The view this browser's user picked; until they do, the one that shows a difference.
   let compareView = loadCompareView();
@@ -606,19 +613,25 @@ export function createEditor(options: EditorOptions): EditorHandle {
   function syncCropButtons(): void {
     syncHeadReset();
     dock.setCropPending(!cropTool.isSelectionFull());
+    syncOutline();
   }
 
-  /** Compose the pending selection into the committed crop. */
-  function applyCrop(): void {
-    if (cropTool.isSelectionFull()) return;
+  /** The committed crop with the marquee's selection composed into it. */
+  function selectedCrop(): CropRect {
     const sel = cropTool.getSelection();
     const c = entry.edits.crop;
-    entry.edits.crop = {
+    return {
       x: clamp(c.x + sel.x * c.width, 0, 1),
       y: clamp(c.y + sel.y * c.height, 0, 1),
       width: clamp(sel.width * c.width, 0.01, 1),
       height: clamp(sel.height * c.height, 0.01, 1),
     };
+  }
+
+  /** Compose the pending selection into the committed crop. */
+  function applyCrop(): void {
+    if (cropTool.isSelectionFull()) return;
+    entry.edits.crop = selectedCrop();
     renderer.setCrop(entry.edits.crop);
     renderer.render();
     cropTool.resetSelection();
@@ -1530,8 +1543,6 @@ export function createEditor(options: EditorOptions): EditorHandle {
   // Crop tool with its whole frame and marquee, only have side by side.
   // Videos keep the momentary hold-compare. ──
 
-  let beforeView: BeforeView | null = null;
-  let beforeAbort: AbortController | null = null;
   signal.addEventListener("abort", () => beforeAbort?.abort(), { once: true });
   let compareLocked = loadCompareLock();
   /** Which pane was zoomed or moved last: locking takes up its view. */
@@ -1581,6 +1592,18 @@ export function createEditor(options: EditorOptions): EditorHandle {
     return { aligned, image: aligned ? original : null };
   }
 
+  /** Trace the result on the Original pane: the edits on it now, and every bake before them. */
+  function syncOutline(): void {
+    if (!beforeView || entry.kind !== "image") return;
+    const crop = activeTool === "crop" ? selectedCrop() : entry.edits.crop;
+    beforeView.setOutline(
+      outlineOf([
+        ...(options.bakedFramings?.() ?? []),
+        framingOf({ ...entry.edits, crop }, entry.image.naturalWidth, entry.image.naturalHeight),
+      ]),
+    );
+  }
+
   function setSideBySide(on: boolean): void {
     if (on && entry.kind === "image") {
       beforeAbort = new AbortController();
@@ -1607,6 +1630,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
     renderer.render();
     beforeView?.render();
     if (beforeView && compareLocked) beforeView.stage.setView(stageView.getView());
+    syncOutline();
     cropTool.refresh();
     if (activeTool === "masks") masksOverlay.refresh();
   }
@@ -1917,6 +1941,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
       if (activeTool === "crop") cropTool.refresh();
       if (activeTool === "masks") masksOverlay.refresh();
       pixelGuides.refresh();
+      syncOutline();
     },
     onView: () => viewed(stageView),
     viewport: () => (beforeView ? paneContent : canvasArea),
