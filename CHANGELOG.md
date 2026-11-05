@@ -69,7 +69,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 ### Fixed
 
 - Keys named in the editor's messages (Space, Enter, Shift, the arrows, the brush's `[` and `]`)
-  look like the shortcuts on the rail, rather than plain words.
+  look like the shortcuts on the rail, rather than plain words. So do the keys on the tooltips of
+  Undo, Redo, Compare, the zoom buttons, Play/Pause, Apply and Clear selection, and each shows the
+  keys of the computer it is on.
 - A crop corner pulled off in one direction no longer stays stuck on it. A drag keeps to the
   direction it starts in only through the hand's drift: once the pointer heads clearly off it, the
   drag follows the pointer. The same goes for moving the crop frame, mask handles and curve points.

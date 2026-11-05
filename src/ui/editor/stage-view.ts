@@ -1,5 +1,6 @@
 import { h, keycap } from "../h";
 import { ICON_MINUS, ICON_PLUS } from "../icons";
+import { keyTip } from "../key-tip";
 import { motionOK } from "../motion";
 import { isTouchFirst } from "../platform";
 import type { CanvasRenderer } from "./canvas-renderer";
@@ -159,20 +160,25 @@ export function createStageView(options: StageViewOptions): StageView {
     type: "button",
     class: "rt-zoom__btn",
     "aria-label": "Zoom out",
-    title: "Zoom out (−)",
+    "aria-keyshortcuts": "-",
   });
   outBtn.innerHTML = ICON_MINUS;
   const inBtn = h("button", {
     type: "button",
     class: "rt-zoom__btn",
     "aria-label": "Zoom in",
-    title: "Zoom in (+)",
+    "aria-keyshortcuts": "+",
   });
   inBtn.innerHTML = ICON_PLUS;
   const value = h("span", { class: "rt-zoom__value" });
   const fitBtn = h(
     "button",
-    { type: "button", class: "rt-zoom__text", title: "Fit to screen (0)" },
+    {
+      type: "button",
+      class: "rt-zoom__text",
+      "aria-label": "Fit to screen",
+      "aria-keyshortcuts": "0",
+    },
     "Fit",
   );
   const actualBtn = h(
@@ -336,6 +342,9 @@ export function createStageView(options: StageViewOptions): StageView {
   };
   const actualPixels = (): void => setZoom(1 / renderer.getViewScales().fit);
 
+  keyTip(outBtn, "Zoom out", "−", signal);
+  keyTip(inBtn, "Zoom in", "+", signal);
+  keyTip(fitBtn, "Fit to screen", "0", signal);
   outBtn.addEventListener("click", () => setZoom(zoom / STEP), { signal });
   inBtn.addEventListener("click", () => setZoom(zoom * STEP), { signal });
   fitBtn.addEventListener("click", fitToScreen, { signal });

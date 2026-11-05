@@ -1,6 +1,8 @@
 import type { AiOptions } from "../../types";
 import { h } from "../h";
 import { ICON_CLOSE, ICON_SEND, ICON_SPARKLE } from "../icons";
+import { keyTip } from "../key-tip";
+import { shortcutLabel } from "../platform";
 
 /** What an applied AI command reports back to the chat. */
 export interface AiReply {
@@ -56,10 +58,10 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
 
   const trigger = h("button", {
     class: "rt-ai__trigger",
-    title: "Ask AI (⌘K)",
     "aria-label": "Ask AI to edit",
+    "aria-keyshortcuts": "Meta+K Control+K",
   });
-  trigger.innerHTML = `${SPARKLE_ICON}<span>Ask AI</span><kbd class="rt-ai__kbd">⌘K</kbd>`;
+  trigger.innerHTML = `${SPARKLE_ICON}<span>Ask AI</span><kbd class="rt-ai__kbd">${shortcutLabel("K")}</kbd>`;
 
   // ── Panel: header · messages · input ──
 
@@ -110,10 +112,11 @@ export function createAiChat(options: AiChatOptions): AiChatHandle {
   }) as HTMLInputElement;
   const sendBtn = h("button", {
     class: "rt-ai__send",
-    title: "Apply (Enter)",
     "aria-label": "Apply",
+    "aria-keyshortcuts": "Enter",
   });
   sendBtn.innerHTML = SEND_ICON;
+  keyTip(sendBtn, "Apply", "Enter", signal);
   const form = h("div", { class: "rt-ai__form" }, input, sendBtn);
 
   const panel = h(

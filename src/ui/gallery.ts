@@ -19,6 +19,7 @@ import {
   ICON_VIEW_STRIP,
   iconElement,
 } from "./icons";
+import { keyTip } from "./key-tip";
 import { isTouchFirst } from "./platform";
 
 export interface GalleryOptions {
@@ -190,10 +191,11 @@ export function createGallery(options: GalleryOptions): ViewHandle {
       type: "button",
       class: "rt-gallery__clear",
       "aria-label": "Clear selection",
-      title: "Clear selection (Esc)",
+      "aria-keyshortcuts": "Escape",
     },
     iconElement(ICON_CLOSE),
   );
+  keyTip(clearBtn, "Clear selection", "Esc", rootSignal);
   clearBtn.addEventListener("click", () => clearSelection(), { signal: rootSignal });
 
   const viewBtns = VIEWS.map((def) => {

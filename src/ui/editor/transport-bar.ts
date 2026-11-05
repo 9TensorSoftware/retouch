@@ -5,6 +5,7 @@ import type { SeekQueue } from "../../utils/video";
 import { clampTrim, formatTime, generateFilmstrip, snapTime } from "../../utils/video";
 import { h } from "../h";
 import { ICON_MUTED, ICON_PAUSE, ICON_PLAY, ICON_SOUND } from "../icons";
+import { keyTip } from "../key-tip";
 
 export interface TransportBarOptions {
   video: HTMLVideoElement;
@@ -63,10 +64,11 @@ export function createTransportBar(options: TransportBarOptions): TransportBarHa
 
   const playBtn = h("button", {
     class: "rt-video-bar__btn",
-    title: "Play/Pause (Space)",
     "aria-label": "Play/pause",
+    "aria-keyshortcuts": "Space",
   });
   playBtn.innerHTML = PLAY_ICON;
+  keyTip(playBtn, "Play/Pause", "Space", signal);
 
   const muteBtn = h("button", { class: "rt-video-bar__btn", title: "Mute", "aria-label": "Mute" });
   video.muted = edits.mute;

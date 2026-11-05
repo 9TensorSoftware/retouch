@@ -56,6 +56,8 @@ import {
   ICON_SPARKLE,
   ICON_UNDO,
 } from "../icons";
+import { keyTip } from "../key-tip";
+import { isApple, shortcutLabel } from "../platform";
 import { createAdjustTool } from "./adjust-tool";
 import type { AiChatHandle } from "./ai-chat";
 import { createAiChat, getStoredAiKey } from "./ai-chat";
@@ -286,16 +288,18 @@ export function createEditor(options: EditorOptions): EditorHandle {
 
   const undoBtn = h("button", {
     class: "rt-editor__icon-btn",
-    title: "Undo (⌘/Ctrl+Z)",
     "aria-label": "Undo",
+    "aria-keyshortcuts": "Meta+Z Control+Z",
   });
   undoBtn.innerHTML = UNDO_ICON;
   const redoBtn = h("button", {
     class: "rt-editor__icon-btn",
-    title: "Redo (⌘/Ctrl+⇧Z)",
     "aria-label": "Redo",
+    "aria-keyshortcuts": "Meta+Shift+Z Control+Shift+Z",
   });
   redoBtn.innerHTML = REDO_ICON;
+  keyTip(undoBtn, "Undo", shortcutLabel("Z"), signal);
+  keyTip(redoBtn, "Redo", isApple() ? "⌘⇧Z" : "Ctrl+Shift+Z", signal);
   const historyBtn = h("button", {
     class: "rt-editor__icon-btn",
     title: "Edit history",
@@ -1615,7 +1619,8 @@ export function createEditor(options: EditorOptions): EditorHandle {
   }
 
   if (entry.kind === "image") {
-    compareBtn.title = "Compare before and after (\\)";
+    compareBtn.removeAttribute("title");
+    keyTip(compareBtn, "Compare before and after", "\\", signal);
     compareBtn.setAttribute("aria-label", "Compare before and after");
     compareBtn.setAttribute("aria-pressed", "false");
     compareBtn.setAttribute("aria-keyshortcuts", "\\");

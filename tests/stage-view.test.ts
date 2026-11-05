@@ -194,7 +194,7 @@ describe("stage view", () => {
     const { label, button, target, cleanup } = setup(0.25);
     button("1:1")?.click();
     expect(label()).toBe("100%");
-    button("Fit")?.click();
+    button("Fit to screen")?.click();
     expect(label()).toBe("25%");
     vi.advanceTimersByTime(160);
     expect(target.style.transform).toBe("");

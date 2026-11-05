@@ -2052,6 +2052,10 @@ body:has(> .rt-editor-overlay) {
   transform: translate(-50%, -100%);
 }
 
+.rt-tooltip[data-side="bottom"] {
+  transform: translateX(-50%);
+}
+
 .rt-tooltip[hidden] {
   display: none;
 }
