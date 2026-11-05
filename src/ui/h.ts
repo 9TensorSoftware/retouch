@@ -26,3 +26,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(
 
   return el;
 }
+
+/** A key named in running text, styled like the shortcuts on the rail. */
+export function keycap(label: string): HTMLElement {
+  return h("kbd", { class: "rt-kbd" }, label);
+}

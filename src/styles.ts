@@ -2056,6 +2056,16 @@ body:has(> .rt-editor-overlay) {
   display: none;
 }
 
+/* A key named in a message, as the rail shows its shortcuts. */
+.rt-kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--rt-control);
+  color: var(--rt-text-2);
+  font: 500 var(--rt-type-xs) var(--rt-font-mono);
+}
+
 .rt-tooltip kbd {
   padding: 1px 5px;
   border-radius: 4px;

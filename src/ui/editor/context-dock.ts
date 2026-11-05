@@ -1,6 +1,6 @@
 import { ASPECT_RATIOS } from "../../constants";
 import type { AspectRatioPreset, EditorTool, ImageEdits, ViewHandle } from "../../types";
-import { h } from "../h";
+import { h, keycap } from "../h";
 import { ICON_FLIP_H, ICON_FLIP_V, ICON_ROTATE_CCW, ICON_ROTATE_CW } from "../icons";
 import type { AdjustToolHandle } from "./adjust-tool";
 import { createSection } from "./controls";
@@ -198,7 +198,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       "p",
       { class: "rt-dock__hint rt-crop-pane__note" },
       cropHint,
-      h("span", { class: "rt-keys" }, " or Enter."),
+      h("span", { class: "rt-keys" }, " or ", keycap("Enter"), "."),
       h("span", { class: "rt-touch" }, "."),
     ),
   );

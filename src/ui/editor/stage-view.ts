@@ -1,4 +1,4 @@
-import { h } from "../h";
+import { h, keycap } from "../h";
 import { ICON_MINUS, ICON_PLUS } from "../icons";
 import { motionOK } from "../motion";
 import { isTouchFirst } from "../platform";
@@ -183,7 +183,9 @@ export function createStageView(options: StageViewOptions): StageView {
   const hint = h(
     "div",
     { class: "rt-zoom__hint", role: "status", hidden: true },
-    options.spacePan ? "Hold Space and drag to move" : "Drag with the middle button to move",
+    ...(options.spacePan
+      ? ["Hold ", keycap("Space"), " and drag to move"]
+      : ["Drag with the middle button to move"]),
   );
   const root = h(
     "div",

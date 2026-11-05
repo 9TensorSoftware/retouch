@@ -426,6 +426,8 @@ describe("stage view", () => {
       expect(hint.hidden).toBe(true);
       vi.advanceTimersByTime(160);
       expect(hint.hidden).toBe(false);
+      expect(hint.textContent).toBe("Hold Space and drag to move");
+      expect(hint.querySelector("kbd.rt-kbd")?.textContent).toBe("Space");
       vi.advanceTimersByTime(4000);
       expect(hint.hidden).toBe(true);
 

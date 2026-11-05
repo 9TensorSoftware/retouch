@@ -1,4 +1,4 @@
-import { h } from "../h";
+import { h, keycap } from "../h";
 import { createSlider } from "./slider";
 
 export interface LiquifyToolOptions {
@@ -71,7 +71,15 @@ export function createLiquifyTool(options: LiquifyToolOptions): LiquifyToolHandl
       "p",
       { class: "rt-dock__hint rt-liquify__hint" },
       "Drag on the photo to push pixels.",
-      h("span", { class: "rt-keys" }, " Press [ and ] to change the brush size."),
+      h(
+        "span",
+        { class: "rt-keys" },
+        " Press ",
+        keycap("["),
+        " and ",
+        keycap("]"),
+        " to change the brush size.",
+      ),
     ),
     sizeSlider.root,
     strengthSlider.root,

@@ -1,6 +1,6 @@
 import type { TrimRange, VideoEdits } from "../../types";
 import { formatTime } from "../../utils/video";
-import { h } from "../h";
+import { h, keycap } from "../h";
 import type { TransportBarHandle } from "./transport-bar";
 
 export interface TrimToolOptions {
@@ -148,7 +148,17 @@ export function createTrimTool(options: TrimToolOptions): TrimToolHandle {
         "span",
         { class: "rt-dock__hint" },
         "Drag the handles on the filmstrip",
-        h("span", { class: "rt-keys" }, " · arrows nudge 0.1s, Shift 1s"),
+        h(
+          "span",
+          { class: "rt-keys" },
+          " · ",
+          keycap("←"),
+          " ",
+          keycap("→"),
+          " nudge 0.1s, ",
+          keycap("Shift"),
+          " 1s",
+        ),
       ),
     ),
     gifRow,
