@@ -130,7 +130,7 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
 
   // One pointer drives a drag: other fingers (a pinch, a stray touch) are ignored.
   // Moves and corners can go either way, so they lock to the direction they
-  // set off in; an edge handle only has one way to go.
+  // set off in until the pointer leaves it; an edge handle only has one way to go.
   let dragging: {
     id: number;
     type: "move" | HandlePosition;

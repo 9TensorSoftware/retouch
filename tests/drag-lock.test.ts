@@ -1,6 +1,11 @@
 import { createDefaultCurves } from "../src/constants";
 import type { Curves, EditMask } from "../src/types";
-import { AXIS_DECIDE_PX, createAxisLock, pickAxis } from "../src/ui/editor/axis-lock";
+import {
+  AXIS_DECIDE_PX,
+  AXIS_RELEASE_PX,
+  createAxisLock,
+  pickAxis,
+} from "../src/ui/editor/axis-lock";
 import type { CanvasRenderer } from "../src/ui/editor/canvas-renderer";
 import { createCropTool } from "../src/ui/editor/crop-tool";
 import { createCurvesTool } from "../src/ui/editor/curves-tool";
@@ -41,12 +46,25 @@ describe("direction lock", () => {
     expect(pickAxis(30, 30)).toBe("free");
   });
 
-  it("keeps a drag on its axis however far the hand drifts after", () => {
+  it("keeps a drag on its axis through the hand's drift", () => {
     const lock = createAxisLock();
     expect(lock.apply(1, 2)).toEqual({ dx: 1, dy: 2 }); // too short to tell
     expect(lock.apply(1, 20)).toEqual({ dx: 0, dy: 20 });
-    expect(lock.apply(60, 30)).toEqual({ dx: 0, dy: 30 });
+    expect(lock.apply(AXIS_RELEASE_PX, 300)).toEqual({ dx: 0, dy: 300 });
     expect(lock.axis).toBe("y");
+  });
+
+  it("frees the drag for good once the pointer heads off the axis", () => {
+    const lock = createAxisLock();
+    lock.apply(-40, 0);
+    expect(lock.axis).toBe("x");
+    expect(lock.apply(-40, -(AXIS_RELEASE_PX + 1))).toEqual({
+      dx: -40,
+      dy: -(AXIS_RELEASE_PX + 1),
+    });
+    expect(lock.axis).toBe("free");
+    expect(lock.apply(-40, -2)).toEqual({ dx: -40, dy: -2 });
+    expect(lock.axis).toBe("free");
   });
 });
 
@@ -76,6 +94,17 @@ describe("crop drags", () => {
     const sel = tool.getSelection();
     expect(sel.width).toBe(0.75);
     expect(sel.height).toBeCloseTo(0.85, 6);
+  });
+
+  it("a corner pulled away along one side still follows the pointer back in", () => {
+    const { tool, handle } = cropTool();
+    drag(handle("se"), 400, 300, [
+      [380, 300],
+      [340, 300],
+      [340, 270],
+      [300, 225],
+    ]);
+    expect(tool.getSelection()).toEqual({ x: 0, y: 0, width: 0.75, height: 0.75 });
   });
 
   it("a frame moved sideways stays at its height", () => {

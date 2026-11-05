@@ -68,6 +68,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- A crop corner pulled off in one direction no longer stays stuck on it. A drag keeps to the
+  direction it starts in only through the hand's drift: once the pointer heads clearly off it, the
+  drag follows the pointer. The same goes for moving the crop frame, mask handles and curve points.
 - The mouse wheel zooms the photo at the pointer, easing in a step a notch. It used to scroll
   the page behind the editor. A trackpad's up-and-down scroll now zooms too.
 - The page behind the editor is locked while it's open, and its scroll bar is gone.
