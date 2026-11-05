@@ -50,23 +50,28 @@ import {
   ICON_COMPARE_SIDE,
   ICON_EYE,
   ICON_HISTORY,
+  ICON_LOCK,
   ICON_POSTER,
   ICON_REDO,
   ICON_RESET,
   ICON_SPARKLE,
   ICON_UNDO,
+  ICON_UNLOCK,
 } from "../icons";
 import { keyTip } from "../key-tip";
 import { isApple, shortcutLabel } from "../platform";
 import { createAdjustTool } from "./adjust-tool";
 import type { AiChatHandle } from "./ai-chat";
 import { createAiChat, getStoredAiKey } from "./ai-chat";
+import { type BeforeView, createBeforeView } from "./before-view";
 import { CanvasRenderer } from "./canvas-renderer";
 import { listChanges } from "./changes";
 import {
   type CompareView,
   createCompareSplit,
+  loadCompareLock,
   loadCompareView,
+  saveCompareLock,
   saveCompareView,
 } from "./compare-split";
 import { createConfirm } from "./confirm";
@@ -81,11 +86,12 @@ import { createLiquifyOverlay } from "./liquify-overlay";
 import { createLiquifyTool } from "./liquify-tool";
 import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
+import { createGuidesSwitch, createPixelGuides } from "./pixel-guides";
 import { createPreviewBase, renderLook, renderLookToCanvas } from "./preview";
 import { loadRailLayout, saveRailLayout } from "./rail-layout";
 import type { SheetHandle } from "./sheet";
 import { createSheet } from "./sheet";
-import { createStageView } from "./stage-view";
+import { createStageView, type StageView } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools, resolveToolDef } from "./tool-registry";
@@ -441,6 +447,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
     entry.edits,
   );
   const compareSplit = createCompareSplit({ container: canvasContainer, renderer, signal });
+  const guidesSwitch = createGuidesSwitch();
   // Declared up here: the first tool selection (below) already reads it.
   let compareOn = false;
   let compareMode: "off" | CompareView = "off";
@@ -1523,7 +1530,39 @@ export function createEditor(options: EditorOptions): EditorHandle {
   // Crop tool with its whole frame and marquee, only have side by side.
   // Videos keep the momentary hold-compare. ──
 
-  let beforePane: HTMLElement | null = null;
+  let beforeView: BeforeView | null = null;
+  let beforeAbort: AbortController | null = null;
+  signal.addEventListener("abort", () => beforeAbort?.abort(), { once: true });
+  let compareLocked = loadCompareLock();
+  /** Which pane was zoomed or moved last: locking takes up its view. */
+  let lastViewed: StageView | null = null;
+
+  /** With the lock on, the other pane goes where `from` just went. */
+  function viewed(from: StageView): void {
+    lastViewed = from;
+    if (!compareLocked || !beforeView) return;
+    (from === stageView ? beforeView.stage : stageView).setView(from.getView());
+  }
+
+  const lockBtn = h("button", { type: "button", class: "rt-compare-lock" });
+  function syncLock(): void {
+    const label = compareLocked ? "Panes zoom and move together" : "Panes zoom and move separately";
+    lockBtn.innerHTML = compareLocked ? ICON_LOCK : ICON_UNLOCK;
+    lockBtn.title = label;
+    lockBtn.setAttribute("aria-label", label);
+    lockBtn.setAttribute("aria-pressed", String(compareLocked));
+  }
+  syncLock();
+  lockBtn.addEventListener(
+    "click",
+    () => {
+      compareLocked = !compareLocked;
+      saveCompareLock(compareLocked);
+      syncLock();
+      if (compareLocked && beforeView) viewed(lastViewed ?? stageView);
+    },
+    { signal },
+  );
 
   /**
    * What the divider's left side draws: the source itself (null), or a
@@ -1542,40 +1581,32 @@ export function createEditor(options: EditorOptions): EditorHandle {
     return { aligned, image: aligned ? original : null };
   }
 
-  function buildBeforePane(): HTMLElement {
-    const content = h("div", { class: "rt-editor__pane-content" });
-    if (entry.kind === "image") {
-      const source = entry.original?.image ?? entry.image;
-      const canvas = document.createElement("canvas");
-      const cap = Math.min(1, 1600 / Math.max(source.naturalWidth, source.naturalHeight, 1));
-      canvas.width = Math.max(1, Math.round(source.naturalWidth * cap));
-      canvas.height = Math.max(1, Math.round(source.naturalHeight * cap));
-      canvas.getContext("2d")?.drawImage(source, 0, 0, canvas.width, canvas.height);
-      content.appendChild(canvas);
-    }
-    return h(
-      "div",
-      { class: "rt-editor__canvas-pane rt-compare-pane" },
-      h("div", { class: "rt-compare-header" }, "Original"),
-      content,
-    );
-  }
-
   function setSideBySide(on: boolean): void {
-    // Side by side always shows both at fit; zoom comes back with the single view.
-    stageView.setEnabled(!on);
-    if (on) {
-      beforePane = buildBeforePane();
-      canvasArea.insertBefore(beforePane, canvasPane);
+    if (on && entry.kind === "image") {
+      beforeAbort = new AbortController();
+      beforeView = createBeforeView({
+        source: entry.original?.image ?? entry.image,
+        guides: guidesSwitch,
+        onView: () => beforeView && viewed(beforeView.stage),
+        signal: beforeAbort.signal,
+      });
+      canvasArea.insertBefore(beforeView.pane, canvasPane);
+      canvasArea.append(beforeView.stage.root, lockBtn);
       canvasArea.classList.add("rt-editor__canvas-area--split");
       editedHeader.style.display = "";
     } else {
-      beforePane?.remove();
-      beforePane = null;
+      beforeAbort?.abort();
+      beforeView?.pane.remove();
+      beforeView?.stage.root.remove();
+      lockBtn.remove();
+      beforeView = null;
+      lastViewed = null;
       canvasArea.classList.remove("rt-editor__canvas-area--split");
       editedHeader.style.display = "none";
     }
     renderer.render();
+    beforeView?.render();
+    if (beforeView && compareLocked) beforeView.stage.setView(stageView.getView());
     cropTool.refresh();
     if (activeTool === "masks") masksOverlay.refresh();
   }
@@ -1868,6 +1899,15 @@ export function createEditor(options: EditorOptions): EditorHandle {
 
   // Zoom and pan. Every render re-applies the view, so overlays follow both
   // edits and zooming.
+  const pixelGuides = createPixelGuides({
+    area: canvasArea,
+    host: () => (beforeView ? paneContent : canvasArea),
+    photo: () => renderer.getCanvasElement(),
+    pixels: () => renderer.getVisiblePixels(),
+    ignore: ".rt-compare-pane, .rt-zoom, .rt-ai, .rt-compare-lock",
+    control: guidesSwitch,
+    signal,
+  });
   const stageView = createStageView({
     area: canvasArea,
     target: canvasContainer,
@@ -1876,9 +1916,14 @@ export function createEditor(options: EditorOptions): EditorHandle {
     onChange: () => {
       if (activeTool === "crop") cropTool.refresh();
       if (activeTool === "masks") masksOverlay.refresh();
+      pixelGuides.refresh();
     },
+    onView: () => viewed(stageView),
+    viewport: () => (beforeView ? paneContent : canvasArea),
+    ignore: ".rt-compare-pane",
     signal,
   });
+  stageView.root.appendChild(guidesSwitch.button(signal));
   canvasArea.appendChild(stageView.root);
   // The page locks behind the modal (styles.ts); this keeps its width as its scroll bar goes.
   if (!document.querySelector("body > .rt-editor-overlay")) {
@@ -2005,7 +2050,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
         liquifyTool.nudgeSize(e.key === "]" ? 1 : -1);
         return;
       }
-      if (stageView.handleKey(e)) {
+      if ((beforeView?.pane.matches(":hover") ? beforeView.stage : stageView).handleKey(e)) {
         e.preventDefault();
         return;
       }

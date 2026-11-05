@@ -2384,6 +2384,114 @@ body:has(> .rt-editor-overlay) {
 
 .rt-editor__canvas-area--split {
   gap: 24px;
+  /* Each pane's zoom bar sits below it, so tight windows drop a button. */
+  container-type: inline-size;
+}
+
+/* A pane's photo zooms within the pane. */
+.rt-editor__canvas-area--split .rt-editor__pane-content {
+  overflow: hidden;
+}
+
+.rt-editor__canvas-area--split .rt-zoom {
+  left: calc(75% - 6px);
+}
+
+.rt-editor__canvas-area--split .rt-zoom--before {
+  left: calc(25% + 6px);
+}
+
+@container (max-width: 620px) {
+  .rt-zoom .rt-zoom__actual,
+  .rt-zoom .rt-zoom__sep {
+    display: none;
+  }
+}
+
+/* Between the panes, at their headers: it links the two. */
+.rt-compare-lock {
+  position: absolute;
+  top: 21px;
+  left: 50%;
+  z-index: 16;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--rt-line-strong);
+  border-radius: var(--rt-radius-full);
+  background: var(--rt-surface-overlay);
+  color: var(--rt-text-3);
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: color var(--rt-dur-1) var(--rt-ease), border-color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-compare-lock:hover,
+.rt-compare-lock[aria-pressed="true"] {
+  color: var(--rt-text-1);
+}
+
+.rt-compare-lock svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* The mouse's lines across the stage, and which pixel it's on. */
+.rt-guides {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rt-guides__line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.rt-guides__line--across {
+  width: 100%;
+  height: 1px;
+}
+
+.rt-guides__line--down {
+  width: 1px;
+  height: 100%;
+}
+
+.rt-guides__readout {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--rt-surface-overlay);
+  color: var(--rt-text-1);
+  font: 500 var(--rt-type-xs) var(--rt-font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: var(--rt-shadow-md);
+}
+
+.rt-zoom__guides[aria-pressed="true"] {
+  color: var(--rt-text-1);
+}
+
+.rt-zoom__guides[aria-pressed="false"] {
+  opacity: 0.55;
+}
+
+@media (hover: none) {
+  .rt-zoom__guides {
+    display: none;
+  }
 }
 
 .rt-editor__canvas-area--split .rt-editor__canvas-pane {
@@ -2414,11 +2522,15 @@ body:has(> .rt-editor-overlay) {
   right: 36px;
 }
 
-/* 90%: the same fit margin the renderer gives the edited side. */
 .rt-compare-pane canvas {
-  max-width: 90%;
-  max-height: 90%;
+  flex-shrink: 0;
+  display: block;
   border-radius: 2px;
+}
+
+/* Its stage's own cursor, whichever way the other pane is zoomed. */
+.rt-compare-pane {
+  cursor: default;
 }
 
 .rt-editor__compare-btn {
@@ -5872,6 +5984,10 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
     flex-direction: column;
     gap: 8px;
   }
+  .rt-compare-lock {
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
   .rt-editor__topbar-title {
     display: none;
   }
@@ -6005,7 +6121,8 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
     width: 44px;
     height: 44px;
   }
-  .rt-editor__canvas-area:not(.rt-stage--zoomed) .rt-zoom {
+  .rt-editor__canvas-area:not(.rt-stage--zoomed) .rt-zoom,
+  .rt-editor__canvas-area--split .rt-zoom {
     display: none;
   }
   .rt-editor__canvas-area {

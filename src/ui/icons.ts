@@ -117,6 +117,15 @@ export const ICON_SEND = icon('<path d="M12 19V5"/><path d="M5.5 11.5L12 5l6.5 6
 export const ICON_CLOSE = icon('<path d="M6 6l12 12M18 6L6 18"/>');
 export const ICON_PLUS = icon('<path d="M12 6v12M6 12h12"/>');
 export const ICON_MINUS = icon('<path d="M6 12h12"/>');
+export const ICON_CROSSHAIR = icon(
+  '<circle cx="12" cy="12" r="6"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/>',
+);
+export const ICON_LOCK = icon(
+  '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+);
+export const ICON_UNLOCK = icon(
+  '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
+);
 export const ICON_CHEVRON_DOWN = icon('<path d="M6 9l6 6 6-6"/>');
 /** Pin a tool to the rail: a pushpin. */
 export const ICON_PIN = icon('<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>');

@@ -37,7 +37,7 @@ const DOUBLE_TAP_PX = 30;
 
 /** Touches on these zoom and pan the photo; everything else on the stage has its own gestures. */
 const BACKGROUND =
-  ".rt-editor__canvas-area, .rt-editor__canvas-pane, .rt-editor__pane-content, .rt-editor__canvas-container, .canvas-container, .lower-canvas, .upper-canvas";
+  ".rt-editor__canvas-area, .rt-editor__canvas-pane, .rt-editor__pane-content, .rt-editor__canvas-container, .canvas-container, .lower-canvas, .upper-canvas, .rt-compare-pane canvas";
 
 /** The wheel's legacy field: notches × 120, or -3 × deltaY on a trackpad. Not in every browser. */
 function wheelDeltaYOf(e: WheelEvent): number | undefined {
@@ -114,17 +114,36 @@ export function clampPan(pan: Point, content: Size, viewport: Size, slack = 48):
   };
 }
 
+/** What the stage needs from whatever draws the photo. */
+export type StageRenderer = Pick<
+  CanvasRenderer,
+  "getViewScales" | "getImageRect" | "setViewZoom" | "setScreenScale" | "onRender" | "render"
+>;
+
 export interface StageViewOptions {
   /** The stage: zoom and pan gestures land here, and it clips the canvas. */
   area: HTMLElement;
   /** What gets panned and scaled: the renderer's container, overlays included. */
   target: HTMLElement;
-  renderer: CanvasRenderer;
+  renderer: StageRenderer;
   /** Space + drag pans. Off for video, where Space plays. */
   spacePan: boolean;
   /** After every view change, so overlays and readouts can re-measure. */
   onChange: () => void;
+  /** After someone zooms or moves this view, and not when it's redrawn or told to. */
+  onView?: () => void;
+  /** What the photo may slide within, when that isn't the whole stage. */
+  viewport?: () => HTMLElement;
+  /** Gestures starting on these belong to something else on the stage. */
+  ignore?: string;
   signal: AbortSignal;
+}
+
+/** Where a view is, in terms another photo can take up: its zoom over fit, and its pan as a share of the photo on screen. */
+export interface ViewState {
+  zoom: number;
+  x: number;
+  y: number;
 }
 
 export interface StageView {
@@ -134,8 +153,9 @@ export interface StageView {
   zoomBy(factor: number, around?: Point): void;
   fitToScreen(): void;
   actualPixels(): void;
-  /** Turn zooming off and back to fit, e.g. while comparing side by side. */
-  setEnabled(enabled: boolean): void;
+  getView(): ViewState;
+  /** Go where another view is, as far as this photo can. */
+  setView(view: ViewState): void;
   /** + / - zoom, 0 fits. True when the key was handled. */
   handleKey(e: KeyboardEvent): boolean;
 }
@@ -153,8 +173,9 @@ export function createStageView(options: StageViewOptions): StageView {
   const { area, target, renderer, signal } = options;
   let zoom = 1;
   let pan: Point = { x: 0, y: 0 };
-  let enabled = true;
   let settleTimer = 0;
+  /** In setView: this view is following, so it's nothing for onView to pass on. */
+  let following = false;
 
   const outBtn = h("button", {
     type: "button",
@@ -183,7 +204,7 @@ export function createStageView(options: StageViewOptions): StageView {
   );
   const actualBtn = h(
     "button",
-    { type: "button", class: "rt-zoom__text", title: "Actual pixels" },
+    { type: "button", class: "rt-zoom__text rt-zoom__actual", title: "Actual pixels" },
     "1:1",
   );
   const hint = h(
@@ -219,16 +240,31 @@ export function createStageView(options: StageViewOptions): StageView {
     };
   }
 
+  function ignored(e: Event): boolean {
+    return !!options.ignore && !!(e.target as Element).closest(options.ignore);
+  }
+
+  /** The photo's size on screen at the current zoom. */
+  function shownSize(): Size {
+    const { fit, draw } = renderer.getViewScales();
+    const rect = renderer.getImageRect();
+    const css = draw > 0 ? (fit * zoom) / draw : 1;
+    return { width: rect.width * css, height: rect.height * css };
+  }
+
   /** Write the transform for the current zoom/pan against the canvas as drawn. */
-  function apply(): void {
+  function apply(redrawn = false): void {
+    // A bigger stage or a tighter crop can leave the zoom past the limit for the new fit.
+    zoom = Math.min(zoom, maxZoom());
     const { fit, draw } = renderer.getViewScales();
     const raw = draw > 0 ? (fit * zoom) / draw : 1;
     const css = Math.abs(raw - 1) < 1e-3 ? 1 : raw;
     const rect = renderer.getImageRect();
+    const frame = options.viewport?.() ?? area;
     pan = clampPan(
       pan,
       { width: rect.width * css, height: rect.height * css },
-      { width: area.clientWidth, height: area.clientHeight },
+      { width: frame.clientWidth, height: frame.clientHeight },
     );
     const identity = css === 1 && pan.x === 0 && pan.y === 0;
     target.style.transform = identity ? "" : `translate(${pan.x}px, ${pan.y}px) scale(${css})`;
@@ -240,6 +276,7 @@ export function createStageView(options: StageViewOptions): StageView {
     inBtn.disabled = zoom >= maxZoom() - 1e-6;
     area.classList.toggle("rt-stage--zoomed", zoom > 1);
     options.onChange();
+    if (!redrawn && !following) options.onView?.();
   }
 
   /**
@@ -283,7 +320,6 @@ export function createStageView(options: StageViewOptions): StageView {
   }
 
   function setZoom(next: number, around: Point = { x: 0, y: 0 }, delay = SETTLE_MS): void {
-    if (!enabled) return;
     const clamped = Math.min(maxZoom(), Math.max(1, next));
     if (clamped === zoom) return;
     pan = clamped === 1 ? { x: 0, y: 0 } : zoomAround(pan, around, zoom, clamped);
@@ -350,7 +386,7 @@ export function createStageView(options: StageViewOptions): StageView {
   fitBtn.addEventListener("click", fitToScreen, { signal });
   actualBtn.addEventListener("click", actualPixels, { signal });
 
-  renderer.onRender(apply);
+  renderer.onRender(() => apply(true));
   signal.addEventListener("abort", () => {
     clearTimeout(settleTimer);
     clearTimeout(hintTimer);
@@ -363,7 +399,7 @@ export function createStageView(options: StageViewOptions): StageView {
   area.addEventListener(
     "wheel",
     (e) => {
-      if (!enabled || (e.target as Element).closest(".rt-ai")) return;
+      if ((e.target as Element).closest(".rt-ai") || ignored(e)) return;
       e.preventDefault();
       if (!e.ctrlKey && !e.metaKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         if (zoom > 1) {
@@ -399,7 +435,7 @@ export function createStageView(options: StageViewOptions): StageView {
   area.addEventListener(
     "pointerdown",
     (e) => {
-      if (!enabled || zoom <= 1) return;
+      if (zoom <= 1 || ignored(e)) return;
       const from = { x: e.clientX, y: e.clientY, from: { ...pan }, id: e.pointerId };
       if (e.button === 1 || (spaceHeld && e.button === 0)) {
         // Captured here first, so crop handles and brushes never see the drag.
@@ -476,7 +512,7 @@ export function createStageView(options: StageViewOptions): StageView {
   area.addEventListener(
     "pointerdown",
     (e) => {
-      if (e.pointerType !== "touch" || !enabled) return;
+      if (e.pointerType !== "touch" || ignored(e)) return;
       if ((e.target as Element).closest(".rt-ai, .rt-zoom")) return;
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (touches.size >= 2) {
@@ -592,16 +628,27 @@ export function createStageView(options: StageViewOptions): StageView {
     zoomBy: (factor, around) => setZoom(zoom * factor, around),
     fitToScreen,
     actualPixels,
-    setEnabled(next) {
-      if (!next) {
-        fitToScreen();
-        hideHint();
-      }
-      enabled = next;
-      root.hidden = !next;
+    getView() {
+      const shown = shownSize();
+      return {
+        zoom,
+        x: shown.width > 0 ? pan.x / shown.width : 0,
+        y: shown.height > 0 ? pan.y / shown.height : 0,
+      };
+    },
+    setView(view) {
+      stopGlide();
+      const next = Math.min(maxZoom(), Math.max(1, view.zoom));
+      const rezoomed = next !== zoom;
+      zoom = next;
+      const shown = shownSize();
+      pan = { x: view.x * shown.width, y: view.y * shown.height };
+      following = true;
+      apply();
+      following = false;
+      if (rezoomed) settle();
     },
     handleKey(e) {
-      if (!enabled) return false;
       if (e.key === "+" || e.key === "=") setZoom(zoom * STEP);
       else if (e.key === "-" || e.key === "_") setZoom(zoom / STEP);
       else if (e.key === "0") fitToScreen();

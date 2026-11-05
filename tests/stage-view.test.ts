@@ -451,17 +451,123 @@ describe("stage view", () => {
     });
   });
 
-  it("turns off (back to fit) while disabled", () => {
-    const { view, label, cleanup } = setup(0.5);
+  it("says where it is, and goes where it's told without passing that on", () => {
+    const { area, renderer, view, label, cleanup } = setup(0.5);
+    const onView = vi.fn();
+    const other = createStageView({
+      area,
+      target: document.createElement("div"),
+      renderer: renderer as unknown as CanvasRenderer,
+      spacePan: false,
+      onChange: () => {},
+      onView,
+      signal: new AbortController().signal,
+    });
     view.zoomBy(2);
-    view.setEnabled(false);
-    expect(view.root.hidden).toBe(true);
-    expect(label()).toBe("50%");
-    expect(view.handleKey(new KeyboardEvent("keydown", { key: "+" }))).toBe(false);
+    other.setView(view.getView());
+    expect(other.getView()).toEqual(view.getView());
+    expect(onView).not.toHaveBeenCalled();
+    other.zoomBy(1.5);
+    expect(onView).toHaveBeenCalledTimes(1);
+    expect(label()).toBe("100%");
+    cleanup();
+  });
+
+  it("tells onView about zooming, not about a redraw", () => {
+    const { area, renderer, cleanup } = setup(0.5);
+    const onView = vi.fn();
+    const view = createStageView({
+      area,
+      target: document.createElement("div"),
+      renderer: renderer as unknown as CanvasRenderer,
+      spacePan: false,
+      onChange: () => {},
+      onView,
+      signal: new AbortController().signal,
+    });
+    renderer.render();
+    expect(onView).not.toHaveBeenCalled();
     view.zoomBy(2);
-    expect(label()).toBe("50%");
-    view.setEnabled(true);
-    expect(view.root.hidden).toBe(false);
+    expect(onView).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it("comes back within the limit when the fit grows", () => {
+    let fit = 0.1;
+    let listener: (() => void) | null = null;
+    const area = document.createElement("div");
+    const abort = new AbortController();
+    const view = createStageView({
+      area,
+      target: document.createElement("div"),
+      renderer: {
+        getViewScales: () => ({ fit, draw: fit }),
+        getImageRect: () => ({ x: 0, y: 0, width: 1000 * fit, height: 1000 * fit }),
+        setViewZoom: () => false,
+        setScreenScale: () => {},
+        onRender: (next) => {
+          listener = next;
+        },
+        render: () => listener?.(),
+      },
+      spacePan: false,
+      onChange: () => {},
+      signal: abort.signal,
+    });
+    view.setView({ zoom: 80, x: 0, y: 0 });
+    expect(view.getView().zoom).toBe(80);
+    fit = 0.4;
+    (listener as unknown as () => void)();
+    expect(view.getView().zoom).toBe(20);
+    expect(view.root.querySelector(".rt-zoom__value")?.textContent).toBe("800%");
+    abort.abort();
+  });
+
+  it("leaves gestures on what it's told to ignore", () => {
+    const area = document.createElement("div");
+    const other = document.createElement("div");
+    other.className = "other";
+    const target = document.createElement("div");
+    area.append(other, target);
+    document.body.appendChild(area);
+    const abort = new AbortController();
+    const view = createStageView({
+      area,
+      target,
+      renderer: fakeRenderer(0.5, 1) as unknown as CanvasRenderer,
+      spacePan: false,
+      onChange: () => {},
+      ignore: ".other",
+      signal: abort.signal,
+    });
+    const wheel = (el: Element): boolean =>
+      el.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -100 }));
+    expect(wheel(other)).toBe(true);
+    expect(view.getView().zoom).toBe(1);
+    expect(wheel(target)).toBe(false);
+    abort.abort();
+    area.remove();
+  });
+
+  it("slides within the viewport it's given", () => {
+    const { area, renderer, cleanup } = setup(0.5);
+    const frame = document.createElement("div");
+    Object.defineProperty(frame, "clientWidth", { value: 300 });
+    Object.defineProperty(frame, "clientHeight", { value: 300 });
+    const target = document.createElement("div");
+    const view = createStageView({
+      area,
+      target,
+      renderer: renderer as unknown as CanvasRenderer,
+      spacePan: false,
+      onChange: () => {},
+      viewport: () => frame,
+      signal: new AbortController().signal,
+    });
+    view.setView({ zoom: 2, x: 0.9, y: 0 });
+    const shown = view.getView();
+    expect(shown.x).toBeGreaterThan(0);
+    expect(shown.x).toBeLessThan(0.9);
     cleanup();
   });
 

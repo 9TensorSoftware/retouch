@@ -389,6 +389,12 @@ export class CanvasRenderer {
     return this.fabricCanvas.getElement();
   }
 
+  /** The size in pixels of the photo as shown: turned, and cropped if the crop is applied. */
+  getVisiblePixels(): { width: number; height: number } {
+    const { width, height } = this.visibleSize();
+    return { width: Math.round(width), height: Math.round(height) };
+  }
+
   /**
    * The scale render() draws at. At fit, the fit. Zoomed in, enough for the
    * zoom, but no more device pixels than the frame has: past that there's no

@@ -24,6 +24,25 @@ export function saveCompareView(view: CompareView): void {
   }
 }
 
+const LOCK_KEY = "rt-compare-lock";
+
+/** Whether side by side's panes zoom and move together: yes, until this browser's user says no. */
+export function loadCompareLock(): boolean {
+  try {
+    return localStorage.getItem(LOCK_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function saveCompareLock(locked: boolean): void {
+  try {
+    localStorage.setItem(LOCK_KEY, locked ? "on" : "off");
+  } catch {
+    // Storage unavailable: the pick lasts for this editor only.
+  }
+}
+
 export interface CompareSplitOptions {
   /** The canvas container; the divider lives inside it, so it zooms and pans with the photo. */
   container: HTMLElement;

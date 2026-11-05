@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Added
 
+- A crosshair follows the mouse over the photo, with the pixel it's on beside it, counted in the
+  photo as it'll come out. It's on by default; a button on the zoom bar turns it off, and the
+  choice is remembered.
+- Compare's side by side zooms and moves: each pane has its own zoom bar, and the original stays
+  sharp as it zooms. A lock between the panes keeps them zooming and moving together. It's on by
+  default, and remembered. Where a crop or turn has given them different frames, they keep the
+  same zoom and relative position, not the same pixel.
 - Zoomed in, drag the photo to move around it, with a mouse as with a finger. In Crop that works
   while the frame still covers the whole photo, and around it after. Tools that draw on the photo
   keep the drag, and say once how to move instead: Space or the middle button. A sideways scroll
