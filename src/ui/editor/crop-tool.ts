@@ -99,6 +99,8 @@ export function createCropTool(options: CropToolOptions): CropToolHandle {
     selection.style.top = `${sy}px`;
     selection.style.width = `${sw}px`;
     selection.style.height = `${sh}px`;
+    // With no room to move, a drag on the frame is free to pan the zoomed stage.
+    selection.classList.toggle("rt-crop__selection--full", sel.width > 0.999 && sel.height > 0.999);
 
     const cw = container.clientWidth || imgRect.width;
     const ch = container.clientHeight || imgRect.height;

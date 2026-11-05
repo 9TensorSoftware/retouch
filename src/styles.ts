@@ -2241,8 +2241,16 @@ body:has(> .rt-editor-overlay) {
     var(--rt-surface-subtle);
 }
 
-.rt-stage--zoomed.rt-stage--grab {
+/* Zoomed in, a drag on the photo or around it moves the view. */
+.rt-stage--zoomed,
+.rt-stage--zoomed .rt-crop__selection--full {
   cursor: grab;
+}
+
+/* Space held takes the drag from whatever tool is on the stage. */
+.rt-stage--zoomed.rt-stage--grab,
+.rt-stage--zoomed.rt-stage--grab * {
+  cursor: grab !important;
 }
 
 .rt-stage--panning,
@@ -2269,6 +2277,27 @@ body:has(> .rt-editor-overlay) {
 }
 
 .rt-zoom[hidden] {
+  display: none;
+}
+
+.rt-zoom__hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  padding: 6px 12px;
+  border: 1px solid var(--rt-line);
+  border-radius: var(--rt-radius-full);
+  background: var(--rt-surface-glass);
+  box-shadow: var(--rt-shadow-md);
+  color: var(--rt-text-1);
+  font-size: var(--rt-type-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: rt-fade-in var(--rt-dur-2) var(--rt-ease) backwards;
+}
+
+.rt-zoom__hint[hidden] {
   display: none;
 }
 

@@ -299,6 +299,138 @@ describe("stage view", () => {
     cleanup();
   });
 
+  describe("dragging to pan", () => {
+    /** jsdom has no PointerEvent: a MouseEvent carrying a mouse pointer's fields. */
+    function mouse(el: Element, type: string, x = 0, y = 0, button = 0): MouseEvent {
+      const e = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button });
+      Object.assign(e, { pointerId: 1, pointerType: "mouse" });
+      el.dispatchEvent(e);
+      return e;
+    }
+    function onStage(target: HTMLElement, className: string): HTMLElement {
+      const el = document.createElement("div");
+      el.className = className;
+      target.append(el);
+      return el;
+    }
+
+    it("pans once a press on the photo has moved, and leaves a click alone", () => {
+      const { view, area, target, cleanup } = setup(0.5);
+      const photo = onStage(target, "lower-canvas");
+      view.zoomBy(2);
+      const before = target.style.transform;
+
+      mouse(photo, "pointerdown", 100, 100);
+      mouse(area, "pointermove", 102, 101);
+      expect(target.style.transform).toBe(before);
+      expect(area.classList.contains("rt-stage--panning")).toBe(false);
+      mouse(area, "pointerup", 102, 101);
+      mouse(area, "pointermove", 140, 140);
+      expect(target.style.transform).toBe(before);
+
+      mouse(photo, "pointerdown", 100, 100);
+      mouse(area, "pointermove", 110, 130);
+      expect(area.classList.contains("rt-stage--panning")).toBe(true);
+      expect(target.style.transform).not.toBe(before);
+      mouse(area, "pointerup", 110, 130);
+      expect(area.classList.contains("rt-stage--panning")).toBe(false);
+      cleanup();
+    });
+
+    it("does nothing at fit", () => {
+      const { area, target, cleanup } = setup(0.5);
+      mouse(onStage(target, "lower-canvas"), "pointerdown", 100, 100);
+      mouse(area, "pointermove", 140, 140);
+      expect(area.classList.contains("rt-stage--panning")).toBe(false);
+      cleanup();
+    });
+
+    it("leaves a drag to the tool that claims it, and to the eyedropper", () => {
+      const { view, area, target, cleanup } = setup(0.5);
+      const photo = onStage(target, "lower-canvas");
+      const brush = onStage(target, "rt-liquify");
+      view.zoomBy(2);
+      const before = target.style.transform;
+
+      mouse(brush, "pointerdown", 100, 100);
+      mouse(area, "pointermove", 140, 140);
+      expect(target.style.transform).toBe(before);
+      mouse(area, "pointerup", 140, 140);
+
+      area.classList.add("rt-editor__canvas-area--picking");
+      mouse(photo, "pointerdown", 100, 100);
+      mouse(area, "pointermove", 140, 140);
+      expect(target.style.transform).toBe(before);
+      cleanup();
+    });
+
+    it("takes a crop frame's drag only while the frame covers the photo", () => {
+      const { view, area, target, cleanup } = setup(0.5);
+      const frame = onStage(target, "rt-crop__selection");
+      const handle = document.createElement("div");
+      handle.className = "rt-crop__handle";
+      frame.append(handle);
+      const heard = vi.fn();
+      frame.addEventListener("pointerdown", heard);
+      view.zoomBy(2);
+      const before = target.style.transform;
+
+      mouse(frame, "pointerdown", 100, 100);
+      mouse(area, "pointermove", 140, 140);
+      mouse(area, "pointerup", 140, 140);
+      expect(heard).toHaveBeenCalledTimes(1);
+      expect(target.style.transform).toBe(before);
+
+      frame.classList.add("rt-crop__selection--full");
+      mouse(handle, "pointerdown", 100, 100);
+      mouse(area, "pointermove", 140, 140);
+      mouse(area, "pointerup", 140, 140);
+      expect(heard).toHaveBeenCalledTimes(2);
+      expect(target.style.transform).toBe(before);
+
+      mouse(frame, "pointerdown", 100, 100);
+      mouse(area, "pointermove", 140, 140);
+      expect(heard).toHaveBeenCalledTimes(2);
+      expect(target.style.transform).not.toBe(before);
+      cleanup();
+    });
+
+    it("says how to move, once, when a tool covers the stage", () => {
+      const { view, area, target, cleanup } = setup(0.5);
+      const brush = onStage(target, "rt-liquify");
+      const hint = area.querySelector(".rt-zoom__hint") as HTMLElement;
+      const wide = { width: 500 } as DOMRect;
+      vi.spyOn(area, "getBoundingClientRect").mockReturnValue(wide);
+      vi.spyOn(brush, "getBoundingClientRect").mockReturnValue(wide);
+      document.elementFromPoint = () => brush;
+
+      view.zoomBy(2);
+      expect(hint.hidden).toBe(true);
+      vi.advanceTimersByTime(160);
+      expect(hint.hidden).toBe(false);
+      vi.advanceTimersByTime(4000);
+      expect(hint.hidden).toBe(true);
+
+      view.zoomBy(1.5);
+      vi.advanceTimersByTime(160);
+      expect(hint.hidden).toBe(true);
+      cleanup();
+      Reflect.deleteProperty(document, "elementFromPoint");
+    });
+
+    it("keeps quiet where a drag on the photo pans", () => {
+      const { view, area, target, cleanup } = setup(0.5);
+      const photo = onStage(target, "lower-canvas");
+      const hint = area.querySelector(".rt-zoom__hint") as HTMLElement;
+      document.elementFromPoint = () => photo;
+      view.zoomBy(2);
+      vi.advanceTimersByTime(160);
+      expect(hint.hidden).toBe(true);
+      cleanup();
+      Reflect.deleteProperty(document, "elementFromPoint");
+    });
+  });
+
   it("turns off (back to fit) while disabled", () => {
     const { view, label, cleanup } = setup(0.5);
     view.zoomBy(2);

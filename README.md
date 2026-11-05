@@ -352,7 +352,7 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | `+` / `-` · `0` | Zoom in / out · fit to screen |
 | Pinch · two-finger drag · double-tap (touch) | Zoom · pan · zoom in, or back to fit |
 | Mouse wheel, trackpad scroll or pinch | Zoom at the pointer |
-| Sideways scroll · `Space`+drag (images) or middle-drag | Pan when zoomed |
+| Drag the photo · sideways scroll · `Space`+drag (images) or middle-drag, which also work over a tool's brush | Pan when zoomed |
 | `\` | Compare before and after (images) |
 | `[` / `]` (Liquify) | Smaller / larger brush |
 | `Enter` (Crop tab) · `Space` (video) | Apply crop · play/pause |

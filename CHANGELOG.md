@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Added
 
+- Zoomed in, drag the photo to move around it, with a mouse as with a finger. In Crop that works
+  while the frame still covers the whole photo, and around it after. Tools that draw on the photo
+  keep the drag, and say once how to move instead: Space or the middle button. A sideways scroll
+  pans too.
 - **Info**, a built-in tool at the foot of the rail: what the file says about the photo. The
   file, camera and lens, exposure, location (with a map link), description and rights, an
   image generator's prompt, color profile and Content Credentials, then every EXIF, GPS, XMP,
@@ -65,8 +69,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 ### Fixed
 
 - The mouse wheel zooms the photo at the pointer, easing in a step a notch. It used to scroll
-  the page behind the editor. A trackpad's up-and-down scroll now zooms too; a sideways scroll, or
-  Space or middle-button drag, pans.
+  the page behind the editor. A trackpad's up-and-down scroll now zooms too.
 - The page behind the editor is locked while it's open, and its scroll bar is gone.
 - Scrolling over a value in Info moves the panel. Each value was its own scroll box, which kept
   the wheel from reaching the panel; long ones now fold, with **Show all**.

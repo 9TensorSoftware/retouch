@@ -1,6 +1,7 @@
 import { h } from "../h";
 import { ICON_MINUS, ICON_PLUS } from "../icons";
 import { motionOK } from "../motion";
+import { isTouchFirst } from "../platform";
 import type { CanvasRenderer } from "./canvas-renderer";
 
 export interface Point {
@@ -41,6 +42,13 @@ const BACKGROUND =
 function wheelDeltaYOf(e: WheelEvent): number | undefined {
   return (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
 }
+
+/** Where a mouse drag pans once zoomed in: as for touch, plus a crop frame with nowhere to go. */
+const MOUSE_PAN = `${BACKGROUND}, .rt-crop__selection--full, .rt-crop__selection--full :not(.rt-crop__handle)`;
+/** A press has to travel this far (px) to be a pan; less stays a click. */
+const PAN_START_PX = 4;
+/** How long the hint about panning over a drawing tool stays up. */
+const PAN_HINT_MS = 4000;
 
 /**
  * Whether a wheel event looks like continuous scrolling (a trackpad, or a
@@ -136,8 +144,8 @@ export interface StageView {
  * transform on the canvas container, then the renderer redraws sharp at the
  * new size once input settles; past the preview's own resolution the CSS
  * scale simply stays. Zoom with the wheel, a trackpad's scroll or pinch, the
- * keys, or the controls; pan with a sideways scroll, middle-drag, or Space-drag.
- * On touch: pinch to zoom, two fingers to pan, one finger on the
+ * keys, or the controls; pan by dragging the photo, where the tool leaves that
+ * free, or with a sideways scroll, middle-drag, or Space-drag. On touch: pinch to zoom, two fingers to pan, one finger on the
  * photo to pan once zoomed in, and double-tap to zoom in or back to fit.
  */
 export function createStageView(options: StageViewOptions): StageView {
@@ -172,9 +180,15 @@ export function createStageView(options: StageViewOptions): StageView {
     { type: "button", class: "rt-zoom__text", title: "Actual pixels" },
     "1:1",
   );
+  const hint = h(
+    "div",
+    { class: "rt-zoom__hint", role: "status", hidden: true },
+    options.spacePan ? "Hold Space and drag to move" : "Drag with the middle button to move",
+  );
   const root = h(
     "div",
     { class: "rt-zoom", role: "group", "aria-label": "Zoom" },
+    hint,
     outBtn,
     value,
     inBtn,
@@ -232,7 +246,32 @@ export function createStageView(options: StageViewOptions): StageView {
       if (signal.aborted) return;
       target.style.willChange = "";
       if (renderer.setViewZoom(zoom)) renderer.render();
+      offerPanHint();
     }, delay);
+  }
+
+  let hinted = false;
+  let hintTimer = 0;
+
+  function hideHint(): void {
+    clearTimeout(hintTimer);
+    hint.hidden = true;
+  }
+
+  /**
+   * Once per photo: if a tool covers the stage (a brush, say), a drag is the
+   * tool's, so say how to move around. Small things in the way (a divider, a
+   * gizmo's dot) leave plenty of photo to drag.
+   */
+  function offerPanHint(): void {
+    if (hinted || zoom <= 1 || isTouchFirst()) return;
+    const box = area.getBoundingClientRect();
+    const over = document.elementFromPoint?.(box.left + box.width / 2, box.top + box.height / 2);
+    if (!over || !area.contains(over) || over.matches(MOUSE_PAN)) return;
+    if (over.getBoundingClientRect().width < box.width / 2) return;
+    hinted = true;
+    hint.hidden = false;
+    hintTimer = window.setTimeout(hideHint, PAN_HINT_MS);
   }
 
   function setZoom(next: number, around: Point = { x: 0, y: 0 }, delay = SETTLE_MS): void {
@@ -303,6 +342,7 @@ export function createStageView(options: StageViewOptions): StageView {
   renderer.onRender(apply);
   signal.addEventListener("abort", () => {
     clearTimeout(settleTimer);
+    clearTimeout(hintTimer);
     stopGlide();
     renderer.onRender(null);
   });
@@ -330,26 +370,42 @@ export function createStageView(options: StageViewOptions): StageView {
     { passive: false, signal },
   );
 
-  // ── Drag to pan: middle button, or Space held (images) ──
+  // ── Drag to pan: on the photo where the tool leaves it free, or middle button, or Space held ──
 
   let spaceHeld = false;
-  let drag: { x: number; y: number; from: Point; id: number } | null = null;
+  let drag: { x: number; y: number; from: Point; id: number; moved: boolean } | null = null;
+
+  function startPanning(id: number): void {
+    hideHint();
+    try {
+      area.setPointerCapture(id);
+    } catch {
+      // synthetic pointers may not support capture
+    }
+    area.classList.add("rt-stage--panning");
+  }
 
   area.addEventListener(
     "pointerdown",
     (e) => {
       if (!enabled || zoom <= 1) return;
-      if (e.button !== 1 && !(spaceHeld && e.button === 0)) return;
-      // Captured here first, so crop handles and brushes never see the drag.
-      e.preventDefault();
-      e.stopPropagation();
-      drag = { x: e.clientX, y: e.clientY, from: { ...pan }, id: e.pointerId };
-      try {
-        area.setPointerCapture(e.pointerId);
-      } catch {
-        // synthetic pointers may not support capture
+      const from = { x: e.clientX, y: e.clientY, from: { ...pan }, id: e.pointerId };
+      if (e.button === 1 || (spaceHeld && e.button === 0)) {
+        // Captured here first, so crop handles and brushes never see the drag.
+        e.preventDefault();
+        e.stopPropagation();
+        drag = { ...from, moved: true };
+        startPanning(e.pointerId);
+        return;
       }
-      area.classList.add("rt-stage--panning");
+      const over = e.target as Element;
+      if (e.button !== 0 || e.ctrlKey || e.pointerType === "touch" || !over.matches(MOUSE_PAN)) {
+        return;
+      }
+      if (area.classList.contains("rt-editor__canvas-area--picking")) return;
+      // Tools don't listen on the background, but a crop frame would start moving.
+      if (!over.matches(BACKGROUND)) e.stopPropagation();
+      drag = { ...from, moved: false };
     },
     { capture: true, signal },
   );
@@ -357,7 +413,14 @@ export function createStageView(options: StageViewOptions): StageView {
     "pointermove",
     (e) => {
       if (!drag || e.pointerId !== drag.id) return;
-      pan = { x: drag.from.x + e.clientX - drag.x, y: drag.from.y + e.clientY - drag.y };
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.moved) {
+        if (Math.hypot(dx, dy) < PAN_START_PX) return;
+        drag.moved = true;
+        startPanning(e.pointerId);
+      }
+      pan = { x: drag.from.x + dx, y: drag.from.y + dy };
       apply();
     },
     { signal },
@@ -475,11 +538,17 @@ export function createStageView(options: StageViewOptions): StageView {
   if (options.spacePan) {
     const typing = (t: EventTarget | null): boolean =>
       t instanceof HTMLElement &&
-      (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName));
+      (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     document.addEventListener(
       "keydown",
       (e) => {
         if (e.key !== " " || typing(e.target)) return;
+        // Choosing a tool leaves its button focused: with the pointer on the zoomed
+        // stage, Space is for panning, not for pressing that button again.
+        if (e.target instanceof HTMLButtonElement) {
+          if (zoom <= 1 || !area.matches(":hover")) return;
+          e.preventDefault();
+        }
         spaceHeld = true;
         area.classList.add("rt-stage--grab");
       },
@@ -489,6 +558,7 @@ export function createStageView(options: StageViewOptions): StageView {
       "keyup",
       (e) => {
         if (e.key !== " ") return;
+        if (spaceHeld && e.target instanceof HTMLButtonElement) e.preventDefault();
         spaceHeld = false;
         area.classList.remove("rt-stage--grab");
       },
@@ -502,7 +572,10 @@ export function createStageView(options: StageViewOptions): StageView {
     fitToScreen,
     actualPixels,
     setEnabled(next) {
-      if (!next) fitToScreen();
+      if (!next) {
+        fitToScreen();
+        hideHint();
+      }
       enabled = next;
       root.hidden = !next;
     },
