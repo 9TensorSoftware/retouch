@@ -644,22 +644,3 @@ if (window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
 }
 
 Object.assign(window, { editor });
-
-// The header menus are <details>, as on 9tensor.com: one open at a time, shut on a click elsewhere or Escape.
-const menus = [...document.querySelectorAll<HTMLDetailsElement>(".menu")];
-for (const menu of menus) {
-  menu.addEventListener("toggle", () => {
-    if (menu.open) for (const other of menus) if (other !== menu) other.open = false;
-  });
-}
-document.addEventListener("click", (event) => {
-  for (const menu of menus) if (!menu.contains(event.target as Node)) menu.open = false;
-});
-document.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") return;
-  for (const menu of menus) {
-    if (!menu.open) continue;
-    menu.open = false;
-    menu.querySelector("summary")?.focus();
-  }
-});
