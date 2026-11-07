@@ -121,6 +121,25 @@ describe("createToolUi", () => {
     expect(free.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("lights a list row as if pointed at, and only one", () => {
+    const list = createToolUi().list<string>({
+      label: "Tracks",
+      items: [
+        { value: "a", label: "A" },
+        { value: "b", label: "B" },
+      ],
+      onChange: () => {},
+    });
+    const [a, b] = [...list.root.children];
+    list.setHighlight("a");
+    expect(a.hasAttribute("data-highlight")).toBe(true);
+    list.setHighlight("b");
+    expect(a.hasAttribute("data-highlight")).toBe(false);
+    expect(b.hasAttribute("data-highlight")).toBe(true);
+    list.setHighlight(null);
+    expect(b.hasAttribute("data-highlight")).toBe(false);
+  });
+
   it("builds a list that picks, lets go on a second click, and lights current rows", () => {
     const onChange = vi.fn();
     const onHover = vi.fn();

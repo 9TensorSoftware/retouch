@@ -13,6 +13,7 @@ import {
   ICON_TOOL_TRANSFORM,
   ICON_TOOL_TRIM,
 } from "../icons";
+import type { ObjectLayer, ObjectLayerOptions } from "./object-layer";
 import type { ToolUi } from "./tool-ui";
 
 /** What a custom tool gets to work with. Mutate `edits`, then render + record. */
@@ -30,6 +31,12 @@ export interface ToolContext {
   canvasArea: HTMLElement;
   /** Builders for pane controls that match the built-in tools. */
   ui: ToolUi;
+  /**
+   * A layer of things found in the media, over it and apart from its pixels:
+   * shapes and rows that light each other up, and a pick. Create one when
+   * the tool mounts, and turn it on and off with the tool.
+   */
+  objects<T extends string = string>(options: ObjectLayerOptions<T>): ObjectLayer<T>;
   /**
    * A small picture of the photo with `edits` applied over the current ones,
    * as an image URL — for preview tiles (`ui.tiles`). It shows the tone,

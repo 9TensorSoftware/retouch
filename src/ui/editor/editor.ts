@@ -89,6 +89,7 @@ import { createLiquifyOverlay } from "./liquify-overlay";
 import { createLiquifyTool } from "./liquify-tool";
 import { createMasksOverlay } from "./masks-overlay";
 import { createMasksTool } from "./masks-tool";
+import { createObjectLayer } from "./object-layer";
 import { createGuidesSwitch, createPixelGuides } from "./pixel-guides";
 import { createPreviewBase, renderLook, renderLookToCanvas } from "./preview";
 import { loadRailLayout, saveRailLayout } from "./rail-layout";
@@ -974,6 +975,12 @@ export function createEditor(options: EditorOptions): EditorHandle {
     record: recordEdit,
     canvasArea,
     ui: createToolUi(signal),
+    objects: (options) =>
+      createObjectLayer(options, {
+        host: () => renderer.getCanvasElement().parentElement,
+        area: canvasArea,
+        signal,
+      }),
     preview: (patch = {}) => {
       const e = entry.edits;
       return renderLook(previewBase, {

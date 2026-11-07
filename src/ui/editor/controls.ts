@@ -240,6 +240,17 @@ export function createList<T extends string>(
       if (time !== null)
         root.style.setProperty("--rt-list-t", String(Math.min(1, Math.max(0, time))));
     },
+    setHighlight(value) {
+      for (const [key, row] of rows) row.toggleAttribute("data-highlight", key === value);
+      const row = value === null ? undefined : rows.get(value);
+      if (!row) return;
+      // Within the list only: the pane around it stays where it is.
+      const top = row.offsetTop - root.offsetTop;
+      if (top < root.scrollTop) root.scrollTop = top;
+      else if (top + row.offsetHeight > root.scrollTop + root.clientHeight) {
+        root.scrollTop = top + row.offsetHeight - root.clientHeight;
+      }
+    },
   };
 }
 

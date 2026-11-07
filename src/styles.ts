@@ -3254,7 +3254,8 @@ body:has(> .rt-editor-overlay) {
   grid-template-columns: 8px minmax(0, 1fr) auto;
 }
 
-.rt-list__item:hover {
+.rt-list__item:hover,
+.rt-list__item[data-highlight] {
   background: var(--rt-control);
   color: var(--rt-text-1);
 }
@@ -4233,6 +4234,103 @@ input.rt-dock__slider-value:focus-visible {
 
 .rt-mask-overlay__handle--end {
   fill: var(--rt-surface-overlay);
+}
+
+/* ctx.objects: what a model found, on a layer of its own over the media. */
+.rt-objects,
+.rt-objects__marks,
+.rt-objects__tags {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.rt-objects {
+  z-index: 3;
+}
+
+.rt-objects[hidden] {
+  display: none;
+}
+
+.rt-objects__shape {
+  fill: color-mix(in srgb, var(--rt-object) 12%, transparent);
+  stroke: var(--rt-object);
+  stroke-width: calc(2 * var(--rt-px, 1px));
+  stroke-linejoin: round;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity var(--rt-dur-2) var(--rt-ease), fill var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-objects__shape.is-focus {
+  fill: color-mix(in srgb, var(--rt-object) 32%, transparent);
+}
+
+.rt-objects__shape.is-selected {
+  stroke-width: calc(3 * var(--rt-px, 1px));
+}
+
+.rt-objects__trail {
+  fill: none;
+  stroke: var(--rt-object);
+  stroke-width: calc(2.5 * var(--rt-px, 1px));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 5;
+  opacity: 0.85;
+  transition: opacity var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-objects__tag {
+  position: absolute;
+  padding: 2px 7px;
+  border-radius: 5px 5px 5px 0;
+  background: var(--rt-object);
+  color: #0b0d12;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  transform-origin: 0 0;
+  transform: scale(calc(1 / var(--rt-view-scale, 1))) translateY(-100%);
+  transition: opacity var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-objects__tag[data-inside] {
+  border-radius: 0 0 5px 0;
+  transform: scale(calc(1 / var(--rt-view-scale, 1)));
+}
+
+.rt-objects__tag[hidden] {
+  display: none;
+}
+
+.rt-objects__tag.is-focus {
+  z-index: 1;
+}
+
+.rt-objects[data-focus] .rt-objects__shape:not(.is-focus),
+.rt-objects[data-focus] .rt-objects__trail:not(.is-focus),
+.rt-objects[data-focus] .rt-objects__tag:not(.is-focus) {
+  opacity: 0.15;
+}
+
+/* A fresh run's findings arrive one by one. */
+@media (prefers-reduced-motion: no-preference) {
+  .rt-objects--live .rt-objects__shape,
+  .rt-objects--live .rt-objects__tag {
+    animation: rt-objects-in 0.5s var(--rt-ease) both;
+    animation-delay: var(--rt-object-delay, 0ms);
+  }
+}
+
+@keyframes rt-objects-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* Transparent pixels (a cutout) read as a checkerboard, not as the stage. */

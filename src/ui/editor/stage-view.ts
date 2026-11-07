@@ -36,8 +36,8 @@ const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_PX = 30;
 
 /** Touches on these zoom and pan the photo; everything else on the stage has its own gestures. */
-const BACKGROUND =
-  ".rt-editor__canvas-area, .rt-editor__canvas-pane, .rt-editor__pane-content, .rt-editor__canvas-container, .canvas-container, .lower-canvas, .upper-canvas, .rt-compare-pane canvas";
+export const STAGE_BACKGROUND =
+  ".rt-editor__canvas-area, .rt-editor__canvas-pane, .rt-editor__pane-content, .rt-editor__canvas-container, .canvas-container, .lower-canvas, .upper-canvas, .rt-compare-pane canvas, .rt-objects__shape";
 
 /** The wheel's legacy field: notches × 120, or -3 × deltaY on a trackpad. Not in every browser. */
 function wheelDeltaYOf(e: WheelEvent): number | undefined {
@@ -45,7 +45,7 @@ function wheelDeltaYOf(e: WheelEvent): number | undefined {
 }
 
 /** Where a mouse drag pans once zoomed in: as for touch, plus a crop frame with nowhere to go. */
-const MOUSE_PAN = `${BACKGROUND}, .rt-crop__selection--full, .rt-crop__selection--full :not(.rt-crop__handle)`;
+const MOUSE_PAN = `${STAGE_BACKGROUND}, .rt-crop__selection--full, .rt-crop__selection--full :not(.rt-crop__handle)`;
 /** A press has to travel this far (px) to be a pan; less stays a click. */
 const PAN_START_PX = 4;
 /** How long the hint about panning over a drawing tool stays up. */
@@ -451,7 +451,7 @@ export function createStageView(options: StageViewOptions): StageView {
       }
       if (area.classList.contains("rt-editor__canvas-area--picking")) return;
       // Tools don't listen on the background, but a crop frame would start moving.
-      if (!over.matches(BACKGROUND)) e.stopPropagation();
+      if (!over.matches(STAGE_BACKGROUND)) e.stopPropagation();
       drag = { ...from, moved: false };
     },
     { capture: true, signal },
@@ -525,7 +525,7 @@ export function createStageView(options: StageViewOptions): StageView {
         if (touches.size === 2) pinch = { zoom, pan: { ...pan }, ...spread() };
         return;
       }
-      const background = (e.target as Element).matches(BACKGROUND);
+      const background = (e.target as Element).matches(STAGE_BACKGROUND);
       press = { id: e.pointerId, t: e.timeStamp, x: e.clientX, y: e.clientY, background };
       if (background && zoom > 1) {
         touchPan = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { ...pan }, moved: false };

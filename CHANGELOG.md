@@ -8,6 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Added
 
+- What Detect, Track and Read text find is now a layer of its own over the photo or video, drawn
+  and handled one way in all three. Point at a box or a row to bring it forward on both sides and
+  dim the rest. Click to pick it, and click again, click the bare photo or press Esc to let go.
+  The actions work on the pick, or on everything without one: mask, pixelate or crop to one face,
+  copy one line. Boxes keep their place through a crop and survive switching tools and reopening
+  the photo, undo brings them back with their pixels, and **Hide boxes** clears the view. A drag
+  across a box on a zoomed photo still pans.
+- `ctx.objects()`: the same layer for any tool, with its rows, hover and pick wired together.
+- `setHighlight()` on `ctx.ui.list()`: light a row as if pointed at, scrolling the list to it.
 - A crosshair follows the mouse over the photo, with the pixel it's on beside it, counted in the
   photo as it'll come out. It's on by default; a button on the zoom bar turns it off, and the
   choice is remembered.

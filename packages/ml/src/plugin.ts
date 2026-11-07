@@ -1,8 +1,10 @@
 import type {
   EditMask,
   ImageEdits,
+  ObjectLayer,
   Retouch,
   ToolContext,
+  UiButton,
   UiCard,
   UiNote,
   UiStep,
@@ -10,7 +12,7 @@ import type {
   VideoEdits,
 } from "@9tensor/retouch";
 import { composeBokeh, prepareBokeh, renderBokeh, suggestFocus } from "./bokeh";
-import { KEEP_RGB, ON_KEEP, rgba } from "./colors";
+import { KEEP_RGB, rgba } from "./colors";
 import {
   applyMatteAlpha,
   type CutoutOptions,
@@ -35,6 +37,7 @@ import {
   detectObjects,
 } from "./detect";
 import { createEraseSurface } from "./erase-tool";
+import { boxQuad, detectionColors, detectionName, keepFindings } from "./findings";
 import {
   CUTOUT_ICON,
   DENOISE_ICON,
@@ -247,92 +250,29 @@ function turnsAreNeutral(edits: ImageEdits): boolean {
 const NEEDS_FRAME =
   "This works on the uncropped, unturned photo. Reset Crop, Transform and Liquify first.";
 
-/** A box to outline: a detection, or a text line with its rotated corners. */
-type OverlayBox = Detection & { quad?: TextLine["quad"] };
-
 /**
- * Non-interactive overlay that outlines boxes over the preview. Boxes with
- * a `quad` are drawn rotated; `labels: false` leaves out the label chips.
+ * A "Hide boxes" button for a tool's object layer. The layer shows while the
+ * tool is active, unless it's been hidden.
  */
-function createBoxOverlay(
-  canvasArea: HTMLElement,
-  { labels = true }: { labels?: boolean } = {},
-): {
-  draw(boxes: OverlayBox[]): void;
-  setVisible(visible: boolean): void;
-  destroy(): void;
-} {
-  const container = canvasArea.querySelector("canvas")?.parentElement;
-  const overlay = document.createElement("canvas");
-  overlay.className = "rt-ml-detect-overlay";
-  overlay.style.cssText =
-    "position:absolute;left:0;top:0;width:100%;height:100%;z-index:3;pointer-events:none;display:none;";
-  container?.appendChild(overlay);
-  let boxes: OverlayBox[] = [];
-
-  function redraw(): void {
-    const w = Math.max(1, Math.round(overlay.clientWidth));
-    const h = Math.max(1, Math.round(overlay.clientHeight));
-    if (overlay.width !== w || overlay.height !== h) {
-      overlay.width = w;
-      overlay.height = h;
-    }
-    const ctx = overlay.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = rgba(KEEP_RGB, 0.95);
-    ctx.lineWidth = 2;
-    ctx.font = "600 11px system-ui, sans-serif";
-    for (const b of boxes) {
-      if (b.quad) {
-        ctx.beginPath();
-        for (const [x, y] of b.quad) ctx.lineTo(x * w, y * h);
-        ctx.closePath();
-        ctx.fillStyle = rgba(KEEP_RGB, 0.14);
-        ctx.fill();
-        ctx.stroke();
-      } else {
-        ctx.strokeRect(b.x * w, b.y * h, b.w * w, b.h * h);
-      }
-      if (!labels) continue;
-      const tag = b.label
-        ? `${b.label} ${Math.round(b.score * 100)}%`
-        : `${Math.round(b.score * 100)}%`;
-      // Label chip: measured rounded pill in the box color, ink text on top.
-      const chipH = 17;
-      const padX = 6;
-      const chipW = ctx.measureText(tag).width + padX * 2;
-      const cx = Math.max(0, b.x * w - 1);
-      const cy = Math.max(0, b.y * h - chipH - 3);
-      ctx.fillStyle = rgba(KEEP_RGB, 0.95);
-      ctx.beginPath();
-      ctx.roundRect(cx, cy, chipW, chipH, 4);
-      ctx.fill();
-      ctx.fillStyle = ON_KEEP;
-      ctx.fillText(tag, cx + padX, cy + 12.5);
-    }
-  }
-
-  const observer =
-    typeof ResizeObserver !== "undefined"
-      ? new ResizeObserver(() => {
-          if (overlay.style.display !== "none") redraw();
-        })
-      : null;
-  if (container) observer?.observe(container);
-
+function layerSwitch(
+  ctx: ToolContext,
+  layer: Pick<ObjectLayer, "setVisible">,
+): { button: UiButton; setActive(active: boolean): void } {
+  let active = false;
+  let shown = true;
+  const button = ctx.ui.button({
+    label: "Hide boxes",
+    onClick: () => {
+      shown = !shown;
+      button.setLabel(shown ? "Hide boxes" : "Show boxes");
+      layer.setVisible(active && shown);
+    },
+  });
   return {
-    draw(next) {
-      boxes = next;
-      redraw();
-    },
-    setVisible(visible) {
-      overlay.style.display = visible ? "" : "none";
-      if (visible) redraw();
-    },
-    destroy() {
-      observer?.disconnect();
-      overlay.remove();
+    button,
+    setActive(next) {
+      active = next;
+      layer.setVisible(active && shown);
     },
   };
 }
@@ -384,6 +324,11 @@ const activeRuns = new Set<string>();
 
 /** Each video's last tracking, kept while the entry lives: reopening the tool shows it again. */
 const trackResults = new WeakMap<object, TrackedVideo>();
+
+/** Each photo's last Detect run, as it was left. */
+const detectResults = keepFindings<{ found: Detection[]; noun: string }>();
+/** Each photo's last Read text run. */
+const textResults = keepFindings<TextLine[]>();
 
 type Follow = "all" | "people" | "vehicles" | "animals";
 
@@ -1149,14 +1094,33 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "5 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
+        if (ctx.entry.kind !== "image")
+          return { root: ctx.ui.note("Detect works on photos.").root };
+        // Narrowed once, so closures keep the image's fields.
+        const entry = ctx.entry;
         const note = ctx.ui.note("");
-        const overlay = createBoxOverlay(ctx.canvasArea);
-        let found: Detection[] = [];
+        const kept = detectResults.get(entry);
+        let found: Detection[] = kept?.found ?? [];
+        let noun = kept?.noun ?? "object";
         let busy = false;
+
+        const objects = ctx.objects({
+          label: "What was found",
+          onSelect: (id) => {
+            const picked = id === null ? null : found[Number(id)];
+            note.set(
+              picked
+                ? `${detectionName(picked)}, ${Math.round(picked.score * 100)}%. Click it again to let go.`
+                : summary(),
+            );
+            syncState();
+          },
+        });
+        const boxes = layerSwitch(ctx, objects);
 
         const card = ctx.ui.card({
           description:
-            "Finds faces or objects, then adds a mask over each, pixelates them for privacy, or crops to them.",
+            "Finds faces or objects and marks them on a layer over the photo. Point at one, or pick it, then add a mask, pixelate or crop to it, or to all of them.",
           facts: [
             ["Models", "UltraFace (faces) · YOLOX-nano (objects)"],
             [
@@ -1187,19 +1151,77 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const addMasks = ctx.ui.button({ label: "Add masks", onClick: () => maskThem() });
         const pixelate = ctx.ui.button({ label: "Pixelate", onClick: () => void pixelateThem() });
         const cropTo = ctx.ui.button({ label: "Crop to them", onClick: () => cropToThem() });
-        const actions = ctx.ui.row(addMasks.root, pixelate.root, cropTo.root);
+        const actions = ctx.ui.row(addMasks.root, pixelate.root, cropTo.root, boxes.button.root);
 
+        /** What the actions work on: the pick, or everything. */
+        function targets(): Detection[] {
+          const id = objects.selected;
+          return id === null ? found : [found[Number(id)]];
+        }
+
+        /** What the run found, or why the boxes or actions are held back. */
+        function summary(): string {
+          const edits = ctx.edits as ImageEdits;
+          if (found.length === 0) return "";
+          if (!turnsAreNeutral(edits)) {
+            return "Boxes show on the unturned photo. Reset Transform to see them.";
+          }
+          if (!geometryIsNeutral(edits)) return NEEDS_FRAME;
+          const labels = [...new Set(found.map((f) => f.label).filter(Boolean))];
+          const what = labels.length
+            ? `: ${labels.slice(0, 4).join(", ")}${labels.length > 4 ? "…" : ""}`
+            : "";
+          const count = `${found.length} ${noun}${found.length > 1 ? "s" : ""}`;
+          return `${count} found${what}. Pick one to act on it alone.`;
+        }
+
+        function showFound(animate: boolean): void {
+          objects.select(null);
+          const colors = detectionColors(found);
+          objects.show(
+            found.map((f, i) => ({
+              id: String(i),
+              quad: boxQuad(f),
+              color: colors[i],
+              tag: detectionName(f),
+            })),
+            { animate },
+          );
+          objects.setItems(
+            found.map((f, i) => ({
+              value: String(i),
+              label: detectionName(f),
+              color: colors[i],
+              span: [0, f.score] as const,
+              detail: `${Math.round(f.score * 100)}%`,
+            })),
+          );
+          objects.list.hidden = found.length === 0;
+        }
+
+        let framing = "";
         function syncState(): void {
-          const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
+          const edits = ctx.edits as ImageEdits;
+          const neutral = geometryIsNeutral(edits);
+          // Boxes are in the source frame: they line up through a crop, not a turn.
+          objects.setFrame(turnsAreNeutral(edits) ? edits.crop : null);
+          const now = JSON.stringify([edits.crop, neutral]);
+          if (now !== framing) {
+            framing = now;
+            note.set(summary());
+          }
+          const one = objects.selected !== null;
           findFaces.setDisabled(busy);
           findObjects.setDisabled(busy);
           actions.hidden = found.length === 0;
+          addMasks.setLabel(one ? "Add mask" : "Add masks");
+          cropTo.setLabel(one ? "Crop to it" : "Crop to them");
           for (const b of [addMasks, pixelate, cropTo])
             b.setDisabled(busy || !neutral || found.length === 0);
         }
 
         async function find(kind: "faces" | "objects"): Promise<void> {
-          if (busy || activeRuns.has("detect") || ctx.entry.kind !== "image") return;
+          if (busy || activeRuns.has("detect")) return;
           busy = true;
           activeRuns.add("detect");
           syncState();
@@ -1210,35 +1232,27 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                 note.set(`Downloading the model… ${formatMb(p.loaded)} of ${formatMb(p.total)}`);
               } else note.set("Looking…");
             };
-            if (kind === "faces") {
-              found = await detectFaces(ctx.entry.image, {
-                ...detectOptions,
-                onDownloadProgress: (p) => {
-                  progress(p);
-                  detectOptions.onDownloadProgress?.(p);
-                },
-              });
-            } else {
-              found = await detectObjects(ctx.entry.image, {
-                ...objectOptions,
-                onDownloadProgress: (p) => {
-                  progress(p);
-                  objectOptions.onDownloadProgress?.(p);
-                },
-              });
-            }
-            overlay.draw(found);
-            const noun = kind === "faces" ? "face" : "object";
-            if (found.length === 0) {
-              note.set(`No ${noun}s found.`);
-            } else {
-              const labels = [...new Set(found.map((f) => f.label).filter(Boolean))];
-              const what = labels.length
-                ? `: ${labels.slice(0, 4).join(", ")}${labels.length > 4 ? "…" : ""}`
-                : ".";
-              note.set(`${found.length} ${noun}${found.length > 1 ? "s" : ""} found${what}`);
-              if (!geometryIsNeutral(ctx.edits as ImageEdits)) note.set(NEEDS_FRAME);
-            }
+            const results =
+              kind === "faces"
+                ? await detectFaces(entry.image, {
+                    ...detectOptions,
+                    onDownloadProgress: (p) => {
+                      progress(p);
+                      detectOptions.onDownloadProgress?.(p);
+                    },
+                  })
+                : await detectObjects(entry.image, {
+                    ...objectOptions,
+                    onDownloadProgress: (p) => {
+                      progress(p);
+                      objectOptions.onDownloadProgress?.(p);
+                    },
+                  });
+            found = [...results].sort((a, b) => b.score - a.score);
+            noun = kind === "faces" ? "face" : "object";
+            detectResults.set(entry, { found, noun });
+            showFound(true);
+            note.set(found.length === 0 ? `No ${noun}s found.` : summary());
           } catch (error) {
             note.set(errorText(error, "Detection failed"));
             console.error(error);
@@ -1250,7 +1264,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         function maskThem(): void {
-          for (const f of found) {
+          const those = targets();
+          for (const f of those) {
             const mask: EditMask = {
               id:
                 typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -1276,26 +1291,29 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           ctx.render();
           ctx.record();
           note.set(
-            `Added ${found.length} radial mask${found.length > 1 ? "s" : ""}. Tune them in Masks.`,
+            `Added ${those.length} radial mask${those.length > 1 ? "s" : ""}. Tune them in Masks.`,
           );
         }
 
         async function pixelateThem(): Promise<void> {
-          if (busy || activeRuns.has("detect") || ctx.entry.kind !== "image") return;
+          if (busy || activeRuns.has("detect")) return;
           busy = true;
           activeRuns.add("detect");
           syncState();
           note.set("Pixelating…");
           try {
             const canvas = document.createElement("canvas");
-            canvas.width = ctx.entry.image.naturalWidth;
-            canvas.height = ctx.entry.image.naturalHeight;
+            canvas.width = entry.image.naturalWidth;
+            canvas.height = entry.image.naturalHeight;
             const cctx = canvas.getContext("2d");
             if (!cctx) throw new Error("[Retouch ML] Failed to create canvas context");
-            cctx.drawImage(ctx.entry.image, 0, 0);
-            for (const f of found) pixelateRegion(canvas, f);
+            cctx.drawImage(entry.image, 0, 0);
+            for (const f of targets()) pixelateRegion(canvas, f);
+            // A mosaic moves nothing: the layer stays with the new pixels.
+            detectResults.carry(entry, { found, noun });
             await replacePhoto(ctx, canvas, "Pixelate");
           } catch (error) {
+            detectResults.drop(entry);
             note.set(errorText(error, "Pixelate failed"));
             console.error(error);
           } finally {
@@ -1310,7 +1328,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           let y0 = 1;
           let x1 = 0;
           let y1 = 0;
-          for (const f of found) {
+          for (const f of targets()) {
             x0 = Math.min(x0, f.x);
             y0 = Math.min(y0, f.y);
             x1 = Math.max(x1, f.x + f.w);
@@ -1325,25 +1343,29 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           ctx.edits.crop = { x: cx0, y: cy0, width: cx1 - cx0, height: cy1 - cy0 };
           ctx.render();
           ctx.record();
-          overlay.draw([]);
-          found = [];
           syncState();
           note.set("Cropped to what was found. Undo to go back.");
         }
 
-        card.body.append(ctx.ui.row(findFaces.root, findObjects.root), actions, note.root);
+        card.body.append(
+          ctx.ui.row(findFaces.root, findObjects.root),
+          objects.list,
+          actions,
+          note.root,
+        );
+        showFound(false);
         syncState();
         return {
           root: card.root,
           onActivate() {
-            overlay.setVisible(true);
+            boxes.setActive(true);
           },
           onDeactivate() {
-            overlay.setVisible(false);
+            boxes.setActive(false);
           },
           sync: syncState,
           destroy() {
-            overlay.destroy();
+            objects.destroy();
           },
         };
       },
@@ -1412,20 +1434,19 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           (isCached) => run.setLabel(actionLabel("Track objects", model, isCached)),
         );
 
-        const overlay = createTrackOverlay(ctx.canvasArea, entry.video, (time, ids) => {
-          list.setTime(time / entry.duration);
-          list.setCurrent(ids.map(String));
-        });
-        const list = ctx.ui.list<string>({
+        const objects = ctx.objects({
           label: "Tracks",
-          items: [],
-          onChange: (value) => pick(value === null ? null : Number(value)),
-          onHover: (value) => overlay.focus(value === null ? picked : Number(value)),
+          onSelect: (id, from) => pick(id === null ? null : Number(id), from === "list"),
         });
+        const overlay = createTrackOverlay(objects, entry.video, (time, ids) => {
+          objects.setTime(time / entry.duration);
+          objects.setCurrent(ids.map(String));
+        });
+        const boxes = layerSwitch(ctx, objects);
         const trimTo = ctx.ui.button({ label: "Trim to it", onClick: () => trimToPicked() });
         const cropTo = ctx.ui.button({ label: "Crop to it", onClick: () => cropToPicked() });
         const save = ctx.ui.button({ label: "Save tracks", onClick: () => saveTracks() });
-        const actions = ctx.ui.row(trimTo.root, cropTo.root, save.root);
+        const actions = ctx.ui.row(trimTo.root, cropTo.root, save.root, boxes.button.root);
 
         const at = (seconds: number) => `${seconds.toFixed(1)} s`;
         const trackOf = (id: number | null) => result?.tracks.find((t) => t.id === id) ?? null;
@@ -1450,7 +1471,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           }
           const turned = !turnsAreNeutral(edits);
           // Boxes are in the source frame: they line up through a crop, not a turn.
-          overlay.setFrame(turned ? null : edits.crop);
+          objects.setFrame(turned ? null : edits.crop);
           run.setDisabled(busy);
           stop.root.hidden = !busy;
           actions.hidden = !result || result.tracks.length === 0;
@@ -1461,12 +1482,13 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
         function showResult(): void {
           overlay.show(result);
+          objects.select(null);
           picked = null;
           const tracks = [...(result?.tracks ?? [])].sort(
             // Longest-lived first: the ones it followed all the way.
             (a, b) => b.lastSeen - b.firstSeen - (a.lastSeen - a.firstSeen) || a.id - b.id,
           );
-          list.setItems(
+          objects.setItems(
             tracks.map((t) => ({
               value: String(t.id),
               label: trackName(t),
@@ -1478,21 +1500,22 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
               detail: at(t.lastSeen - t.firstSeen),
             })),
           );
-          list.root.hidden = tracks.length === 0;
+          objects.list.hidden = tracks.length === 0;
           if (result) note.set(summary());
           syncState();
         }
 
-        function pick(id: number | null): void {
+        function pick(id: number | null, jump: boolean): void {
           picked = id;
-          overlay.focus(id);
           const track = trackOf(id);
           if (result && track) {
-            // Jump to where it's first on screen, within the trim.
-            const time = firstShown(result, track.id) ?? track.firstSeen;
-            entry.video.currentTime = Math.min(Math.max(time, edits.trim.start), edits.trim.end);
+            if (jump) {
+              // Jump to where it's first on screen, within the trim.
+              const time = firstShown(result, track.id) ?? track.firstSeen;
+              entry.video.currentTime = Math.min(Math.max(time, edits.trim.start), edits.trim.end);
+            }
             note.set(`${trackName(track)}: ${at(track.firstSeen)} to ${at(track.lastSeen)}.`);
-          }
+          } else note.set(summary());
           syncState();
         }
 
@@ -1594,22 +1617,25 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           followChoice.root,
           ctx.ui.row(run.root, stop.root),
           steps.root,
-          note.root,
-          list.root,
+          objects.list,
           actions,
+          note.root,
         );
         showResult();
         return {
           root: card.root,
           onActivate() {
             overlay.setVisible(true);
+            boxes.setActive(true);
           },
           onDeactivate() {
             overlay.setVisible(false);
+            boxes.setActive(false);
           },
           sync: syncState,
           destroy() {
             overlay.destroy();
+            objects.destroy();
           },
         };
       },
@@ -1634,11 +1660,23 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       badge: "13 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
+        if (ctx.entry.kind !== "image")
+          return { root: ctx.ui.note("Read text works on photos.").root };
+        const entry = ctx.entry;
         const note = ctx.ui.note("");
-        const overlay = createBoxOverlay(ctx.canvasArea, { labels: false });
         const output = ctx.ui.output({ label: "Text in the photo" });
-        let found: TextLine[] = [];
+        let found: TextLine[] = textResults.get(entry) ?? [];
         let busy = false;
+
+        const objects = ctx.objects({
+          label: "Lines of text",
+          onSelect: (id) => {
+            const picked = id === null ? null : found[Number(id)];
+            note.set(picked ? picked.text : summary());
+            syncState();
+          },
+        });
+        const boxes = layerSwitch(ctx, objects);
 
         const run = ctx.ui.button({
           label: actionLabel("Read the text", model, false),
@@ -1647,30 +1685,69 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         });
         const copy = ctx.ui.button({ label: "Copy text", onClick: () => void copyText() });
         const pixelate = ctx.ui.button({ label: "Pixelate it", onClick: () => void hideText() });
-        const actions = ctx.ui.row(copy.root, pixelate.root);
+        const actions = ctx.ui.row(copy.root, pixelate.root, boxes.button.root);
         const { card, refresh } = modelCard(
           ctx,
           model,
-          "Finds every line of text in the photo and reads it, in 32 Latin-script languages. Copy what it read, or pixelate it to hide it.",
+          "Finds every line of text in the photo and reads it, in 32 Latin-script languages. Copy what it read, or pixelate it to hide it. Pick a line on the photo to do that to it alone.",
           (isCached) => run.setLabel(actionLabel("Read the text", model, isCached)),
         );
 
+        /** What the actions work on: the picked line, or all of them. */
+        function targets(): TextLine[] {
+          const id = objects.selected;
+          return id === null ? found : [found[Number(id)]];
+        }
+
+        function summary(): string {
+          const edits = ctx.edits as ImageEdits;
+          if (found.length === 0) return "";
+          if (!turnsAreNeutral(edits)) {
+            return "Boxes show on the unturned photo. Reset Transform to see them.";
+          }
+          if (!geometryIsNeutral(edits)) return NEEDS_FRAME;
+          return `${found.length} line${found.length > 1 ? "s" : ""} found.`;
+        }
+
+        function showFound(animate: boolean): void {
+          objects.select(null);
+          objects.show(
+            found.map((line, i) => ({
+              id: String(i),
+              quad: line.quad,
+              color: rgba(KEEP_RGB, 1),
+            })),
+            { animate },
+          );
+          output.set(linesToText(found));
+        }
+
+        let framing = "";
         function syncState(): void {
-          const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
+          const edits = ctx.edits as ImageEdits;
+          const neutral = geometryIsNeutral(edits);
+          objects.setFrame(turnsAreNeutral(edits) ? edits.crop : null);
+          const now = JSON.stringify([edits.crop, neutral]);
+          if (now !== framing) {
+            framing = now;
+            note.set(summary());
+          }
+          const one = objects.selected !== null;
           run.setDisabled(busy);
           actions.hidden = found.length === 0;
+          copy.setLabel(one ? "Copy line" : "Copy text");
           copy.setDisabled(busy);
           pixelate.setDisabled(busy || !neutral);
         }
 
         async function read(): Promise<void> {
-          if (busy || activeRuns.has("text") || ctx.entry.kind !== "image") return;
+          if (busy || activeRuns.has("text")) return;
           busy = true;
           activeRuns.add("text");
           syncState();
           note.set("Reading…");
           try {
-            found = await recognizeText(ctx.entry.image, {
+            found = await recognizeText(entry.image, {
               ...textOptions,
               onDownloadProgress: (p) => {
                 if (p.total > 0 && p.loaded < p.total) {
@@ -1679,13 +1756,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                 textOptions.onDownloadProgress?.(p);
               },
             });
-            overlay.draw(found);
-            output.set(linesToText(found));
-            if (found.length === 0) note.set("No text found.");
-            else {
-              note.set(`${found.length} line${found.length > 1 ? "s" : ""} found.`);
-              if (!geometryIsNeutral(ctx.edits as ImageEdits)) note.set(NEEDS_FRAME);
-            }
+            textResults.set(entry, found);
+            showFound(true);
+            note.set(found.length === 0 ? "No text found." : summary());
           } catch (error) {
             note.set(errorText(error, "Reading failed"));
             console.error(error);
@@ -1699,7 +1772,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
         async function copyText(): Promise<void> {
           try {
-            await navigator.clipboard.writeText(linesToText(found));
+            await navigator.clipboard.writeText(linesToText(targets()));
             note.set("Copied.");
           } catch {
             note.set("Couldn't reach the clipboard. Select the text and copy it instead.");
@@ -1707,21 +1780,24 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         async function hideText(): Promise<void> {
-          if (busy || activeRuns.has("text") || ctx.entry.kind !== "image") return;
+          if (busy || activeRuns.has("text")) return;
           busy = true;
           activeRuns.add("text");
           syncState();
           note.set("Pixelating…");
           try {
             const canvas = document.createElement("canvas");
-            canvas.width = ctx.entry.image.naturalWidth;
-            canvas.height = ctx.entry.image.naturalHeight;
+            canvas.width = entry.image.naturalWidth;
+            canvas.height = entry.image.naturalHeight;
             const cctx = canvas.getContext("2d");
             if (!cctx) throw new Error("[Retouch ML] Failed to create canvas context");
-            cctx.drawImage(ctx.entry.image, 0, 0);
-            for (const line of found) pixelateRegion(canvas, line);
+            cctx.drawImage(entry.image, 0, 0);
+            for (const line of targets()) pixelateRegion(canvas, line);
+            // A mosaic moves nothing: the layer stays with the new pixels.
+            textResults.carry(entry, found);
             await replacePhoto(ctx, canvas, "Pixelate text");
           } catch (error) {
+            textResults.drop(entry);
             note.set(errorText(error, "Pixelate failed"));
             console.error(error);
           } finally {
@@ -1732,18 +1808,19 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         card.body.append(run.root, output.root, actions, note.root);
+        showFound(false);
         syncState();
         return {
           root: card.root,
           onActivate() {
-            overlay.setVisible(true);
+            boxes.setActive(true);
           },
           onDeactivate() {
-            overlay.setVisible(false);
+            boxes.setActive(false);
           },
           sync: syncState,
           destroy() {
-            overlay.destroy();
+            objects.destroy();
           },
         };
       },

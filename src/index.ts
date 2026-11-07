@@ -33,6 +33,13 @@ export type {
   VideoEntry,
 } from "./types";
 export type {
+  LayerFrame,
+  LayerObject,
+  LayerPoint,
+  ObjectLayer,
+  ObjectLayerOptions,
+} from "./ui/editor/object-layer";
+export type {
   EditorToolPlugin,
   PreviewEdits,
   ToolContext,

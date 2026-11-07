@@ -142,6 +142,8 @@ export interface UiList<T extends string> {
   setCurrent(values: Iterable<T>): void;
   /** A playhead across the spans, from 0 to 1; null hides it. */
   setTime(time: number | null): void;
+  /** Light a row as if pointed at, scrolling the list to it; null for none. */
+  setHighlight(value: T | null): void;
 }
 
 /** Options for `ctx.ui.card()`. */

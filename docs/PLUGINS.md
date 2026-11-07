@@ -87,6 +87,7 @@ what you add yourself.
 | `ctx.render()` | Draws the current edits on the stage and syncs every tool's controls. |
 | `ctx.record()` | Adds an undo step. Call it once per user gesture, after the change. |
 | `ctx.canvasArea` | The element around the canvas, for overlays of your own. |
+| `ctx.objects(options)` | A layer of things found in the media, over it and apart from its pixels; see [Object layers](#object-layers). |
 | `ctx.ui` | Control builders; see below. |
 | `ctx.preview(edits?)` | A small picture of the photo with `edits` in place of the current ones, as an image URL. It shows adjustments, filter, curves, color mix and stylize; each one you pass replaces the photo's own. |
 | `ctx.reveal(result)` | Wipes a new version of the photo in over the stage; see [AI tools](#ai-tools). |
@@ -165,7 +166,8 @@ swatch and `span` a `[start, end]` from 0 to 1 drawn as a bar on a timeline), `v
 `null`), `onChange` and `onHover`. A second click on the picked row lets go, so `onChange` gets
 `null`. The handle has `value`, `set()`, `setItems()`, `setCurrent(values)` to light the rows
 that are current without picking them, and `setTime(t)` to draw a playhead across the spans
-(`null` hides it). It scrolls past a dozen or so rows.
+(`null` hides it), and `setHighlight(value)` to light a row as if pointed at, scrolling the list to
+it. It scrolls past a dozen or so rows.
 
 ### `note(text)`
 
@@ -180,6 +182,49 @@ names it for screen readers; `set(text)` replaces the text.
 ### `card(options)` and `steps(options)`
 
 For tools that download or run something; see the next section.
+
+## Object layers
+
+`ctx.objects()` is what Detect, Track and Read text draw on, for any tool that finds things in a
+photo or video. It's an SVG layer of shapes over the media, never part of its pixels, and rows
+that list the same things. Pointing at a shape or a row brings it forward on both sides and dims
+the rest. Clicking picks it; clicking it again, clicking the bare photo or pressing Esc lets go.
+Hovering outranks the pick, which comes back when the pointer leaves. A drag across a shape on a
+zoomed photo still pans.
+
+```ts
+mount(ctx) {
+  const objects = ctx.objects({
+    label: "Faces",
+    onSelect: (id, from) => { /* from is "layer" or "list"; id is null on letting go */ },
+  });
+  objects.show(found.map((f, i) => ({
+    id: String(i),
+    quad: [[f.x, f.y], [f.x + f.w, f.y], [f.x + f.w, f.y + f.h], [f.x, f.y + f.h]],
+    color: "#5cc8ff",
+    tag: "face",
+  })));
+  objects.setItems(found.map((f, i) => ({ value: String(i), label: "face", color: "#5cc8ff" })));
+  return {
+    root: ctx.ui.section("Found", objects.list),
+    onActivate: () => objects.setVisible(true),
+    onDeactivate: () => objects.setVisible(false),
+    destroy: () => objects.destroy(),
+  };
+}
+```
+
+An object has an `id`, its `quad` (corners from 0 to 1 on the source frame, clockwise from
+top-left, rotated if need be), a `color`, and optionally a `tag` to flag it with and a `trail` of
+points it has passed. Smaller objects sit on top, so one inside another can still be reached.
+
+The layer starts off: call `setVisible(true)` when your tool activates. `show()` replaces what's
+on it, and can run per frame: objects keep their shapes by `id`, and `{ animate: true }` staggers
+new ones in. `selected` reads the pick and `select(id)` sets it without firing `onSelect`.
+`setFrame(rect)` says which part of the source frame is on screen, usually `ctx.edits.crop`, so
+the shapes line up through a crop; `null` hides the layer, for when the frame is turned or warped.
+`list` is the rows' element, to place in your pane or leave out, and `setItems`, `setCurrent` and
+`setTime` work as they do on [`list()`](#listoptions).
 
 ## AI tools
 

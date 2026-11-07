@@ -34,7 +34,9 @@ through the plugin API and ride its edit model.
   boxes. Either feeds three one-click actions: add a radial mask per box
   (tune it in the Masks tool), **pixelate** for privacy (replaces the image
   in place), or **crop to the detected boxes**. Mask/crop actions ride the
-  non-destructive edit model, so they undo like any other edit.
+  non-destructive edit model, so they undo like any other edit. What it finds
+  is a layer over the photo: point at a box or its row to bring it forward,
+  and pick one to act on it alone.
 - **Track (video)** — the same YOLOX-nano, run on a video's frames, with a
   tracker that follows each object from the frame it enters to the frame it
   leaves under one number. Boxes match by overlap with where each track is
@@ -43,8 +45,10 @@ through the plugin API and ride its edit model.
   track survives a few missed frames. Registers a "Track" tool for videos:
   follow everything, or only people, vehicles or animals, through the
   trimmed clip; each track plays boxed and numbered with a trail, and is
-  listed with its span on a timeline. Pick one to jump to it, **trim** the
-  video to it or **crop** to where it goes, or save the tracks as JSON.
+  listed with its span on a timeline, on the same layer as Detect. Point at a
+  box or row to bring it forward. Pick a row to jump to it, or a box where it
+  is, then **trim** the video to it or **crop** to where it goes, or save the
+  tracks as JSON.
   `trackVideo(video)` seeks through a clip and returns every frame's boxes
   plus a summary of each track; `createTracker()` takes detections from any
   source, frame by frame.

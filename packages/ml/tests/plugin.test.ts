@@ -1,5 +1,6 @@
 import type { EditorToolPlugin, ToolContext } from "@9tensor/retouch";
 import { DEFAULT_EDITS } from "../../../src/constants";
+import { createObjectLayer } from "../../../src/ui/editor/object-layer";
 import { createToolUi } from "../../../src/ui/editor/tool-ui";
 import { DEFAULT_CUTOUT_MODEL_URL } from "../src/cutout";
 import { installMlTools } from "../src/plugin";
@@ -40,6 +41,12 @@ function context(kind: "image" | "video" = "image"): ToolContext {
     record: vi.fn(),
     canvasArea,
     ui: createToolUi(),
+    objects: (options) =>
+      createObjectLayer(options, {
+        host: () => container,
+        area: canvasArea,
+        signal: new AbortController().signal,
+      }),
     preview: () => "",
     reveal: async () => () => {},
   };
@@ -186,8 +193,8 @@ describe("ML tool panes", () => {
     expect(
       [...pane.root.querySelectorAll(".rt-dock__group .rt-dock__chip")].map((b) => b.textContent),
     ).toEqual(["Everything", "People", "Vehicles", "Animals"]);
-    expect(ctx.canvasArea.querySelector(".rt-ml-track-overlay")).not.toBeNull();
+    expect(ctx.canvasArea.querySelector(".rt-objects")).not.toBeNull();
     pane.destroy?.();
-    expect(ctx.canvasArea.querySelector(".rt-ml-track-overlay")).toBeNull();
+    expect(ctx.canvasArea.querySelector(".rt-objects")).toBeNull();
   });
 });

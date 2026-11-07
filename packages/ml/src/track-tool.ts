@@ -1,17 +1,15 @@
+import type { ObjectLayer } from "@9tensor/retouch";
+import { boxQuad, FINDING_COLORS } from "./findings";
 import type { TrackBox, TrackedVideo } from "./track";
 
 /**
- * Overlay for the Track tool: each tracked box over the playing video, in
- * its own color, with its name and a trail of where it's been. Between the
- * frames the tracker read, boxes glide from one to the next, so the
- * overlay keeps up with playback. Boxes map through the crop, since every
- * tool but Crop shows the cropped frame.
+ * Track's side of the editor's object layer: each tracked box over the
+ * playing video, in its own color, with its name and a trail of where it's
+ * been. Between the frames the tracker read, boxes glide from one to the
+ * next, so the layer keeps up with playback.
  */
 
-/** One color per track, in turn. */
-export const TRACK_COLORS = ["#5cc8ff", "#ffc457", "#8ce99a", "#a58bff", "#ff9068", "#ff7eb6"];
-
-export const trackColor = (id: number): string => TRACK_COLORS[(id - 1) % TRACK_COLORS.length];
+export const trackColor = (id: number): string => FINDING_COLORS[(id - 1) % FINDING_COLORS.length];
 
 export const trackName = (track: { id: number; label?: string }): string =>
   `${track.label ?? "thing"} ${track.id}`;
@@ -94,10 +92,7 @@ export function trackBounds(result: TrackedVideo, id: number, margin = 0.08): Fr
 
 export interface TrackOverlayHandle {
   show(result: TrackedVideo | null): void;
-  /** Bring one track forward and dim the rest; null for all alike. */
-  focus(id: number | null): void;
-  /** The part of the frame on screen; null hides the boxes (the frame is turned or warped). */
-  setFrame(frame: FrameRect | null): void;
+  /** Off while the tool is away: nothing is worked out per frame. */
   setVisible(visible: boolean): void;
   destroy(): void;
 }
@@ -107,103 +102,56 @@ type VideoWithRVFC = HTMLVideoElement & {
 };
 
 /**
- * `onTime` hears each drawn time and the tracks in that frame, so the pane
- * can move its playhead and light the rows.
+ * Keeps `layer` on the video's current frame. `onTime` hears each drawn time
+ * and the tracks in that frame, so the pane can move its playhead and light
+ * the rows.
  */
 export function createTrackOverlay(
-  canvasArea: HTMLElement,
+  layer: Pick<ObjectLayer, "show">,
   video: HTMLVideoElement,
   onTime: (time: number, ids: number[]) => void,
 ): TrackOverlayHandle {
-  const container = canvasArea.querySelector("canvas")?.parentElement;
-  const overlay = document.createElement("canvas");
-  overlay.className = "rt-ml-track-overlay";
-  overlay.style.cssText =
-    "position:absolute;left:0;top:0;width:100%;height:100%;z-index:3;pointer-events:none;display:none;";
-  container?.appendChild(overlay);
   let result: TrackedVideo | null = null;
   /** Each track's one name, from the whole run. */
   let names = new Map<number, string>();
-  let focused: number | null = null;
-  let frame: FrameRect | null = { x: 0, y: 0, width: 1, height: 1 };
   let visible = false;
   let destroyed = false;
-  let lastTime = video.currentTime;
 
   function draw(time = video.currentTime): void {
-    lastTime = time;
     if (!visible) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(1, Math.round(overlay.clientWidth * dpr));
-    const h = Math.max(1, Math.round(overlay.clientHeight * dpr));
-    if (overlay.width !== w || overlay.height !== h) {
-      overlay.width = w;
-      overlay.height = h;
-    }
-    const ctx = overlay.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, w, h);
     const boxes = result ? boxesAt(result, time) : [];
     onTime(
       time,
       boxes.map((box) => box.id),
     );
-    if (!result || !frame || boxes.length === 0) return;
-    ctx.scale(dpr, dpr);
-    const cw = w / dpr;
-    const ch = h / dpr;
-    const view = frame;
-    const px = (x: number) => ((x - view.x) / view.width) * cw;
-    const py = (y: number) => ((y - view.y) / view.height) * ch;
-    const step = Math.round(TRAIL * result.fps);
+    if (!result || boxes.length === 0) {
+      layer.show([]);
+      return;
+    }
+    const { frames, fps } = result;
+    const step = Math.round(TRAIL * fps);
     const index = Math.max(
       0,
-      Math.min(result.frames.length - 1, Math.floor((time - result.frames[0].time) * result.fps)),
+      Math.min(frames.length - 1, Math.floor((time - frames[0].time) * fps)),
     );
-    ctx.font = "600 11px system-ui, sans-serif";
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    for (const box of boxes) {
-      const color = trackColor(box.id);
-      const on = focused === null || focused === box.id;
-      ctx.globalAlpha = on ? 1 : 0.3;
-      ctx.strokeStyle = color;
-
-      // Where its center has been over the last moments, ending where it is now.
-      ctx.beginPath();
-      for (let i = Math.max(0, index - step); i <= index; i++) {
-        const past = result.frames[i].boxes.find((b) => b.id === box.id);
-        if (past) ctx.lineTo(px(past.x + past.w / 2), py(past.y + past.h / 2));
-      }
-      ctx.lineTo(px(box.x + box.w / 2), py(box.y + box.h / 2));
-      ctx.setLineDash([3, 4]);
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.lineWidth = focused === box.id ? 3 : 2;
-      ctx.strokeRect(
-        px(box.x),
-        py(box.y),
-        px(box.x + box.w) - px(box.x),
-        py(box.y + box.h) - py(box.y),
-      );
-
-      const tag = names.get(box.id) ?? trackName(box);
-      const chipH = 17;
-      const padX = 6;
-      const chipW = ctx.measureText(tag).width + padX * 2;
-      const cx = Math.max(0, Math.min(cw - chipW, px(box.x) - 1));
-      const cy = Math.max(0, py(box.y) - chipH - 3);
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.roundRect(cx, cy, chipW, chipH, 4);
-      ctx.fill();
-      ctx.fillStyle = "#10141a";
-      ctx.fillText(tag, cx + padX, cy + 12.5);
-    }
-    ctx.globalAlpha = 1;
+    layer.show(
+      boxes.map((box) => {
+        // Where its center has been over the last moments, ending where it is now.
+        const trail: [number, number][] = [];
+        for (let i = Math.max(0, index - step); i <= index; i++) {
+          const past = frames[i].boxes.find((b) => b.id === box.id);
+          if (past) trail.push([past.x + past.w / 2, past.y + past.h / 2]);
+        }
+        trail.push([box.x + box.w / 2, box.y + box.h / 2]);
+        return {
+          id: String(box.id),
+          quad: boxQuad(box),
+          color: trackColor(box.id),
+          tag: names.get(box.id) ?? trackName(box),
+          trail,
+        };
+      }),
+    );
   }
 
   // Drawn per presented frame at that frame's own time (currentTime runs
@@ -233,36 +181,20 @@ export function createTrackOverlay(
   video.addEventListener("seeked", redraw);
   video.addEventListener("pause", redraw);
 
-  const observer =
-    typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => draw(lastTime)) : null;
-  if (container) observer?.observe(container);
-
   return {
     show(next) {
       result = next;
       names = new Map(next?.tracks.map((track) => [track.id, trackName(track)]));
-      focused = null;
       draw();
-    },
-    focus(id) {
-      focused = id;
-      draw(lastTime);
-    },
-    setFrame(next) {
-      frame = next;
-      draw(lastTime);
     },
     setVisible(next) {
       visible = next;
-      overlay.style.display = next ? "" : "none";
       draw();
     },
     destroy() {
       destroyed = true;
-      observer?.disconnect();
       video.removeEventListener("seeked", redraw);
       video.removeEventListener("pause", redraw);
-      overlay.remove();
     },
   };
 }
