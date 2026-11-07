@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_EDITS } from "../src/constants";
 import type { ImageEdits } from "../src/types";
-import { framingOf, outlineOf, toSource } from "../src/utils/framing";
+import { framingOf, outlineOf, stageFitScale, toSource } from "../src/utils/framing";
 import { rotateCropCCW, rotateCropCW } from "../src/utils/transform";
 
 const edits = (changes: Partial<ImageEdits>): ImageEdits => ({
@@ -172,5 +172,26 @@ describe("outlineOf", () => {
 
   it("counts a narrowed source when it straightens", () => {
     expect(step({ seamWidth: 50 }, 2000, 1000).width).toBe(1000);
+  });
+});
+
+describe("stageFitScale", () => {
+  const stage = { width: 1000, height: 800 };
+
+  it("fits a big photo inside the stage's margin", () => {
+    expect(stageFitScale(stage, { width: 3000, height: 2000 }, false)).toBeCloseTo(0.3);
+  });
+
+  it("stops a whole small photo at its own pixels", () => {
+    expect(stageFitScale(stage, { width: 200, height: 100 }, false)).toBe(1);
+  });
+
+  it("lets a crop fill the stage, however few pixels it kept", () => {
+    expect(stageFitScale(stage, { width: 115, height: 392 }, true)).toBeCloseTo(720 / 392);
+    expect(stageFitScale(stage, { width: 200, height: 100 }, true)).toBeCloseTo(4.5);
+  });
+
+  it("fits a big crop the same as a big photo", () => {
+    expect(stageFitScale(stage, { width: 3000, height: 2000 }, true)).toBeCloseTo(0.3);
   });
 });

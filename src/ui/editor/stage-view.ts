@@ -274,6 +274,8 @@ export function createStageView(options: StageViewOptions): StageView {
     value.textContent = `${Math.round(fit * zoom * 100)}%`;
     outBtn.disabled = zoom <= 1;
     inBtn.disabled = zoom >= maxZoom() - 1e-6;
+    // A crop enlarged to fit is already past its actual pixels, and the stage doesn't zoom below fit.
+    actualBtn.disabled = fit > 1;
     area.classList.toggle("rt-stage--zoomed", zoom > 1);
     options.onChange();
     if (!redrawn && !following) options.onView?.();

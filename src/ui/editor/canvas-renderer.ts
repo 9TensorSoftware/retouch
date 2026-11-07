@@ -23,6 +23,7 @@ import type { CurveLuts } from "../../utils/curves";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../../utils/curves";
 import { applyDetailToContext, detailIsNeutral } from "../../utils/detail";
 import { buildFabricFilters, drawVignette, isNeutral } from "../../utils/filters";
+import { stageFitScale } from "../../utils/framing";
 import type { PostPasses } from "../../utils/gpu-passes";
 import { GpuPasses, postPassesAreNeutral } from "../../utils/gpu-passes";
 import type { HueTable } from "../../utils/hsl";
@@ -423,7 +424,11 @@ export class CanvasRenderer {
     const area = this.container.parentElement;
     const availWidth = (area?.clientWidth ?? this.container.clientWidth) || 800;
     const availHeight = (area?.clientHeight ?? this.container.clientHeight) || 600;
-    return Math.min((availWidth * 0.9) / sourceW, (availHeight * 0.9) / sourceH, 1);
+    return stageFitScale(
+      { width: availWidth, height: availHeight },
+      { width: sourceW, height: sourceH },
+      this.cropActive(),
+    );
   }
 
   render(): void {

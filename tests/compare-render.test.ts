@@ -78,6 +78,7 @@ describe("canvas sizing", () => {
     renderer.setCrop({ x: 0, y: 0, width: 0.5, height: 1 });
     renderer.render();
     expect(resize).toHaveBeenCalledTimes(2);
-    expect(resize).toHaveBeenLastCalledWith({ width: 200, height: 300 });
+    // Half the picture, enlarged to fill the stage rather than kept at its own pixels.
+    expect(resize).toHaveBeenLastCalledWith({ width: 360, height: 540 });
   });
 });

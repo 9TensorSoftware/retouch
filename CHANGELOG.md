@@ -89,6 +89,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- A crop fills the stage. Cropping to a small area stopped at its own pixels, so the result sat
+  there as a small picture, which read as the photo having shrunk rather than been cropped. **1:1**
+  is off while a crop is enlarged to fit.
 - Keys named in the editor's messages (Space, Enter, Shift, the arrows, the brush's `[` and `]`)
   look like the shortcuts on the rail, rather than plain words. So do the keys on the tooltips of
   Undo, Redo, Compare, the zoom buttons, Play/Pause, Apply and Clear selection, and each shows the

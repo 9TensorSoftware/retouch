@@ -75,6 +75,23 @@ export function toSource(point: Point, framing: Framing): Point {
   );
 }
 
+/**
+ * The scale that fits a picture on the stage, with a small margin. A whole
+ * photo stops at its own pixels; a crop fills the stage however few it has
+ * kept, or cropping to a small area would just show a small picture.
+ */
+export function stageFitScale(
+  available: { width: number; height: number },
+  source: { width: number; height: number },
+  cropped: boolean,
+): number {
+  const fit = Math.min(
+    (available.width * 0.9) / source.width,
+    (available.height * 0.9) / source.height,
+  );
+  return cropped ? fit : Math.min(fit, 1);
+}
+
 function keepsWholeFrame(framing: Framing): boolean {
   const { crop } = framing;
   return (
