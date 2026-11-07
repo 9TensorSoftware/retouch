@@ -121,6 +121,15 @@ export function mountTrackLab(root: HTMLElement): TrackLab {
     return { boxes, index };
   }
 
+  // The tracker takes a few frames to trust a track, so every clip opens with
+  // no boxes. A stopped video rests on its first frame that has some.
+  function skipEmptyOpening(): void {
+    const opening = data?.frames.find((frame) => frame.boxes.length > 0);
+    if (video.paused && opening && video.currentTime < opening.time) {
+      video.currentTime = opening.time;
+    }
+  }
+
   function draw(time = video.currentTime): void {
     if (!data) return;
     const { boxes, index } = boxesAt(time);
@@ -171,10 +180,14 @@ export function mountTrackLab(root: HTMLElement): TrackLab {
     });
   }
   video.addEventListener("seeked", () => draw());
-  video.addEventListener("pause", () => draw());
+  video.addEventListener("pause", () => {
+    skipEmptyOpening();
+    draw();
+  });
   video.addEventListener("loadedmetadata", () => draw());
-  video.addEventListener("play", () => toggle.setAttribute("aria-label", "Pause"));
-  video.addEventListener("pause", () => toggle.setAttribute("aria-label", "Play"));
+  // Changing the source stops the video without a pause event; it only fires emptied.
+  const showPlayState = () => toggle.setAttribute("aria-label", video.paused ? "Play" : "Pause");
+  for (const event of ["play", "pause", "emptied"]) video.addEventListener(event, showPlayState);
   toggle.addEventListener("click", () => {
     if (video.paused) void video.play().catch(() => {});
     else video.pause();
@@ -247,6 +260,7 @@ export function mountTrackLab(root: HTMLElement): TrackLab {
         list.append(row);
       });
       focus();
+      skipEmptyOpening();
       draw();
     },
     status(text) {

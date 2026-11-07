@@ -471,9 +471,12 @@ async function showClip(name: ClipName): Promise<void> {
   const { video } = trackLab;
   const clip = CLIPS[name];
   if (!video.src.endsWith(clipUrl(name))) {
+    // Changing the source stops the video, so a clip that was playing carries on.
+    const wasPlaying = !video.paused;
     video.poster = clipUrl(name, "jpg");
     video.src = clipUrl(name);
     video.setAttribute("aria-label", clip.alt);
+    if (wasPlaying) void video.play().catch(() => {});
   }
   const run = trackRuns.get(name);
   const result = run ?? (await savedTracks(name));
