@@ -60,6 +60,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Changed
 
+- The AI models' browser cache has a new name, so each model downloads once more after updating.
 - AI tools that change a photo's pixels (Cutout, Erase, Denoise, Depth blur, Pixelate) are now
   steps in the editor's history: undo takes them back, and the history menu names them.
   `replaceImageSource(id, file, { label })` adds such a step; the editor stays on the same tool.
@@ -436,5 +437,5 @@ Initial public release: drop zone → gallery → editor with crop,
 rotation and brightness/contrast/saturation adjustments; `onDone` export to Blobs.
 
 [0.2.0]: https://github.com/9tensorsoftware/retouch/compare/v0.0.2...v0.2.0
-[0.1.0]: https://github.com/9tensorsoftware/retouch/commit/97870cf
+[0.1.0]: https://github.com/9tensorsoftware/retouch/commit/28d63ea
 [0.0.2]: https://github.com/9tensorsoftware/retouch/releases/tag/v0.0.2
