@@ -19,6 +19,40 @@ export function boxQuad(box: Pick<Detection, "x" | "y" | "w" | "h">): Corner[] {
   ];
 }
 
+/** A crop in 0–1 of the frame, as `edits.crop` takes it. */
+export interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The boxes as one crop, with even room around them, kept inside the frame:
+ * what "Crop to it" frames. Null when there are no boxes.
+ */
+export function cropAround(
+  boxes: Iterable<Pick<Detection, "x" | "y" | "w" | "h">>,
+  margin = 0.08,
+): CropRect | null {
+  let x0 = 1;
+  let y0 = 1;
+  let x1 = 0;
+  let y1 = 0;
+  for (const box of boxes) {
+    x0 = Math.min(x0, box.x);
+    y0 = Math.min(y0, box.y);
+    x1 = Math.max(x1, box.x + box.w);
+    y1 = Math.max(y1, box.y + box.h);
+  }
+  if (x1 <= x0 || y1 <= y0) return null;
+  const mx = (x1 - x0) * margin;
+  const my = (y1 - y0) * margin;
+  const x = Math.max(0, x0 - mx);
+  const y = Math.max(0, y0 - my);
+  return { x, y, width: Math.min(1, x1 + mx) - x, height: Math.min(1, y1 + my) - y };
+}
+
 /** What a detection is called: its class, or "face" from the face model. */
 export const detectionName = (d: Pick<Detection, "label">): string => d.label ?? "face";
 

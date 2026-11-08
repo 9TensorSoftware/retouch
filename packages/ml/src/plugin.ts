@@ -37,7 +37,7 @@ import {
   detectObjects,
 } from "./detect";
 import { createEraseSurface } from "./erase-tool";
-import { boxQuad, detectionColors, detectionName, keepFindings } from "./findings";
+import { boxQuad, cropAround, detectionColors, detectionName, keepFindings } from "./findings";
 import {
   CUTOUT_ICON,
   DENOISE_ICON,
@@ -1324,23 +1324,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         function cropToThem(): void {
-          let x0 = 1;
-          let y0 = 1;
-          let x1 = 0;
-          let y1 = 0;
-          for (const f of targets()) {
-            x0 = Math.min(x0, f.x);
-            y0 = Math.min(y0, f.y);
-            x1 = Math.max(x1, f.x + f.w);
-            y1 = Math.max(y1, f.y + f.h);
-          }
-          // Faces sit high in a good crop — more margin below than above.
-          const mx = (x1 - x0) * 0.35;
-          const cx0 = Math.max(0, x0 - mx);
-          const cx1 = Math.min(1, x1 + mx);
-          const cy0 = Math.max(0, y0 - (y1 - y0) * 0.4);
-          const cy1 = Math.min(1, y1 + (y1 - y0) * 0.8);
-          ctx.edits.crop = { x: cx0, y: cy0, width: cx1 - cx0, height: cy1 - cy0 };
+          const crop = cropAround(targets());
+          if (!crop) return;
+          ctx.edits.crop = crop;
           ctx.render();
           ctx.record();
           syncState();

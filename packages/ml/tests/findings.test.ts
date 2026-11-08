@@ -1,5 +1,6 @@
 import {
   boxQuad,
+  cropAround,
   detectionColors,
   detectionName,
   FINDING_COLORS,
@@ -14,6 +15,28 @@ describe("findings", () => {
       [0.4, 0.6000000000000001],
       [0.1, 0.6000000000000001],
     ]);
+  });
+
+  it("crops to a box with even room around it", () => {
+    // The corgi: a box in the middle of a tall photo crops to about that box,
+    // not most of the photo.
+    const crop = cropAround([{ x: 0.3, y: 0.31, w: 0.5, h: 0.55 }]);
+    expect(crop?.x).toBeCloseTo(0.26);
+    expect(crop?.y).toBeCloseTo(0.266);
+    expect(crop?.width).toBeCloseTo(0.58);
+    expect(crop?.height).toBeCloseTo(0.638);
+  });
+
+  it("crops to every box at once, and stays inside the frame", () => {
+    const crop = cropAround(
+      [
+        { x: 0, y: 0.5, w: 0.2, h: 0.2 },
+        { x: 0.6, y: 0.7, w: 0.4, h: 0.3 },
+      ],
+      0.1,
+    );
+    expect(crop).toEqual({ x: 0, y: expect.closeTo(0.45), width: 1, height: expect.closeTo(0.55) });
+    expect(cropAround([])).toBeNull();
   });
 
   it("calls what the face model finds a face", () => {

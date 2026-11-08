@@ -1,5 +1,5 @@
 import type { ObjectLayer } from "@9tensor/retouch";
-import { boxQuad, FINDING_COLORS } from "./findings";
+import { boxQuad, cropAround, FINDING_COLORS } from "./findings";
 import type { TrackBox, TrackedVideo } from "./track";
 
 /**
@@ -69,25 +69,8 @@ export function firstShown(result: TrackedVideo, id: number): number | null {
  * "Crop to it" frames. Null when the track is never seen.
  */
 export function trackBounds(result: TrackedVideo, id: number, margin = 0.08): FrameRect | null {
-  let x0 = 1;
-  let y0 = 1;
-  let x1 = 0;
-  let y1 = 0;
-  for (const frame of result.frames) {
-    for (const box of frame.boxes) {
-      if (box.id !== id) continue;
-      x0 = Math.min(x0, box.x);
-      y0 = Math.min(y0, box.y);
-      x1 = Math.max(x1, box.x + box.w);
-      y1 = Math.max(y1, box.y + box.h);
-    }
-  }
-  if (x1 <= x0 || y1 <= y0) return null;
-  const mx = (x1 - x0) * margin;
-  const my = (y1 - y0) * margin;
-  const x = Math.max(0, x0 - mx);
-  const y = Math.max(0, y0 - my);
-  return { x, y, width: Math.min(1, x1 + mx) - x, height: Math.min(1, y1 + my) - y };
+  const boxes = result.frames.flatMap((frame) => frame.boxes.filter((box) => box.id === id));
+  return cropAround(boxes, margin);
 }
 
 export interface TrackOverlayHandle {

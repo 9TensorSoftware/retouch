@@ -89,6 +89,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- Detect's **Crop to it** crops to the box. It framed every find like a portrait, with wide room
+  at the sides and twice as much below as above, so an object crop spread to most of the photo.
+  It now leaves the same even room as Track's.
 - A crop fills the stage. Cropping to a small area stopped at its own pixels, so the result sat
   there as a small picture, which read as the photo having shrunk rather than been cropped. **1:1**
   is off while a crop is enlarged to fit.
