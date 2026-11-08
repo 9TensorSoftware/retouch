@@ -134,11 +134,9 @@ export function createFramePipeline(
   // Perspective/lens corrections warp the cropped frame before fabric sees it.
   let warpCanvas: HTMLCanvasElement | null = null;
   let warpCtx: CanvasRenderingContext2D | null = null;
-  let warpScratch: HTMLCanvasElement | null = null;
   if (warp) {
     warpCanvas = createCanvas(cropW, cropH);
     warpCtx = warpCanvas.getContext("2d");
-    warpScratch = createCanvas(1, 1);
   }
   let lensCanvas: HTMLCanvasElement | null = null;
   let lensCtx: CanvasRenderingContext2D | null = null;
@@ -220,8 +218,8 @@ export function createFramePipeline(
         srcWidth,
         srcHeight,
       );
-      if (warpCanvas && warpCtx && warpScratch) {
-        applyKeystone(cropCanvas, warpScratch, warpCtx, keystoneV, keystoneH);
+      if (warpCanvas && warpCtx) {
+        applyKeystone(cropCanvas, warpCtx, keystoneV, keystoneH);
       }
       if (lensCanvas && lensCtx) {
         applyLensToCanvas(warpCanvas ?? cropCanvas, lensCtx, lensDistortion, lensDevignette);

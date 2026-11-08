@@ -70,7 +70,6 @@ export class CanvasRenderer {
   private frameCtx: CanvasRenderingContext2D;
   /** Scratch canvases for the keystone/lens warps (allocated on first use). */
   private warpSrc: HTMLCanvasElement | null = null;
-  private warpScratch: HTMLCanvasElement | null = null;
   private lensSrc: HTMLCanvasElement | null = null;
   private readonly rawWidth: number;
   private readonly rawHeight: number;
@@ -673,9 +672,7 @@ export class CanvasRenderer {
     // Geometric warp stages, applied in order after the base draw.
     const stages: Array<(src: HTMLCanvasElement, dst: CanvasRenderingContext2D) => void> = [];
     if (hasKeystone(this.keystoneV, this.keystoneH)) {
-      if (!this.warpScratch) this.warpScratch = createCanvas(1, 1);
-      const scratch = this.warpScratch;
-      stages.push((src, dst) => applyKeystone(src, scratch, dst, this.keystoneV, this.keystoneH));
+      stages.push((src, dst) => applyKeystone(src, dst, this.keystoneV, this.keystoneH));
     }
     if (hasLens(this.lensDistortion, this.lensDevignette)) {
       stages.push((src, dst) =>

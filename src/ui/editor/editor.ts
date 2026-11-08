@@ -247,6 +247,22 @@ export function createEditor(options: EditorOptions): EditorHandle {
     if (!suppressRecord) history?.record();
   };
 
+  // The Perspective and Lens sliders redraw the frame through a whole-frame
+  // pixel pass. A drag sends more input events than the screen shows frames,
+  // so they redraw at most once a frame, with whatever the edits are by then.
+  let warpFrame = 0;
+  const redrawWarps = (): void => {
+    if (warpFrame) return;
+    warpFrame = requestAnimationFrame(() => {
+      warpFrame = 0;
+      if (signal.aborted) return;
+      renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
+      renderer.setLens(entry.edits.lensDistortion, entry.edits.lensDevignette);
+      renderer.render();
+    });
+  };
+  signal.addEventListener("abort", () => cancelAnimationFrame(warpFrame));
+
   // Feature groups: built-ins for this media kind plus registered custom
   // tools, optionally filtered/ordered by the `tools` option.
   const customTools = getCustomTools().filter((t) => !t.kinds || t.kinds.includes(entry.kind));
@@ -1084,15 +1100,13 @@ export function createEditor(options: EditorOptions): EditorHandle {
     onKeystoneChange: (vertical, horizontal) => {
       if (!Number.isNaN(vertical)) entry.edits.keystoneV = vertical;
       if (!Number.isNaN(horizontal)) entry.edits.keystoneH = horizontal;
-      renderer.setKeystone(entry.edits.keystoneV, entry.edits.keystoneH);
-      renderer.render();
+      redrawWarps();
       recordEdit();
     },
     onLensChange: (distortion, devignette) => {
       if (!Number.isNaN(distortion)) entry.edits.lensDistortion = distortion;
       if (!Number.isNaN(devignette)) entry.edits.lensDevignette = devignette;
-      renderer.setLens(entry.edits.lensDistortion, entry.edits.lensDevignette);
-      renderer.render();
+      redrawWarps();
       recordEdit();
     },
     onSeamWidthChange:

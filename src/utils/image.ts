@@ -230,9 +230,8 @@ export async function exportImage(
     warped.width = cropCanvas.width;
     warped.height = cropCanvas.height;
     const warpedCtx = warped.getContext("2d");
-    const scratch = document.createElement("canvas");
     if (warpedCtx) {
-      applyKeystone(cropCanvas, scratch, warpedCtx, keystoneV, keystoneH);
+      applyKeystone(cropCanvas, warpedCtx, keystoneV, keystoneH);
       sourceCanvas = warped;
     }
   }

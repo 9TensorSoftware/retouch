@@ -89,6 +89,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- Dragging a **Perspective** slider could freeze the whole browser. Each step drew the photo as a
+  strip per row and per column, thousands of GPU draws, and a drag queued them faster than they
+  were drawn. The warp now works on the pixels directly, as Lens does, and both redraw at most
+  once a frame while you drag.
 - Detect's **Crop to it** crops to the box. It framed every find like a portrait, with wide room
   at the sides and twice as much below as above, so an object crop spread to most of the photo.
   It now leaves the same even room as Track's.
