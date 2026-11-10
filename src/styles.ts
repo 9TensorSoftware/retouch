@@ -2780,11 +2780,16 @@ body:has(> .rt-editor-overlay) {
   outline: none;
 }
 
-/* Resets the active tool; there only while that tool has changes. */
+/*
+ * Resets the active tool; there only while that tool has changes. It's
+ * taller than the title, so it hangs over the header's padding to take up
+ * just the title's line: the header keeps its height as it comes and goes.
+ */
 .rt-inspector__reset {
+  --rt-reset-height: 26px;
   flex-shrink: 0;
-  height: 26px;
-  margin-top: -2px;
+  height: var(--rt-reset-height);
+  margin-block: calc((var(--rt-type-lg) * 1.3 - var(--rt-reset-height)) / 2);
   padding: 0 10px;
   border: none;
   border-radius: var(--rt-radius-sm);
@@ -6253,7 +6258,7 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
     min-width: 40px;
   }
   .rt-inspector__reset {
-    height: 36px;
+    --rt-reset-height: 36px;
     padding: 0 14px;
   }
   .rt-section--collapsible > .rt-section__head {
