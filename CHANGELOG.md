@@ -107,6 +107,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 ### Fixed
 
 - Saving as JPG turned transparent areas black. They're white now.
+- Denoise, Cutout and Erase never showed their last step done: replacing the photo reset the
+  panel while "Replace this photo" was still spinning. It now ends with every step checked.
 - A **mask** dragged on the photo no longer snaps back to where it was when you next move one of
   its sliders, invert it, or add or delete a mask.
 - The tool panel no longer jumps when its **Reset** button comes and goes. The button was taller

@@ -337,6 +337,21 @@ function encodeCanvas(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
 // the pane, but the underlying run keeps going.
 const activeRuns = new Set<string>();
 
+// Replacing a photo remounts the editor, and the pane that did it with it:
+// for the length of the swap, the photo names the tool, so its new pane
+// opens with every step done instead of a blank one.
+const replacing = new WeakMap<object, string>();
+
+/** In a pane just mounted: show the run that replaced the photo as finished. */
+function showReplaced(ctx: ToolContext, tool: string, steps: UiSteps): void {
+  if (replacing.get(ctx.entry) !== tool) return;
+  steps.root.hidden = false;
+  steps.reset();
+  steps.set(0, "done", { detail: "Saved" });
+  steps.set(1, "done");
+  steps.set(2, "done");
+}
+
 /** Each video's last tracking, kept while the entry lives: reopening the tool shows it again. */
 const trackResults = new WeakMap<object, TrackedVideo>();
 
@@ -377,13 +392,19 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     ctx: ToolContext,
     result: HTMLCanvasElement,
     label: string,
-    type = typeOf(ctx),
+    { type = typeOf(ctx), tool }: { type?: string; tool?: string } = {},
   ): Promise<void> {
     const [blob] = await Promise.all([encodeCanvas(result, type), ctx.reveal(result)]);
     const own = ctx.entry.file.name;
     const name =
       type === ctx.entry.file.type ? own : `${own.replace(/\.[^.]+$/, "")}${extensionFor(type)}`;
-    await retouch.replaceImageSource(ctx.entry.id, new File([blob], name, { type }), { label });
+    const entry = ctx.entry;
+    if (tool) replacing.set(entry, tool);
+    try {
+      await retouch.replaceImageSource(entry.id, new File([blob], name, { type }), { label });
+    } finally {
+      replacing.delete(entry);
+    }
   }
 
   /**
@@ -457,6 +478,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     const note = ctx.ui.note("");
     const steps = ctx.ui.steps({ label: "Progress", steps: def.steps });
     steps.root.hidden = true;
+    showReplaced(ctx, def.id, steps);
     let busy = false;
     const button = ctx.ui.button({
       label: actionLabel(def.action, def.model, false),
@@ -537,7 +559,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                 })
               : Promise.reject(new Error("Cutout needs an image")),
           // In place, as PNG so the cleared background stays clear.
-          finish: (result) => replacePhoto(ctx, result, "Remove background", "image/png"),
+          finish: (result) =>
+            replacePhoto(ctx, result, "Remove background", { type: "image/png", tool: "cutout" }),
           failure: (error) => errorText(error, "Cutout failed"),
         });
       },
@@ -568,6 +591,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           ],
         });
         steps.root.hidden = true;
+        showReplaced(ctx, "erase", steps);
         let busy = false;
 
         const brush = ctx.ui.slider({
@@ -620,7 +644,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             steps.set(2, "active");
             // In place: the entry keeps its identity, the pixels change, and
             // the editor remounts (rebuilding this pane).
-            await replacePhoto(ctx, result, "Erase");
+            await replacePhoto(ctx, result, "Erase", { tool: "erase" });
           } catch (error) {
             failSteps(steps);
             note.set(errorText(error, "Erase failed"));
@@ -2178,7 +2202,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                 })
               : Promise.reject(new Error("Denoise needs an image")),
           // In place: pixels map 1:1, so crop and mask edits stay valid.
-          finish: (result) => replacePhoto(ctx, result, "Denoise"),
+          finish: (result) => replacePhoto(ctx, result, "Denoise", { tool: "denoise" }),
           failure: (error) => {
             const message = error instanceof Error ? error.message : "";
             return message.includes("input limit")
