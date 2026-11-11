@@ -26,6 +26,11 @@ export interface MasksToolHandle {
   getSelectedId(): string | null;
   /** Sync after an external change (undo/reset) — does not fire onChange. */
   setMasks(masks: EditMask[]): void;
+  /**
+   * Take a mask's new place from a drag on the photo — does not fire
+   * onChange. Without it the next change here would send the old place back.
+   */
+  setGeometry(mask: Pick<EditMask, "id" | "x0" | "y0" | "x1" | "y1">): void;
   destroy(): void;
 }
 
@@ -255,6 +260,10 @@ export function createMasksTool(options: MasksToolOptions): MasksToolHandle {
       renderList();
       syncSliders();
       options.onSelectionChange(selectedId);
+    },
+    setGeometry({ id, x0, y0, x1, y1 }) {
+      const mask = masks.find((m) => m.id === id);
+      if (mask) Object.assign(mask, { x0, y0, x1, y1 });
     },
     destroy() {
       abort.abort();

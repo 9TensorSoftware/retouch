@@ -168,4 +168,26 @@ describe("masks pane", () => {
     expect(names()).toEqual(["Radial 1"]);
     expect(range(tool.root, "Contrast").value).toBe("20");
   });
+
+  it("keeps a mask where it was dragged when a slider or invert changes next", () => {
+    const { tool, add, onChange, lastMasks } = setup();
+    add("radial");
+    add("linear");
+    const [radial, linear] = lastMasks();
+    const calls = onChange.mock.calls.length;
+    tool.setGeometry({ id: linear.id, x0: 0.2, y0: 0.3, x1: 0.8, y1: 0.9 });
+    tool.setGeometry({ id: radial.id, x0: 0.4, y0: 0.4, x1: 0.6, y1: 0.5 });
+    expect(onChange).toHaveBeenCalledTimes(calls);
+
+    const exposure = range(tool.root, "Exposure");
+    exposure.value = "20";
+    exposure.dispatchEvent(new Event("input"));
+    expect(lastMasks()[1]).toMatchObject({ x0: 0.2, y0: 0.3, x1: 0.8, y1: 0.9 });
+    expect(lastMasks()[0]).toMatchObject({ x0: 0.4, y0: 0.4, x1: 0.6, y1: 0.5 });
+
+    tool.root
+      .querySelector<HTMLButtonElement>('.rt-masklist__icon[aria-label="Invert Linear 2"]')
+      ?.click();
+    expect(lastMasks()[1]).toMatchObject({ x0: 0.2, y0: 0.3, x1: 0.8, y1: 0.9, invert: true });
+  });
 });

@@ -807,6 +807,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
       const target = entry.edits.masks.find((m) => m.id === mask.id);
       if (!target) return;
       Object.assign(target, mask);
+      masksTool.setGeometry(mask);
       renderer.setMasks(entry.edits.masks);
       renderer.render();
       recordEdit();

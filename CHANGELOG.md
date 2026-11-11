@@ -89,6 +89,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- A **mask** dragged on the photo no longer snaps back to where it was when you next move one of
+  its sliders, invert it, or add or delete a mask.
 - The tool panel no longer jumps when its **Reset** button comes and goes. The button was taller
   than the title beside it, so showing it pushed every control down a few pixels.
 - Dragging a **Perspective** slider could freeze the whole browser. Each step drew the photo as a
