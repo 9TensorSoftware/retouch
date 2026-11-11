@@ -182,7 +182,7 @@ describe("Select", () => {
   it("selects with a click, offers each shape, and a new click starts over", async () => {
     pointer("pointerdown", 0.4, 0.4);
     await flush();
-    expect(guide()).toBe("Esc deselects. Shift adds, Alt takes out.");
+    expect(guide()).toBe("Esc deselects.");
     expect(tiles()).toEqual(["Small", "Medium", "Large"]);
     expect(pressed()).toBe("Medium");
     expect(button("Cut out").disabled).toBe(false);
@@ -228,17 +228,35 @@ describe("Select", () => {
     expect(key("z", { metaKey: true })).toBe(false);
   });
 
-  it("adds and takes out parts, each a step Undo takes back", async () => {
+  it("makes every click a new selection with its own shapes, Shift or not, and draws no dot", async () => {
     pointer("pointerdown", 0.4, 0.4);
     await flush();
-    button("Remove").click();
-    expect(guide()).toBe("Click to take a part out.");
-    pointer("pointerdown", 0.45, 0.45);
+    const event = new MouseEvent("pointerdown", {
+      bubbles: true,
+      clientX: 0.6 * 400,
+      clientY: 0.6 * 300,
+      shiftKey: true,
+    });
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    overlay.dispatchEvent(event);
     await flush();
-    expect(decodes.at(-1)?.map((p) => p.label)).toEqual([1, 0]);
-    expect(tiles()).toEqual(["Selected"]);
-    button("Undo").click();
-    await flush();
+    expect(decodes.at(-1)).toEqual([{ x: 0.6, y: 0.6, label: 1 }]);
     expect(tiles()).toEqual(["Small", "Medium", "Large"]);
+    expect(pane.root.querySelector('[aria-label="What a click does"]')).toBeNull();
+  });
+
+  it("lets go of the selection once an erase swaps the photo, and reads the new one", async () => {
+    pointer("pointerdown", 0.4, 0.4);
+    await flush();
+    const swapped = new Image();
+    Object.defineProperty(swapped, "naturalWidth", { value: 800 });
+    Object.defineProperty(swapped, "naturalHeight", { value: 600 });
+    (ctx.entry as { image: HTMLImageElement }).image = swapped;
+    // Any refresh of the panel notices, as Erase's own does when it's done.
+    button("Large").click();
+    await flush();
+    expect(tiles()).toEqual([]);
+    expect(button("Cut out").disabled).toBe(true);
+    expect(guide()).toBe("Click something in the photo.");
   });
 });

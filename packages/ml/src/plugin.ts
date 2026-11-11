@@ -79,8 +79,6 @@ import {
   type SamPoint,
 } from "./sam";
 import {
-  type ClickMode,
-  clickedPoints,
   createSelectionHistory,
   createSelectSurface,
   distinctShapes,
@@ -666,7 +664,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     const eraseModel = options.erase !== false ? options.erase : undefined;
     const fillModel = spec("LaMa", 208, [[eraseModel?.modelUrl, DEFAULT_INPAINT_MODEL_URL]]);
     const apple = /Mac|iP(hone|ad|od)/.test(navigator.platform);
-    const altKey = apple ? "Option" : "Alt";
     const undoKeys = apple ? "⌘Z" : "Ctrl+Z";
     ctor.registerTool({
       id: "select",
@@ -692,7 +689,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
         const click = touch ? "tap" : "click";
         const history = createSelectionHistory();
-        let mode: ClickMode = "new";
         let embeddings: SamEmbeddings | null = null;
         let embeddedImage: unknown = null;
         let reading: Promise<SamEmbeddings | null> | null = null;
@@ -727,20 +723,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           onClick: () => void eraseObject(),
         });
         const outcome = ctx.ui.note("");
-        const modeChoice = ctx.ui.choice<ClickMode>({
-          label: `What a ${click} does`,
-          options: [
-            { value: "new", label: "Select" },
-            { value: "add", label: "Add" },
-            { value: "remove", label: "Remove" },
-          ],
-          value: "new",
-          onChange: (value) => {
-            mode = value;
-            surface.setHover(null);
-            syncState();
-          },
-        });
         const undo = ctx.ui.button({
           label: "Undo",
           title: `Undo (${undoKeys})`,
@@ -756,7 +738,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           shapeRow,
           ctx.ui.row(cut.root, eraseIt.root),
           outcome.root,
-          modeChoice.root,
           ctx.ui.row(undo.root, deselect.root),
         );
 
@@ -788,6 +769,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         function syncState(): void {
+          // An erase (or undoing one) swaps the photo: the old selection goes with it.
+          if (!busy && embeddedImage !== null && embeddedImage !== photo()) {
+            photoChanged();
+            return;
+          }
           const armed = isReady() || reading !== null || cached();
           prepare.root.hidden = armed;
           prepare.setLabel(actionLabel("Start selecting", model, cached()));
@@ -799,20 +785,15 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           shapeRow.hidden = !some;
           cut.setDisabled(!some || busy);
           eraseIt.setDisabled(!some || busy);
-          modeChoice.root.hidden = !some;
           undo.setDisabled(!history.canUndo || busy);
           deselect.setDisabled(history.current.points.length === 0 || busy);
-          surface.setCursor(
-            !armed || !neutral() ? "idle" : busy || reading ? "busy" : some ? mode : "new",
-          );
+          surface.setCursor(!armed || !neutral() ? "idle" : busy || reading ? "busy" : "new");
           if (busy) return;
           if (!neutral()) guide.set(NEEDS_FRAME);
           else if (!armed) guide.set("");
           else if (reading) guide.set("Reading the photo…");
           else if (!some) guide.set(`${capital(click)} something in the photo.`);
-          else if (mode === "add") guide.set(`${capital(click)} to add to it.`);
-          else if (mode === "remove") guide.set(`${capital(click)} to take a part out.`);
-          else guide.set(touch ? "" : `Esc deselects. Shift adds, ${altKey} takes out.`);
+          else guide.set(touch ? "" : "Esc deselects.");
         }
 
         /** Download (if needed) and read the photo, so clicks only decode. */
@@ -885,7 +866,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         async function show(): Promise<void> {
           clearOutcome();
           const { points } = history.current;
-          surface.setPoints(points);
           if (points.length === 0) {
             found = null;
             shapes = [];
@@ -900,8 +880,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             if (history.current.points !== points || !result) return;
             found = result;
             // One click can mean a part or the whole: offer each shape.
-            // Later clicks narrow it down, so the best one stands.
-            shapes = points.length === 1 ? distinctShapes(result) : [result.order[0]];
+            shapes = distinctShapes(result);
             paint();
           } catch (error) {
             guide.set(errorText(error, "Select failed"));
@@ -960,7 +939,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         function onHover(x: number, y: number): void {
-          if (busy || !isReady() || !neutral() || mode !== "new") return;
+          if (busy || !isReady() || !neutral()) return;
           // Over what's already selected, there's nothing new to show.
           const index = chosen();
           if (found && index !== null && shapeContains(found, index, x, y)) {
@@ -972,7 +951,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           void hoverLoop();
         }
 
-        function onClick(x: number, y: number, keys: { shift: boolean; alt: boolean }): void {
+        function onClick(x: number, y: number): void {
           if (busy || ctx.entry.kind !== "image" || !neutral()) return;
           if (!isReady() && !reading && !cached()) {
             guide.set(
@@ -980,8 +959,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             );
             return;
           }
-          const next = clickedPoints(history.current.points, mode, x, y, keys);
-          if (!next) return;
+          // One point, one choice of shapes: a click selects anew, never adds.
+          const next = [{ x, y, label: 1 as const }];
           hoverAt = null;
           surface.setHover(null);
           history.set({ points: next, shape: null });
@@ -1013,8 +992,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         function clearSelection(): void {
           if (busy || history.current.points.length === 0) return;
           history.set({ points: [], shape: null });
-          modeChoice.set("new");
-          mode = "new";
           void show();
         }
 
@@ -1094,7 +1071,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           activeRuns.add("select");
           activeRuns.add("erase");
           syncState();
-          guide.set("Erasing… (the first time downloads the fill model)");
+          guide.set("Erasing…");
+          clearOutcome();
           try {
             const image = ctx.entry.image;
             const maskCtx = mask.getContext("2d");
@@ -1130,7 +1108,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             });
             await replacePhoto(ctx, result, "Erase selection");
           } catch (error) {
-            guide.set(errorText(error, "Erase failed"));
+            outcome.set(errorText(error, "Erase failed"));
             console.error(error);
           } finally {
             busy = false;
