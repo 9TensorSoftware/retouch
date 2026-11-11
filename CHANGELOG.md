@@ -66,9 +66,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - The demo page shows video: a **Track** lab that plays two clips with every person and bike
   followed (it runs the tracker again on the device, or opens the clip in the editor's Track
   tool), a clip graded live as it plays, and a video in the gallery to trim and grade.
+- **Download** beside the photo's name in the editor saves the photo as it is now, edits and new
+  name included, in its own format. The format beside it opens a menu of PNG, JPG, WebP and AVIF,
+  those this browser can write, to save it as another. Saving transparent areas as JPG asks
+  first: fill them with white, or save a PNG instead. A crop frame not applied yet is asked
+  about first, as Done does.
+- `downloadImage(id, { format })` saves a photo in the format given.
 
 ### Changed
 
+- `downloadImage(id)` and the gallery's Download save a photo in its own format, a JPG as JPG,
+  instead of always as PNG, unless the `export` option names one. A photo with transparent areas
+  its own format can't keep goes out as PNG.
 - The AI models' browser cache has a new name, so each model downloads once more after updating.
 - AI tools that change a photo's pixels (Cutout, Erase, Denoise, Depth blur, Pixelate) are now
   steps in the editor's history: undo takes them back, and the history menu names them.
@@ -89,6 +98,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Fixed
 
+- Saving as JPG turned transparent areas black. They're white now.
 - A **mask** dragged on the photo no longer snaps back to where it was when you next move one of
   its sliders, invert it, or add or delete a mask.
 - The tool panel no longer jumps when its **Reset** button comes and goes. The button was taller

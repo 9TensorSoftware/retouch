@@ -146,9 +146,12 @@ export type GalleryViewMode =
 export type AspectRatioPreset = "free" | "16:9" | "4:3" | "1:1" | "3:2" | "9:16";
 
 export interface ImageExportOptions {
-  /** Output format. Defaults to "png". */
-  format?: "png" | "jpeg" | "webp";
-  /** Quality 0–1 for lossy formats (jpeg/webp). Defaults to 0.92. */
+  /**
+   * Output format. Defaults to "png" for `exportAll`/`done()`; a download
+   * defaults to the photo's own format. AVIF only where the browser writes it.
+   */
+  format?: "png" | "jpeg" | "webp" | "avif";
+  /** Quality 0–1 for lossy formats (jpeg/webp/avif). Defaults to 0.92. */
   quality?: number;
   /** Cap the exported image's long edge in pixels. No cap by default. */
   maxDimension?: number;

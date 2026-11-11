@@ -41,12 +41,23 @@ import { formatNames } from "./utils/formats";
 import { framingOf } from "./utils/framing";
 import {
   createThumbnailUrl,
+  encodeImage,
   exportImage,
   generateId,
   loadImage,
   processFiles,
+  renderEditedImage,
   revokeThumbnailUrl,
 } from "./utils/image";
+import {
+  canvasHasTransparency,
+  downloadName,
+  encodableFormats,
+  type FlattenChoice,
+  formatInfo,
+  formatOfMime,
+  type ImageFormat,
+} from "./utils/image-formats";
 import { captureFrame, frameFileName, isImageEntry, releaseVideo } from "./utils/video";
 
 /** Image-only exports get the progress sheet once they've run this long (ms). */
@@ -910,38 +921,86 @@ export class Retouch {
     this.currentView = view;
   }
 
-  async downloadImage(id: string): Promise<void> {
+  /**
+   * Export one entry and download it. A photo is saved as `format` when
+   * given; otherwise as the `export` option's format, or else its own — and
+   * as PNG when it has transparent areas its own format can't keep.
+   */
+  async downloadImage(id: string, options: { format?: ImageFormat } = {}): Promise<void> {
     const entry = this.media.get(id);
     if (!entry) return;
-
+    if (entry.kind === "image") {
+      await this.downloadPhoto(entry, options.format);
+      return;
+    }
     const stem = entry.file.name.replace(/\.[^.]+$/, "");
     let blob: Blob;
     let filename: string;
     try {
-      if (entry.kind === "image") {
-        blob = await exportImage(entry.image, entry.edits, this.options.export);
-        const format = this.options.export?.format ?? "png";
-        filename = `${stem}.${format === "jpeg" ? "jpg" : format}`;
-      } else {
-        blob = await this.exportVideoEntry(entry, new AbortController().signal);
-        filename = `${stem}.${extensionForBlob(blob)}`;
-      }
+      blob = await this.exportVideoEntry(entry, new AbortController().signal);
+      filename = `${stem}.${extensionForBlob(blob)}`;
     } catch (err) {
-      // Degrade gracefully, as exportAll does: the original goes out instead.
-      const error = err instanceof Error ? err : new Error(String(err));
-      this.emitter.emit("export:error", { id: entry.id, error });
-      this.toastExportFailures([entry.file.name]);
+      this.exportFailed(entry, err);
       blob = entry.file;
       filename = entry.file.name;
     }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    saveBlob(blob, filename);
+  }
+
+  /** What a photo downloads as unless asked otherwise. */
+  private async defaultDownloadFormat(entry: ImageEntry): Promise<ImageFormat> {
+    const own = this.options.export?.format ?? formatOfMime(entry.file.type) ?? "png";
+    return (await encodableFormats()).includes(own) ? own : "png";
+  }
+
+  /**
+   * Download a photo as it is now, edits and new name included. When the
+   * format can't keep its transparent areas, `confirmFlatten` asks what to
+   * do; without it, a format someone chose fills them with white and the
+   * default turns to PNG.
+   */
+  private async downloadPhoto(
+    entry: ImageEntry,
+    requested?: ImageFormat,
+    confirmFlatten?: (format: ImageFormat) => Promise<FlattenChoice>,
+  ): Promise<void> {
+    const name = entry.edits.metadata?.fileName ?? entry.file.name;
+    let blob: Blob;
+    let filename: string;
+    try {
+      await this.baking.get(entry.id);
+      const chosen = requested ?? this.options.export?.format;
+      let format = requested ?? (await this.defaultDownloadFormat(entry));
+      if (!(await encodableFormats()).includes(format)) format = "png";
+      const canvas = await renderEditedImage(
+        entry.image,
+        entry.edits,
+        this.options.export?.maxDimension,
+      );
+      if (!formatInfo(format).alpha && canvasHasTransparency(canvas)) {
+        const choice = confirmFlatten ? await confirmFlatten(format) : chosen ? "flatten" : "png";
+        if (choice === "cancel") return;
+        if (choice === "png") format = "png";
+      }
+      blob = await encodeImage(
+        canvas,
+        { format, quality: this.options.export?.quality },
+        entry.edits.metadata,
+      );
+      filename = downloadName(name, format);
+    } catch (err) {
+      // Degrade gracefully, as exportAll does: the original goes out instead.
+      this.exportFailed(entry, err);
+      blob = entry.file;
+      filename = entry.file.name;
+    }
+    saveBlob(blob, filename);
+  }
+
+  private exportFailed(entry: MediaEntry, err: unknown): void {
+    const error = err instanceof Error ? err : new Error(String(err));
+    this.emitter.emit("export:error", { id: entry.id, error });
+    this.toastExportFailures([entry.file.name]);
   }
 
   /**
@@ -962,14 +1021,7 @@ export class Retouch {
     const entry = this.media.get(id);
     if (!entry) return;
     const blob = await this.exportGif(id, options);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${entry.file.name.replace(/\.[^.]+$/, "")}.gif`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    saveBlob(blob, `${entry.file.name.replace(/\.[^.]+$/, "")}.gif`);
   }
 
   /** Use the video's current frame (with edits) as its gallery poster. */
@@ -1064,6 +1116,14 @@ export class Retouch {
           ? (loop) => this.exportGifAndDownload(entry.id, { loop })
           : undefined,
       onSetPoster: entry.kind === "video" ? () => this.setPosterFrame(entry) : undefined,
+      download:
+        entry.kind === "image"
+          ? {
+              formats: () => encodableFormats(),
+              defaultFormat: () => this.defaultDownloadFormat(entry),
+              save: (format, confirmFlatten) => this.downloadPhoto(entry, format, confirmFlatten),
+            }
+          : undefined,
       ai: this.options.ai,
       tools: this.options.tools,
       tool: this.openTool,
@@ -1158,4 +1218,17 @@ export class Retouch {
     this.emitter.emit("images:add", { entries: [entry] });
     this.emitter.emit("frame:capture", { sourceId: source.id, entry });
   }
+}
+
+/** Hand a file to the browser as a download. */
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // A tick later: some browsers read the URL after the click returns.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

@@ -458,7 +458,8 @@ await retouch.replaceImageSource(id, file, { label: "Erase" }); // swap pixels i
 await retouch.exportAll();           // Blob[] with edits applied — what Done hands to onDone
 await retouch.done();                // exportAll() + "done" event + onDone
 retouch.cancelExport();              // abort an in-flight exportAll()/done()
-await retouch.downloadImage(id);     // export one entry and trigger a browser download
+await retouch.downloadImage(id);     // export one entry and download it, in its own format
+await retouch.downloadImage(id, { format: "webp" }); // or as "png", "jpeg", "webp", "avif"
 await retouch.exportGif(id, { fps, maxWidth, loop }); // video: animated GIF of the trimmed range
 
 retouch.destroy();                   // tear down (idempotent)

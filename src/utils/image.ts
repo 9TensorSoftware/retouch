@@ -5,6 +5,7 @@ import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "./curve
 import { applyDetailToContext, detailIsNeutral } from "./detail";
 import { buildFabricFilters, drawVignette } from "./filters";
 import { applyHslToContext, buildHueTable, hslIsNeutral } from "./hsl";
+import { formatInfo } from "./image-formats";
 import { applyLensToCanvas, hasLens } from "./lens";
 import { applyLiquifyToCanvas, liquifyIsNeutral } from "./liquify";
 import { applyMasksToContext, masksAreNeutral, prepareMasks } from "./masks";
@@ -144,6 +145,19 @@ export async function exportImage(
   edits: ImageEdits,
   options: ImageExportOptions = {},
 ): Promise<Blob> {
+  const canvas = await renderEditedImage(image, edits, options.maxDimension);
+  return encodeImage(canvas, options, edits.metadata);
+}
+
+/**
+ * The edited photo at full size (or its long edge capped at `maxDimension`),
+ * on a canvas, ready to encode: every edit applied, nothing written yet.
+ */
+export async function renderEditedImage(
+  image: HTMLImageElement | HTMLCanvasElement,
+  edits: ImageEdits,
+  maxDimension?: number,
+): Promise<HTMLCanvasElement> {
   const {
     crop,
     rotation,
@@ -288,10 +302,8 @@ export async function exportImage(
 
   // Render to a plain canvas (fabric's toBlob would re-render and drop the
   // vignette pass), optionally downscaling the long edge to maxDimension.
-  const format = options.format ?? "png";
   const longEdge = Math.max(outWidth, outHeight);
-  const multiplier =
-    options.maxDimension && options.maxDimension < longEdge ? options.maxDimension / longEdge : 1;
+  const multiplier = maxDimension && maxDimension < longEdge ? maxDimension / longEdge : 1;
   const outCanvas = exportCanvas.toCanvasElement(multiplier);
   exportCanvas.dispose();
 
@@ -339,9 +351,35 @@ export async function exportImage(
     if (outCtx) drawVignette(outCtx, outCanvas.width, outCanvas.height, adjustments.vignette);
   }
 
+  return outCanvas;
+}
+
+/**
+ * Write a rendered photo as a file, carrying the metadata edits. A format
+ * without transparency (JPG) gets its transparent pixels filled with white:
+ * left to the browser, they'd turn black.
+ */
+export async function encodeImage(
+  canvas: HTMLCanvasElement,
+  options: Pick<ImageExportOptions, "format" | "quality"> = {},
+  metadata?: ImageEdits["metadata"],
+): Promise<Blob> {
+  const format = options.format ?? "png";
+  let out = canvas;
+  if (!formatInfo(format).alpha) {
+    out = document.createElement("canvas");
+    out.width = canvas.width;
+    out.height = canvas.height;
+    const ctx = out.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(canvas, 0, 0);
+    }
+  }
   const blob = await new Promise<Blob | null>((resolve) =>
-    outCanvas.toBlob(resolve, `image/${format}`, options.quality ?? 0.92),
+    out.toBlob(resolve, formatInfo(format).mime, options.quality ?? 0.92),
   );
   if (!blob) throw new Error("[Retouch] Failed to export image");
-  return embedMetadata(blob, edits.metadata);
+  return embedMetadata(blob, metadata);
 }

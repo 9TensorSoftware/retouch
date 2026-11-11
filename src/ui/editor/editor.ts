@@ -30,6 +30,7 @@ import { framingOf, outlineOf } from "../../utils/framing";
 import type { HistoryController } from "../../utils/history";
 import { createHistory } from "../../utils/history";
 import { hslIsNeutral } from "../../utils/hsl";
+import { formatInfo, formatOfMime } from "../../utils/image-formats";
 import { applyBrushStroke, createWarpField, liquifyIsNeutral } from "../../utils/liquify";
 import { masksAreNeutral } from "../../utils/masks";
 import { clamp } from "../../utils/math";
@@ -82,6 +83,7 @@ import type { TransformOp } from "./context-dock";
 import { createContextDock } from "./context-dock";
 import { createCropTool } from "./crop-tool";
 import { createCurvesTool } from "./curves-tool";
+import { createDownloadButton, type EditorDownload } from "./download-button";
 import { createFiltersTool } from "./filters-tool";
 import { createHslTool } from "./hsl-tool";
 import { createInfoTool } from "./info-tool";
@@ -222,6 +224,8 @@ export interface EditorOptions {
   onExportGif?: (loop: "forward" | "reverse" | "boomerang") => Promise<void>;
   /** Video only: use the current frame as the gallery poster. */
   onSetPoster?: () => Promise<void>;
+  /** Images: download the photo as it is now, beside its name. */
+  download?: EditorDownload;
 }
 
 export interface EditorHandle extends ViewHandle {
@@ -311,6 +315,27 @@ export function createEditor(options: EditorOptions): EditorHandle {
       ? `${entry.width} × ${entry.height} · ${formatDuration(entry.duration)}`
       : `${entry.image.naturalWidth} × ${entry.image.naturalHeight}`;
   const dimsEl = h("span", { class: "rt-editor__dimensions" }, dimsText);
+  const downloadButton =
+    entry.kind === "image" && options.download
+      ? createDownloadButton({
+          download: options.download,
+          ownFormat: formatOfMime(entry.file.type),
+          menuHost: () => root,
+          confirmFlatten: async (format) => {
+            const { label } = formatInfo(format);
+            const choice = await confirm.ask({
+              title: "Fill the transparent areas with white?",
+              detail: `${label} can't keep transparency. PNG can.`,
+              confirmLabel: `Download ${label}`,
+              discardLabel: "Download PNG",
+            });
+            return choice === "confirm" ? "flatten" : choice === "discard" ? "png" : "cancel";
+          },
+          // As Done does: a crop frame not applied yet is applied or discarded first.
+          beforeSave: settleCrop,
+          signal,
+        })
+      : null;
   const cancelBtn = h("button", { class: "rt-editor__btn-cancel" }, "Cancel");
   const doneBtn = h("button", { class: "rt-editor__btn-done" }, "Done");
 
@@ -449,7 +474,13 @@ export function createEditor(options: EditorOptions): EditorHandle {
     "div",
     { class: "rt-editor__topbar" },
     h("div", { class: "rt-editor__topbar-left" }, cancelBtn),
-    h("div", { class: "rt-editor__topbar-title" }, filenameEl, dimsEl),
+    h(
+      "div",
+      { class: "rt-editor__topbar-title" },
+      filenameEl,
+      dimsEl,
+      ...(downloadButton ? [downloadButton.root] : []),
+    ),
     topbarRight,
     h("div", { class: "rt-editor__topbar-end" }, divider(), doneBtn),
   );

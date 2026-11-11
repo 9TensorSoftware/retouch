@@ -1485,6 +1485,7 @@ body:has(> .rt-editor-overlay) {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  padding-inline: 12px;
 }
 
 .rt-editor__filename {
@@ -1504,6 +1505,80 @@ body:has(> .rt-editor-overlay) {
   border-radius: var(--rt-radius-sm);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/*
+ * Download, in two halves: the button saves in the default format, the
+ * format beside it opens a menu of the others.
+ */
+.rt-download {
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 28px;
+  border-radius: var(--rt-radius-sm);
+  background: var(--rt-control);
+}
+
+.rt-download__main,
+.rt-download__more {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  color: var(--rt-text-2);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-download__main {
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--rt-radius-sm) 0 0 var(--rt-radius-sm);
+}
+
+.rt-download__more {
+  gap: 2px;
+  padding: 0 5px 0 8px;
+  border-left: 1px solid var(--rt-line-strong);
+  border-radius: 0 var(--rt-radius-sm) var(--rt-radius-sm) 0;
+  color: var(--rt-text-3);
+}
+
+.rt-download__main:hover,
+.rt-download__more:hover,
+.rt-download__more[aria-expanded="true"] {
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
+}
+
+.rt-download__main svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rt-download__more svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rt-download--busy {
+  opacity: 0.6;
+}
+
+.rt-download--busy button {
+  cursor: progress;
+}
+
+.rt-flyout.rt-download-menu {
+  width: 300px;
+}
+
+.rt-download-menu .rt-flyout__item {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .rt-editor__topbar-right {
@@ -6072,7 +6147,9 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   .rt-editor__topbar {
     height: 44px;
   }
-  .rt-editor__topbar-title {
+  .rt-editor__filename,
+  .rt-editor__dimensions,
+  .rt-download__label {
     display: none;
   }
   .rt-editor__text-btn span {
@@ -6111,7 +6188,9 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
     top: 50%;
     transform: translate(-50%, -50%);
   }
-  .rt-editor__topbar-title {
+  .rt-editor__filename,
+  .rt-editor__dimensions,
+  .rt-download__label {
     display: none;
   }
   .rt-editor__topbar-left {
@@ -6256,6 +6335,12 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   .rt-zoom button {
     height: 40px;
     min-width: 40px;
+  }
+  .rt-download {
+    height: 36px;
+  }
+  .rt-download__main {
+    padding-inline: 12px;
   }
   .rt-inspector__reset {
     --rt-reset-height: 36px;
