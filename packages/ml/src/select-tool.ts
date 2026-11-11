@@ -61,18 +61,22 @@ export function clickedPoints(
 export interface SelectionHistory {
   readonly current: Selection;
   readonly canUndo: boolean;
+  readonly canRedo: boolean;
   /** Move to a new selection, keeping the one before for undo. */
   set(next: Selection): void;
   /** Back one step; false when there's nothing to go back to. */
   undo(): boolean;
+  /** Forward again after an undo; false when there's nothing undone. */
+  redo(): boolean;
   /** Nothing selected and nothing to undo: the photo changed under it. */
   reset(): void;
 }
 
-/** Every click, shape pick and Start over is a step Undo takes back. */
+/** Every click, shape pick and Deselect is a step Undo takes back. */
 export function createSelectionHistory(limit = 50): SelectionHistory {
   let current = EMPTY_SELECTION;
   const past: Selection[] = [];
+  const future: Selection[] = [];
   return {
     get current() {
       return current;
@@ -80,19 +84,32 @@ export function createSelectionHistory(limit = 50): SelectionHistory {
     get canUndo() {
       return past.length > 0;
     },
+    get canRedo() {
+      return future.length > 0;
+    },
     set(next) {
       past.push(current);
       if (past.length > limit) past.shift();
+      future.length = 0;
       current = next;
     },
     undo() {
       const previous = past.pop();
       if (!previous) return false;
+      future.push(current);
       current = previous;
+      return true;
+    },
+    redo() {
+      const next = future.pop();
+      if (!next) return false;
+      past.push(current);
+      current = next;
       return true;
     },
     reset() {
       past.length = 0;
+      future.length = 0;
       current = EMPTY_SELECTION;
     },
   };
@@ -382,7 +399,7 @@ export function createSelectSurface(
     if (selection) {
       const { fill, edge } = layersFor(selection, w, h);
       // The rest of the photo dims, so what's selected stands out.
-      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
       ctx.fillRect(0, 0, w, h);
       ctx.globalCompositeOperation = "destination-out";
       ctx.drawImage(fill, 0, 0);

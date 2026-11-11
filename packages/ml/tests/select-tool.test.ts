@@ -49,7 +49,7 @@ describe("what a click does", () => {
 });
 
 describe("selection history", () => {
-  it("takes back every step, Start over included", () => {
+  it("takes back every step, Deselect included, and redoes them", () => {
     const history = createSelectionHistory();
     expect(history.canUndo).toBe(false);
     const a = { points: [{ x: 0.1, y: 0.1, label: 1 as const }], shape: null };
@@ -64,6 +64,11 @@ describe("selection history", () => {
     history.undo();
     expect(history.current).toBe(EMPTY_SELECTION);
     expect(history.undo()).toBe(false);
+    expect(history.redo()).toBe(true);
+    expect(history.current).toBe(a);
+    // A new step drops what was undone.
+    history.set(b);
+    expect(history.canRedo).toBe(false);
   });
 
   it("forgets everything when the photo changes", () => {

@@ -78,12 +78,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 ### Changed
 
 - **Select** works differently. Pointing at the photo outlines what a click would select; a
-  click selects it and dims the rest, and a click on something else selects that instead,
-  rather than adding to what's there. **Add** and **Remove** (or Shift- and Alt-click) change a
-  selection. The panel shows what's selected as pictures, with each shape the model offers for
-  a click (Small, Medium, Large) to pick from, in place of clicking the same spot again. **Undo**
-  takes back each click, shape pick and **Start over**. With the model saved, the photo is read
-  as soon as the tool opens, without a button.
+  click selects it, and a click on something else selects that instead, rather than adding to
+  what's there. **Add** and **Remove** (or Shift- and Alt-click) change a selection. The panel
+  shows what's selected as pictures, with each shape the model offers for a click (Small,
+  Medium, Large) to pick from, in place of clicking the same spot again. Esc or **Deselect**
+  clears it without closing the editor, and **Undo** (⌘Z, ⇧⌘Z to redo) takes back each click,
+  shape pick and deselect. With the model saved, the photo is read as soon as the tool opens.
 - `downloadImage(id)` and the gallery's Download save a photo in its own format, a JPG as JPG,
   instead of always as PNG, unless the `export` option names one. A photo with transparent areas
   its own format can't keep goes out as PNG.

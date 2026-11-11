@@ -118,7 +118,7 @@ describe("Select", () => {
   let pane: ReturnType<EditorToolPlugin["mount"]>;
   let overlay: HTMLElement;
 
-  const guide = () => pane.root.firstElementChild?.textContent;
+  const guide = () => pane.root.children[1]?.textContent;
   const sections = () =>
     [...pane.root.querySelectorAll<HTMLElement>(".rt-section")]
       .filter((s) => !s.hidden)
@@ -153,9 +153,24 @@ describe("Select", () => {
     document.body.innerHTML = "";
   });
 
+  const key = (k: string, mods: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent("keydown", {
+      key: k,
+      bubbles: true,
+      cancelable: true,
+      ...mods,
+    });
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+
   it("reads the photo on its own once the model is saved, then says what to do", () => {
-    expect(guide()).toBe("Point at something in the photo, then click it.");
-    expect(sections()).toEqual([]);
+    expect(guide()).toBe("Click something in the photo.");
+    expect(sections()).toEqual(["Selection"]);
+    expect(button("Cut out").disabled).toBe(true);
+    expect(button("Deselect").disabled).toBe(true);
+    // The model card stays on top, as in every other tool.
+    expect(pane.root.firstElementChild?.classList.contains("rt-card")).toBe(true);
   });
 
   it("outlines what's under the mouse before anything is clicked", async () => {
@@ -167,10 +182,10 @@ describe("Select", () => {
   it("selects with a click, offers each shape, and a new click starts over", async () => {
     pointer("pointerdown", 0.4, 0.4);
     await flush();
-    expect(guide()).toBe("Selected. Click something else to select that instead.");
-    expect(sections()).toEqual(["Selected", "Use it", "Fix it"]);
+    expect(guide()).toBe("Esc deselects. Shift adds, Alt takes out.");
     expect(tiles()).toEqual(["Small", "Medium", "Large"]);
     expect(pressed()).toBe("Medium");
+    expect(button("Cut out").disabled).toBe(false);
 
     pointer("pointerdown", 0.6, 0.6);
     await flush();
@@ -178,17 +193,46 @@ describe("Select", () => {
     expect(decodes.at(-1)).toEqual([{ x: 0.6, y: 0.6, label: 1 }]);
   });
 
-  it("takes back a shape pick, a click and Start over, one at a time", async () => {
+  it("deselects with Esc or the button, without closing the editor, and Undo brings it back", async () => {
+    pointer("pointerdown", 0.4, 0.4);
+    await flush();
+    expect(key("Escape")).toBe(true);
+    await flush();
+    expect(tiles()).toEqual([]);
+    expect(guide()).toBe("Click something in the photo.");
+    // Nothing selected: Esc is the editor's again.
+    expect(key("Escape")).toBe(false);
+
+    button("Undo").click();
+    await flush();
+    expect(tiles()).toEqual(["Small", "Medium", "Large"]);
+    button("Deselect").click();
+    await flush();
+    expect(tiles()).toEqual([]);
+  });
+
+  it("steps through the selection with ⌘Z and ⇧⌘Z, then leaves ⌘Z to the editor", async () => {
     pointer("pointerdown", 0.4, 0.4);
     await flush();
     button("Large").click();
-    expect(pressed()).toBe("Large");
-    button("Undo").click();
+    expect(key("z", { metaKey: true })).toBe(true);
     await flush();
     expect(pressed()).toBe("Medium");
+    expect(key("z", { metaKey: true, shiftKey: true })).toBe(true);
+    await flush();
+    expect(pressed()).toBe("Large");
+    key("z", { metaKey: true });
+    key("z", { metaKey: true });
+    await flush();
+    expect(tiles()).toEqual([]);
+    expect(key("z", { metaKey: true })).toBe(false);
+  });
 
+  it("adds and takes out parts, each a step Undo takes back", async () => {
+    pointer("pointerdown", 0.4, 0.4);
+    await flush();
     button("Remove").click();
-    expect(guide()).toBe("Click a part of the selection to take it out.");
+    expect(guide()).toBe("Click to take a part out.");
     pointer("pointerdown", 0.45, 0.45);
     await flush();
     expect(decodes.at(-1)?.map((p) => p.label)).toEqual([1, 0]);
@@ -196,13 +240,5 @@ describe("Select", () => {
     button("Undo").click();
     await flush();
     expect(tiles()).toEqual(["Small", "Medium", "Large"]);
-
-    button("Start over").click();
-    await flush();
-    expect(sections()).toEqual(["Fix it"]);
-    expect(guide()).toBe("Point at something in the photo, then click it.");
-    button("Undo").click();
-    await flush();
-    expect(sections()).toEqual(["Selected", "Use it", "Fix it"]);
   });
 });

@@ -428,7 +428,12 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         retouch.openEditor(added.id);
       },
     });
-    note.root.after(ctx.ui.row(open.root));
+    const row = ctx.ui.row(open.root);
+    row.classList.add("rt-ml-opened");
+    // Another result replaces the last one's button rather than adding a second.
+    const last = note.root.nextElementSibling;
+    if (last?.classList.contains("rt-ml-opened")) last.remove();
+    note.root.after(row);
   }
 
   /**
@@ -680,7 +685,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           ],
         });
         steps.root.hidden = true;
-        // What to do next, always: the one line to read.
+        // What to do next, in a few words.
         const guide = ctx.ui.note("");
 
         // Phones and tablets tap; there's no pointing at things first.
@@ -706,33 +711,24 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           onClick: () => void ready(),
         });
 
-        // ── What's selected: each shape the model offers, as a picture ──
+        // ── The selection: its shapes as pictures, what to do with it, and fixing it ──
         const shapeRow = ctx.ui.row();
-        const shapeHint = ctx.ui.note("");
-        const selected = ctx.ui.section("Selected", shapeRow, shapeHint.root);
         let shownFor: SamCandidates | null = null;
         let tiles: UiTiles<string> | null = null;
-
-        // ── What to do with it ──
         const cut = ctx.ui.button({
           label: "Cut out",
           variant: "primary",
-          title: "A new image of just this, with nothing around it",
+          title: "A new image of just this",
           onClick: () => void cutOut(),
         });
         const eraseIt = ctx.ui.button({
           label: actionLabel("Erase it", fillModel, false),
-          title: "Take it out of this photo and fill in behind it",
+          title: `Take it out of this photo (${undoKeys} brings it back)`,
           onClick: () => void eraseObject(),
         });
-        const useHint = ctx.ui.note(
-          `Cut out adds a new image of just this to the gallery. Erase takes it out of this photo; ${undoKeys} brings it back.`,
-        );
-        const use = ctx.ui.section("Use it", ctx.ui.row(cut.root, eraseIt.root), useHint.root);
-
-        // ── Fixing it ──
+        const outcome = ctx.ui.note("");
         const modeChoice = ctx.ui.choice<ClickMode>({
-          label: "What a click does",
+          label: `What a ${click} does`,
           options: [
             { value: "new", label: "Select" },
             { value: "add", label: "Add" },
@@ -745,22 +741,29 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             syncState();
           },
         });
-        const modeHint = ctx.ui.note("");
-        const undo = ctx.ui.button({ label: "Undo", onClick: () => void undoStep() });
-        const startOver = ctx.ui.button({ label: "Start over", onClick: () => startAgain() });
-        const fix = ctx.ui.section(
-          "Fix it",
+        const undo = ctx.ui.button({
+          label: "Undo",
+          title: `Undo (${undoKeys})`,
+          onClick: () => void undoStep(),
+        });
+        const deselect = ctx.ui.button({
+          label: "Deselect",
+          title: touch ? "Deselect" : "Deselect (Esc)",
+          onClick: () => clearSelection(),
+        });
+        const selection = ctx.ui.section(
+          "Selection",
+          shapeRow,
+          ctx.ui.row(cut.root, eraseIt.root),
+          outcome.root,
           modeChoice.root,
-          modeHint.root,
-          ctx.ui.row(undo.root, startOver.root),
+          ctx.ui.row(undo.root, deselect.root),
         );
 
         const { card, refresh, cached } = modelCard(
           ctx,
           model,
-          touch
-            ? "Tap anything in the photo, a dog, a person, a cup, to select it. Then cut it out as a new image, or erase it from the photo."
-            : "Point at anything in the photo, a dog, a person, a cup, and it's outlined; click to select it. Then cut it out as a new image, or erase it from the photo.",
+          `${capital(click)} a thing in the photo to select it, then cut it out or erase it.`,
           () => {
             syncState();
             if (active && cached()) void ready();
@@ -786,47 +789,30 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
         function syncState(): void {
           const armed = isReady() || reading !== null || cached();
-          // Until it's ready, the card says what this is; after, what's
-          // selected comes first and the card goes to the bottom.
-          if (isReady()) root.append(card.root);
-          else root.prepend(card.root);
           prepare.root.hidden = armed;
           prepare.setLabel(actionLabel("Start selecting", model, cached()));
           prepare.setDisabled(busy || !neutral());
           const some = hasSelection();
-          selected.hidden = !some;
-          use.hidden = !some;
-          fix.hidden = !some && !history.canUndo;
+          // Once the photo is read the section stays put, so a click or a
+          // Deselect never rearranges the panel; only the pictures come and go.
+          selection.hidden = !isReady();
+          shapeRow.hidden = !some;
           cut.setDisabled(!some || busy);
           eraseIt.setDisabled(!some || busy);
+          modeChoice.root.hidden = !some;
           undo.setDisabled(!history.canUndo || busy);
-          startOver.setDisabled(history.current.points.length === 0 || busy);
-          modeHint.set(
-            mode === "add"
-              ? `A ${click} adds that part.`
-              : mode === "remove"
-                ? `A ${click} takes that part out.`
-                : touch
-                  ? "A tap selects something else."
-                  : `A click selects what you point at. Shift-click adds to it, ${altKey}-click takes a part out.`,
-          );
+          deselect.setDisabled(history.current.points.length === 0 || busy);
           surface.setCursor(
             !armed || !neutral() ? "idle" : busy || reading ? "busy" : some ? mode : "new",
           );
           if (busy) return;
           if (!neutral()) guide.set(NEEDS_FRAME);
           else if (!armed) guide.set("");
-          else if (reading) guide.set("Reading the photo… a few seconds.");
-          else if (!some) {
-            guide.set(
-              touch
-                ? "Tap something in the photo to select it."
-                : "Point at something in the photo, then click it.",
-            );
-          } else if (mode === "add") guide.set(`${capital(click)} a part of the photo to add it.`);
-          else if (mode === "remove") {
-            guide.set(`${capital(click)} a part of the selection to take it out.`);
-          } else guide.set(`Selected. ${capital(click)} something else to select that instead.`);
+          else if (reading) guide.set("Reading the photo…");
+          else if (!some) guide.set(`${capital(click)} something in the photo.`);
+          else if (mode === "add") guide.set(`${capital(click)} to add to it.`);
+          else if (mode === "remove") guide.set(`${capital(click)} to take a part out.`);
+          else guide.set(touch ? "" : `Esc deselects. Shift adds, ${altKey} takes out.`);
         }
 
         /** Download (if needed) and read the photo, so clicks only decode. */
@@ -888,13 +874,24 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           return run;
         }
 
+        /** "corgi-cutout.png is in your gallery", until the selection moves on. */
+        function clearOutcome(): void {
+          outcome.set("");
+          const after = outcome.root.nextElementSibling;
+          if (after?.classList.contains("rt-ml-opened")) after.remove();
+        }
+
         /** Show the selection history is on now. */
         async function show(): Promise<void> {
+          clearOutcome();
           const { points } = history.current;
           surface.setPoints(points);
           if (points.length === 0) {
             found = null;
             shapes = [];
+            shownFor = null;
+            tiles = null;
+            shapeRow.replaceChildren();
             paint();
             return;
           }
@@ -937,7 +934,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             shapeRow.replaceChildren(tiles.root);
           }
           tiles?.set(index === null ? null : String(index));
-          shapeHint.set(shapes.length > 1 ? "Not quite? Pick the shape that fits." : "");
           syncState();
         }
 
@@ -1007,13 +1003,51 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           syncState();
         }
 
-        function startAgain(): void {
+        async function redoStep(): Promise<void> {
+          if (busy || !history.redo()) return;
+          await show();
+          syncState();
+        }
+
+        /** Back to nothing selected, as one step Undo takes back. */
+        function clearSelection(): void {
           if (busy || history.current.points.length === 0) return;
           history.set({ points: [], shape: null });
           modeChoice.set("new");
           mode = "new";
           void show();
         }
+
+        // While Select is open, Esc deselects and ⌘Z steps through the
+        // selection, before the editor's own: Esc would close it, ⌘Z undo an edit.
+        const keys = new AbortController();
+        document.addEventListener(
+          "keydown",
+          (e) => {
+            if (!active || busy) return;
+            const over = e.target instanceof Element ? e.target : null;
+            if (over?.closest('input, textarea, select, [contenteditable], [role="alertdialog"]')) {
+              return;
+            }
+            const mod = e.metaKey || e.ctrlKey;
+            const z = e.key === "z" || e.key === "Z";
+            let take = false;
+            if (e.key === "Escape" && history.current.points.length > 0) {
+              take = true;
+              clearSelection();
+            } else if (mod && z && !e.shiftKey && history.canUndo) {
+              take = true;
+              void undoStep();
+            } else if (mod && ((z && e.shiftKey) || e.key === "y") && history.canRedo) {
+              take = true;
+              void redoStep();
+            }
+            if (!take) return;
+            e.preventDefault();
+            e.stopPropagation();
+          },
+          { capture: true, signal: keys.signal },
+        );
 
         /** The selection as a full-size mask, for cutting out and erasing. */
         function selectionMask(): HTMLCanvasElement | null {
@@ -1028,6 +1062,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           activeRuns.add("select");
           syncState();
           guide.set("Cutting out…");
+          clearOutcome();
           try {
             const image = ctx.entry.image;
             const out = document.createElement("canvas");
@@ -1041,9 +1076,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             if (!maskCtx) throw new Error("[Retouch ML] Failed to read the mask");
             applyMatteAlpha(pixels.data, maskCtx.getImageData(0, 0, out.width, out.height).data);
             outCtx.putImageData(pixels, 0, 0);
-            await addToGallery(ctx, out, "cutout", "image/png", guide);
+            await addToGallery(ctx, out, "cutout", "image/png", outcome);
           } catch (error) {
-            guide.set(errorText(error, "Cut out failed"));
+            outcome.set(errorText(error, "Cut out failed"));
             console.error(error);
           } finally {
             busy = false;
@@ -1122,7 +1157,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         card.body.append(prepare.root, steps.root);
         const root = document.createElement("div");
         root.className = "rt-ml-select";
-        root.append(card.root, guide.root, selected, use, fix);
+        root.append(card.root, guide.root, selection);
         syncState();
         return {
           root,
@@ -1143,6 +1178,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             syncState();
           },
           destroy() {
+            keys.abort();
             surface.destroy();
           },
         };
