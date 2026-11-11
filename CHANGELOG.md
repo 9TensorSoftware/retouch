@@ -72,9 +72,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   first: fill them with white, or save a PNG instead. A crop frame not applied yet is asked
   about first, as Done does.
 - `downloadImage(id, { format })` saves a photo in the format given.
+- `decodeSamCandidates()` and `candidateMask()` in `@9tensor/retouch-ml`: every shape the
+  Select model proposes for a set of clicks, and any one of them as a mask at any size.
 
 ### Changed
 
+- **Select** works differently. Pointing at the photo outlines what a click would select; a
+  click selects it and dims the rest, and a click on something else selects that instead,
+  rather than adding to what's there. **Add** and **Remove** (or Shift- and Alt-click) change a
+  selection. The panel shows what's selected as pictures, with each shape the model offers for
+  a click (Small, Medium, Large) to pick from, in place of clicking the same spot again. **Undo**
+  takes back each click, shape pick and **Start over**. With the model saved, the photo is read
+  as soon as the tool opens, without a button.
 - `downloadImage(id)` and the gallery's Download save a photo in its own format, a JPG as JPG,
   instead of always as PNG, unless the `export` option names one. A photo with transparent areas
   its own format can't keep goes out as PNG.

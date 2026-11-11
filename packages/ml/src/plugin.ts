@@ -9,6 +9,7 @@ import type {
   UiNote,
   UiStep,
   UiSteps,
+  UiTiles,
   VideoEdits,
 } from "@9tensor/retouch";
 import { composeBokeh, prepareBokeh, renderBokeh, suggestFocus } from "./bokeh";
@@ -67,15 +68,26 @@ import {
   type TextLine,
 } from "./ocr";
 import {
+  candidateMask,
   DEFAULT_SAM_DECODER_URL,
   DEFAULT_SAM_ENCODER_URL,
-  decodeSamClicks,
+  decodeSamCandidates,
   encodeSamImage,
+  type SamCandidates,
   type SamEmbeddings,
   type SamOptions,
   type SamPoint,
 } from "./sam";
-import { createSelectSurface, isRepeatClick } from "./select-tool";
+import {
+  type ClickMode,
+  clickedPoints,
+  createSelectionHistory,
+  createSelectSurface,
+  distinctShapes,
+  shapeContains,
+  shapeLabels,
+  shapeThumbnail,
+} from "./select-tool";
 import { type TrackedVideo, type TrackVideoOptions, trackVideo } from "./track";
 import { createTrackOverlay, firstShown, trackBounds, trackColor, trackName } from "./track-tool";
 import { DEFAULT_UPSCALE_MODEL_URL, type UpscaleOptions, upscaleImage } from "./upscale";
@@ -212,6 +224,11 @@ function failSteps(steps: UiSteps): void {
   const failed = steps.root.querySelector('[data-state="active"]');
   const index = failed ? [...steps.root.querySelectorAll(".rt-step")].indexOf(failed) : 1;
   steps.set(Math.max(0, index), "failed");
+}
+
+/** "tap" → "Tap". */
+function capital(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 function errorText(error: unknown, fallback: string): string {
@@ -643,16 +660,18 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     ]);
     const eraseModel = options.erase !== false ? options.erase : undefined;
     const fillModel = spec("LaMa", 208, [[eraseModel?.modelUrl, DEFAULT_INPAINT_MODEL_URL]]);
+    const apple = /Mac|iP(hone|ad|od)/.test(navigator.platform);
+    const altKey = apple ? "Option" : "Alt";
+    const undoKeys = apple ? "⌘Z" : "Ctrl+Z";
     ctor.registerTool({
       id: "select",
       label: "Select",
       icon: SELECT_ICON,
       group: "ai",
-      description: "Click an object to select it",
+      description: "Point at a thing in the photo to pick it out",
       badge: "38 MB",
       kinds: ["image"],
       mount(ctx: ToolContext) {
-        const note = ctx.ui.note("");
         const steps = ctx.ui.steps({
           label: "Getting ready",
           steps: [
@@ -661,13 +680,23 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           ],
         });
         steps.root.hidden = true;
+        // What to do next, always: the one line to read.
+        const guide = ctx.ui.note("");
 
-        let points: SamPoint[] = [];
-        /** Which candidate shape to show for these clicks (see decodeSamClicks). */
-        let pick = 0;
-        let mask: HTMLCanvasElement | null = null;
+        // Phones and tablets tap; there's no pointing at things first.
+        const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+        const click = touch ? "tap" : "click";
+        const history = createSelectionHistory();
+        let mode: ClickMode = "new";
         let embeddings: SamEmbeddings | null = null;
+        let embeddedImage: unknown = null;
+        let reading: Promise<SamEmbeddings | null> | null = null;
+        /** The model's shapes for the current clicks, and the ones worth offering. */
+        let found: SamCandidates | null = null;
+        let shapes: number[] = [];
+        /** Reading, cutting out or erasing: clicks wait. */
         let busy = false;
+        let active = false;
 
         // Clicking the photo would start a 38 MB download; until the model
         // is saved, that waits behind an explicit button.
@@ -676,138 +705,329 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           variant: "ai",
           onClick: () => void ready(),
         });
-        const mode = ctx.ui.choice({
-          label: "Click mode",
-          options: [
-            { value: "add", label: "Add" },
-            { value: "subtract", label: "Subtract" },
-          ],
-          value: "add",
-          onChange: () => {},
+
+        // ── What's selected: each shape the model offers, as a picture ──
+        const shapeRow = ctx.ui.row();
+        const shapeHint = ctx.ui.note("");
+        const selected = ctx.ui.section("Selected", shapeRow, shapeHint.root);
+        let shownFor: SamCandidates | null = null;
+        let tiles: UiTiles<string> | null = null;
+
+        // ── What to do with it ──
+        const cut = ctx.ui.button({
+          label: "Cut out",
+          variant: "primary",
+          title: "A new image of just this, with nothing around it",
+          onClick: () => void cutOut(),
         });
-        const cut = ctx.ui.button({ label: "Cut out", onClick: () => void cutOut() });
         const eraseIt = ctx.ui.button({
           label: actionLabel("Erase it", fillModel, false),
+          title: "Take it out of this photo and fill in behind it",
           onClick: () => void eraseObject(),
         });
-        const clear = ctx.ui.button({ label: "Clear", onClick: () => clearSelection() });
-        const actions = ctx.ui.row(mode.root);
-        const results = ctx.ui.row(cut.root, eraseIt.root, clear.root);
+        const useHint = ctx.ui.note(
+          `Cut out adds a new image of just this to the gallery. Erase takes it out of this photo; ${undoKeys} brings it back.`,
+        );
+        const use = ctx.ui.section("Use it", ctx.ui.row(cut.root, eraseIt.root), useHint.root);
+
+        // ── Fixing it ──
+        const modeChoice = ctx.ui.choice<ClickMode>({
+          label: "What a click does",
+          options: [
+            { value: "new", label: "Select" },
+            { value: "add", label: "Add" },
+            { value: "remove", label: "Remove" },
+          ],
+          value: "new",
+          onChange: (value) => {
+            mode = value;
+            surface.setHover(null);
+            syncState();
+          },
+        });
+        const modeHint = ctx.ui.note("");
+        const undo = ctx.ui.button({ label: "Undo", onClick: () => void undoStep() });
+        const startOver = ctx.ui.button({ label: "Start over", onClick: () => startAgain() });
+        const fix = ctx.ui.section(
+          "Fix it",
+          modeChoice.root,
+          modeHint.root,
+          ctx.ui.row(undo.root, startOver.root),
+        );
 
         const { card, refresh, cached } = modelCard(
           ctx,
           model,
-          "Click an object to select it; click again to add to it, or switch to Subtract. Cut it out as a new image, or erase it from this photo.",
-          () => syncState(),
+          touch
+            ? "Tap anything in the photo, a dog, a person, a cup, to select it. Then cut it out as a new image, or erase it from the photo."
+            : "Point at anything in the photo, a dog, a person, a cup, and it's outlined; click to select it. Then cut it out as a new image, or erase it from the photo.",
+          () => {
+            syncState();
+            if (active && cached()) void ready();
+          },
         );
         void isModelCached(fillModel.urls).then((saved) =>
           eraseIt.setLabel(actionLabel("Erase it", fillModel, saved)),
         );
 
+        const neutral = (): boolean => geometryIsNeutral(ctx.edits as ImageEdits);
+        const photo = (): HTMLImageElement | null =>
+          ctx.entry.kind === "image" ? ctx.entry.image : null;
+        const isReady = (): boolean => embeddings !== null && embeddedImage === photo();
+        const hasSelection = (): boolean => found !== null && history.current.points.length > 0;
+
+        /** The shape on show: the one picked, else the model's favourite. */
+        function chosen(): number | null {
+          if (!found || shapes.length === 0) return null;
+          const pick = history.current.shape;
+          if (pick !== null && shapes.includes(pick)) return pick;
+          return shapes.includes(found.order[0]) ? found.order[0] : shapes[0];
+        }
+
         function syncState(): void {
-          const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
-          const armed = embeddings !== null || cached();
+          const armed = isReady() || reading !== null || cached();
+          // Until it's ready, the card says what this is; after, what's
+          // selected comes first and the card goes to the bottom.
+          if (isReady()) root.append(card.root);
+          else root.prepend(card.root);
           prepare.root.hidden = armed;
           prepare.setLabel(actionLabel("Start selecting", model, cached()));
-          prepare.setDisabled(busy || !neutral);
-          actions.hidden = !armed;
-          results.hidden = !armed;
-          const usable = neutral && mask !== null && !busy;
-          cut.setDisabled(!usable);
-          eraseIt.setDisabled(!usable);
-          clear.setDisabled(points.length === 0 || busy);
+          prepare.setDisabled(busy || !neutral());
+          const some = hasSelection();
+          selected.hidden = !some;
+          use.hidden = !some;
+          fix.hidden = !some && !history.canUndo;
+          cut.setDisabled(!some || busy);
+          eraseIt.setDisabled(!some || busy);
+          undo.setDisabled(!history.canUndo || busy);
+          startOver.setDisabled(history.current.points.length === 0 || busy);
+          modeHint.set(
+            mode === "add"
+              ? `A ${click} adds that part.`
+              : mode === "remove"
+                ? `A ${click} takes that part out.`
+                : touch
+                  ? "A tap selects something else."
+                  : `A click selects what you point at. Shift-click adds to it, ${altKey}-click takes a part out.`,
+          );
+          surface.setCursor(
+            !armed || !neutral() ? "idle" : busy || reading ? "busy" : some ? mode : "new",
+          );
           if (busy) return;
-          if (!neutral) note.set(NEEDS_FRAME);
-          else if (!armed) note.set("");
-          else if (mask) note.set("Selected. Click the same spot again for another shape.");
-          else note.set("Click an object in the photo.");
+          if (!neutral()) guide.set(NEEDS_FRAME);
+          else if (!armed) guide.set("");
+          else if (reading) guide.set("Reading the photo… a few seconds.");
+          else if (!some) {
+            guide.set(
+              touch
+                ? "Tap something in the photo to select it."
+                : "Point at something in the photo, then click it.",
+            );
+          } else if (mode === "add") guide.set(`${capital(click)} a part of the photo to add it.`);
+          else if (mode === "remove") {
+            guide.set(`${capital(click)} a part of the selection to take it out.`);
+          } else guide.set(`Selected. ${capital(click)} something else to select that instead.`);
         }
 
-        function clearSelection(): void {
-          if (busy) return;
-          points = [];
-          pick = 0;
-          mask = null;
-          surface.setPoints(points);
-          surface.setMask(null);
-          syncState();
-        }
-
-        /** Download (if needed) and encode the photo, so clicks only decode. */
-        async function ready(): Promise<SamEmbeddings | null> {
-          if (embeddings) return embeddings;
-          if (ctx.entry.kind !== "image") return null;
-          busy = true;
-          activeRuns.add("select");
-          syncState();
+        /** Download (if needed) and read the photo, so clicks only decode. */
+        function ready(): Promise<SamEmbeddings | null> {
+          if (isReady()) return Promise.resolve(embeddings);
+          if (ctx.entry.kind !== "image" || !neutral()) return Promise.resolve(null);
+          if (reading) return reading;
+          const image = ctx.entry.image;
           steps.root.hidden = false;
           beginSteps(steps, cached());
-          note.set("");
+          activeRuns.add("select");
+          reading = (async () => {
+            try {
+              const read = await encodeSamImage(image, {
+                ...selectOptions,
+                onDownloadProgress: trackDownload(steps, selectOptions.onDownloadProgress),
+              });
+              steps.set(0, "done", { detail: cached() ? "Saved" : undefined });
+              steps.set(1, "done");
+              embeddings = read;
+              embeddedImage = image;
+              steps.root.hidden = true;
+              return read;
+            } catch (error) {
+              failSteps(steps);
+              guide.set(errorText(error, "Select couldn't start"));
+              console.error(error);
+              return null;
+            } finally {
+              reading = null;
+              activeRuns.delete("select");
+              void refresh();
+              syncState();
+            }
+          })();
+          syncState();
+          return reading;
+        }
+
+        // One decode at a time: hovering and clicking share the model.
+        let queue: Promise<unknown> = Promise.resolve();
+        const remembered = new Map<string, SamCandidates>();
+        const keyOf = (points: SamPoint[]): string =>
+          points.map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)},${p.label}`).join(";");
+
+        function decode(points: SamPoint[]): Promise<SamCandidates | null> {
+          const key = keyOf(points);
+          const known = remembered.get(key);
+          if (known) return Promise.resolve(known);
+          const run = queue.then(async () => {
+            const read = await ready();
+            if (!read) return null;
+            const result = await decodeSamCandidates(read, points, selectOptions);
+            remembered.set(key, result);
+            if (remembered.size > 24) remembered.delete(remembered.keys().next().value as string);
+            return result;
+          });
+          queue = run.catch(() => {});
+          return run;
+        }
+
+        /** Show the selection history is on now. */
+        async function show(): Promise<void> {
+          const { points } = history.current;
+          surface.setPoints(points);
+          if (points.length === 0) {
+            found = null;
+            shapes = [];
+            paint();
+            return;
+          }
           try {
-            embeddings = await encodeSamImage(ctx.entry.image, {
-              ...selectOptions,
-              onDownloadProgress: trackDownload(steps, selectOptions.onDownloadProgress),
-            });
-            steps.set(0, "done", { detail: cached() ? "Saved" : undefined });
-            steps.set(1, "done");
-            return embeddings;
+            const result = await decode(points);
+            if (history.current.points !== points || !result) return;
+            found = result;
+            // One click can mean a part or the whole: offer each shape.
+            // Later clicks narrow it down, so the best one stands.
+            shapes = points.length === 1 ? distinctShapes(result) : [result.order[0]];
+            paint();
           } catch (error) {
-            failSteps(steps);
-            note.set(errorText(error, "Select couldn't start"));
+            guide.set(errorText(error, "Select failed"));
             console.error(error);
-            return null;
-          } finally {
-            busy = false;
-            activeRuns.delete("select");
-            void refresh();
-            syncState();
           }
         }
 
-        const surface = createSelectSurface(ctx.canvasArea, (x, y, shiftKey) => {
-          if (busy || activeRuns.has("select") || ctx.entry.kind !== "image") return;
-          if (!geometryIsNeutral(ctx.edits as ImageEdits)) return;
-          if (!embeddings && !cached()) {
-            note.set(`Start selecting first: it downloads the model (${model.mb ?? "?"} MB) once.`);
+        function paint(): void {
+          const index = chosen();
+          surface.setSelection(index === null ? null : found, index ?? 0);
+          if (found && found !== shownFor && ctx.entry.kind === "image") {
+            shownFor = found;
+            const labels = shapeLabels(shapes.length);
+            const image = ctx.entry.image;
+            const result = found;
+            tiles = ctx.ui.tiles<string>({
+              label: "Shape",
+              options: shapes.map((shape, i) => ({
+                value: String(shape),
+                label: labels[i],
+                preview: shapeThumbnail(image, result, shape),
+              })),
+              value: index === null ? null : String(index),
+              columns: 3,
+              onChange: (value) => {
+                history.set({ points: history.current.points, shape: Number(value) });
+                paint();
+              },
+            });
+            shapeRow.replaceChildren(tiles.root);
+          }
+          tiles?.set(index === null ? null : String(index));
+          shapeHint.set(shapes.length > 1 ? "Not quite? Pick the shape that fits." : "");
+          syncState();
+        }
+
+        // Pointing outlines what a click would select.
+        let hoverAt: { x: number; y: number } | null = null;
+        let hovering = false;
+        async function hoverLoop(): Promise<void> {
+          if (hovering) return;
+          hovering = true;
+          try {
+            let done: { x: number; y: number } | null = null;
+            while (hoverAt && hoverAt !== done) {
+              const spot: { x: number; y: number } = hoverAt;
+              done = spot;
+              const result = await decode([{ x: spot.x, y: spot.y, label: 1 }]);
+              if (hoverAt !== spot || !result) continue;
+              surface.setHover(result, result.order[0]);
+            }
+          } catch {
+            // A missed outline is fine; the click still works.
+          } finally {
+            hovering = false;
+          }
+        }
+
+        function onHover(x: number, y: number): void {
+          if (busy || !isReady() || !neutral() || mode !== "new") return;
+          // Over what's already selected, there's nothing new to show.
+          const index = chosen();
+          if (found && index !== null && shapeContains(found, index, x, y)) {
+            hoverAt = null;
+            surface.setHover(null);
             return;
           }
-          const label = shiftKey || mode.value === "subtract" ? 0 : 1;
-          // The same spot again means "not that one": step to the next shape.
-          if (isRepeatClick(points, x, y, label)) pick++;
-          else {
-            points.push({ x, y, label });
-            pick = 0;
+          hoverAt = { x, y };
+          void hoverLoop();
+        }
+
+        function onClick(x: number, y: number, keys: { shift: boolean; alt: boolean }): void {
+          if (busy || ctx.entry.kind !== "image" || !neutral()) return;
+          if (!isReady() && !reading && !cached()) {
+            guide.set(
+              `Start selecting first: it downloads the model (${model.mb ?? "?"} MB) once.`,
+            );
+            return;
           }
-          surface.setPoints(points);
-          void refine();
+          const next = clickedPoints(history.current.points, mode, x, y, keys);
+          if (!next) return;
+          hoverAt = null;
+          surface.setHover(null);
+          history.set({ points: next, shape: null });
+          void show();
+        }
+
+        const surface = createSelectSurface(ctx.canvasArea, {
+          onHover,
+          onHoverEnd: () => {
+            hoverAt = null;
+            surface.setHover(null);
+          },
+          onClick,
         });
 
-        async function refine(): Promise<void> {
-          const ready_ = await ready();
-          if (!ready_) return;
-          busy = true;
-          activeRuns.add("select");
-          note.set("Selecting…");
-          try {
-            const result = await decodeSamClicks(ready_, points, selectOptions, pick);
-            mask = result.mask;
-            surface.setMask(mask);
-          } catch (error) {
-            note.set(errorText(error, "Select failed"));
-            console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("select");
-            syncState();
-          }
+        async function undoStep(): Promise<void> {
+          if (busy || !history.undo()) return;
+          await show();
+          syncState();
+        }
+
+        function startAgain(): void {
+          if (busy || history.current.points.length === 0) return;
+          history.set({ points: [], shape: null });
+          modeChoice.set("new");
+          mode = "new";
+          void show();
+        }
+
+        /** The selection as a full-size mask, for cutting out and erasing. */
+        function selectionMask(): HTMLCanvasElement | null {
+          const index = chosen();
+          return found && index !== null ? candidateMask(found, index) : null;
         }
 
         async function cutOut(): Promise<void> {
+          const mask = selectionMask();
           if (busy || !mask || ctx.entry.kind !== "image") return;
           busy = true;
           activeRuns.add("select");
           syncState();
-          note.set("Cutting out…");
+          guide.set("Cutting out…");
           try {
             const image = ctx.entry.image;
             const out = document.createElement("canvas");
@@ -821,9 +1041,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             if (!maskCtx) throw new Error("[Retouch ML] Failed to read the mask");
             applyMatteAlpha(pixels.data, maskCtx.getImageData(0, 0, out.width, out.height).data);
             outCtx.putImageData(pixels, 0, 0);
-            await addToGallery(ctx, out, "cutout", "image/png", note);
+            await addToGallery(ctx, out, "cutout", "image/png", guide);
           } catch (error) {
-            note.set(errorText(error, "Cut out failed"));
+            guide.set(errorText(error, "Cut out failed"));
             console.error(error);
           } finally {
             busy = false;
@@ -833,12 +1053,13 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         async function eraseObject(): Promise<void> {
+          const mask = selectionMask();
           if (busy || !mask || ctx.entry.kind !== "image" || activeRuns.has("erase")) return;
           busy = true;
           activeRuns.add("select");
           activeRuns.add("erase");
           syncState();
-          note.set("Erasing… (the first time downloads the fill model)");
+          guide.set("Erasing… (the first time downloads the fill model)");
           try {
             const image = ctx.entry.image;
             const maskCtx = mask.getContext("2d");
@@ -865,16 +1086,16 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
               modelUrl: eraseModel?.modelUrl,
               onDownloadProgress: (p) => {
                 if (p.total > 0 && p.loaded < p.total) {
-                  note.set(
+                  guide.set(
                     `Downloading the fill model… ${formatMb(p.loaded)} of ${formatMb(p.total)}`,
                   );
-                } else note.set("Erasing…");
+                } else guide.set("Erasing…");
                 selectOptions.onDownloadProgress?.(p);
               },
             });
             await replacePhoto(ctx, result, "Erase selection");
           } catch (error) {
-            note.set(errorText(error, "Erase failed"));
+            guide.set(errorText(error, "Erase failed"));
             console.error(error);
           } finally {
             busy = false;
@@ -884,18 +1105,43 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           }
         }
 
-        card.body.append(prepare.root, actions, results, steps.root, note.root);
+        /** New pixels under the selection (an erase, an undo): it no longer fits them. */
+        function photoChanged(): void {
+          if (embeddedImage === null || embeddedImage === photo()) return;
+          embeddings = null;
+          embeddedImage = null;
+          history.reset();
+          found = null;
+          shapes = [];
+          remembered.clear();
+          surface.setHover(null);
+          void show();
+          if (active && cached()) void ready();
+        }
+
+        card.body.append(prepare.root, steps.root);
+        const root = document.createElement("div");
+        root.className = "rt-ml-select";
+        root.append(card.root, guide.root, selected, use, fix);
         syncState();
         return {
-          root: card.root,
+          root,
           onActivate() {
+            active = true;
             surface.setVisible(true);
+            photoChanged();
+            if (cached()) void ready();
             syncState();
           },
           onDeactivate() {
+            active = false;
+            hoverAt = null;
             surface.setVisible(false);
           },
-          sync: syncState,
+          sync() {
+            photoChanged();
+            syncState();
+          },
           destroy() {
             surface.destroy();
           },

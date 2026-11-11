@@ -107,9 +107,12 @@ export {
   runResilient,
 } from "./runtime";
 export {
+  candidateLogits,
+  candidateMask,
   clearSamCache,
   DEFAULT_SAM_DECODER_URL,
   DEFAULT_SAM_ENCODER_URL,
+  decodeSamCandidates,
   decodeSamClicks,
   encodeSamImage,
   type MaskRegion,
@@ -120,16 +123,29 @@ export {
   rankMasks,
   rgbaToSamTensor,
   SAM_SIZE,
+  type SamCandidates,
   type SamEmbeddings,
   type SamOptions,
   type SamPoint,
   samResizedSize,
 } from "./sam";
 export {
+  type ClickMode,
+  clickedPoints,
+  createSelectionHistory,
   createSelectSurface,
+  distinctShapes,
+  EMPTY_SELECTION,
   isRepeatClick,
   SAME_SPOT,
+  type Selection,
+  type SelectionHistory,
   type SelectSurfaceHandle,
+  type SelectSurfaceOptions,
+  type SurfaceCursor,
+  shapeContains,
+  shapeLabels,
+  shapeThumbnail,
 } from "./select-tool";
 export { computeTileGrid, type Tile } from "./tiles";
 export {

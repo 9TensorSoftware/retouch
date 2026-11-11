@@ -262,18 +262,30 @@ export function encodeSamImage(
   return promise;
 }
 
-/**
- * Run the prompt decoder for the given clicks. Returns a white-on-black
- * binary mask canvas at the source resolution plus the model's confidence.
- * `pick` steps through the candidates, best first (see rankMasks), and wraps
- * around; `candidates` is how many there are to step through.
- */
-export async function decodeSamClicks(
+/** Everything the decoder proposed for a set of clicks. */
+export interface SamCandidates {
+  /** Each candidate's 256×256 mask logits, one after another. */
+  masks: Float32Array;
+  /** The part of the 256² grid that holds the photo; the rest is padding. */
+  region: MaskRegion;
+  /** The candidates' indexes, best first (see rankMasks). */
+  order: number[];
+  /** The model's guess at each candidate's quality. */
+  iou: Float32Array;
+  /** The source's size. */
+  width: number;
+  height: number;
+}
+
+/** The decoder's grid side. */
+const MASK_SIDE = 256;
+
+/** Run the prompt decoder for the given clicks, keeping every candidate. */
+export async function decodeSamCandidates(
   embeddings: SamEmbeddings,
   points: SamPoint[],
   options: SamOptions = {},
-  pick = 0,
-): Promise<{ mask: HTMLCanvasElement; score: number; candidates: number }> {
+): Promise<SamCandidates> {
   if (points.length === 0) throw new Error("[Retouch ML] No prompt points");
   const ort = await loadOrt();
   const { coords, labels } = pointsToSamTensors(points, embeddings.width, embeddings.height);
@@ -290,45 +302,55 @@ export async function decodeSamClicks(
   );
   const iou = results[session.outputNames[0]].data as Float32Array;
   const masks = results[session.outputNames[1]].data as Float32Array;
-  const side = 256;
   const resized = samResizedSize(embeddings.width, embeddings.height);
-  const order = rankMasks(iou, masks, side * side, {
-    width: Math.round((side * resized.width) / SAM_SIZE),
-    height: Math.round((side * resized.height) / SAM_SIZE),
-    stride: side,
-  });
-  const chosen = order[((pick % order.length) + order.length) % order.length] ?? 0;
-  const mask = masks.subarray(chosen * side * side, (chosen + 1) * side * side);
-  const score = iou[chosen];
+  const region: MaskRegion = {
+    width: Math.round((MASK_SIDE * resized.width) / SAM_SIZE),
+    height: Math.round((MASK_SIDE * resized.height) / SAM_SIZE),
+    stride: MASK_SIDE,
+  };
+  return {
+    masks,
+    region,
+    order: rankMasks(iou, masks, MASK_SIDE * MASK_SIDE, region),
+    iou,
+    width: embeddings.width,
+    height: embeddings.height,
+  };
+}
 
-  // 256² sigmoid-gray → bilinear to 1024² → crop padding → source size
+/** One candidate's logits. */
+export function candidateLogits(candidates: SamCandidates, index: number): Float32Array {
+  const pixels = MASK_SIDE * MASK_SIDE;
+  return candidates.masks.subarray(index * pixels, (index + 1) * pixels);
+}
+
+/**
+ * One candidate as a white-on-black mask, at the source's size or any
+ * other (a small one to draw on screen, say).
+ */
+export function candidateMask(
+  candidates: SamCandidates,
+  index: number,
+  width = candidates.width,
+  height = candidates.height,
+): HTMLCanvasElement {
+  // 256² sigmoid-gray → bilinear up to the output, dropping the padding.
+  const side = MASK_SIDE;
   const small = canvasOf(side, side);
-  small.getContext("2d")?.putImageData(new ImageData(maskLogitsToGray(mask), side, side), 0, 0);
-  const up = canvasOf(resized.width, resized.height);
-  const upCtx = up.getContext("2d");
-  if (!upCtx) throw new Error("[Retouch ML] Failed to create canvas context");
-  upCtx.imageSmoothingEnabled = true;
-  upCtx.imageSmoothingQuality = "high";
-  // Scale the full 256² (which represents the padded 1024²) and let the
-  // crop fall out of drawing only the un-padded region scaled to fit.
-  upCtx.drawImage(
-    small,
-    0,
-    0,
-    (side * resized.width) / SAM_SIZE,
-    (side * resized.height) / SAM_SIZE,
-    0,
-    0,
-    resized.width,
-    resized.height,
-  );
-
-  const out = canvasOf(embeddings.width, embeddings.height);
+  small
+    .getContext("2d")
+    ?.putImageData(
+      new ImageData(maskLogitsToGray(candidateLogits(candidates, index)), side, side),
+      0,
+      0,
+    );
+  const out = canvasOf(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
   const outCtx = out.getContext("2d");
   if (!outCtx) throw new Error("[Retouch ML] Failed to create canvas context");
   outCtx.imageSmoothingEnabled = true;
   outCtx.imageSmoothingQuality = "high";
-  outCtx.drawImage(up, 0, 0, embeddings.width, embeddings.height);
+  const { region } = candidates;
+  outCtx.drawImage(small, 0, 0, region.width, region.height, 0, 0, out.width, out.height);
   const image = outCtx.getImageData(0, 0, out.width, out.height);
   const d = image.data;
   for (let i = 0; i < d.length; i += 4) {
@@ -339,5 +361,23 @@ export async function decodeSamClicks(
     d[i + 3] = 255;
   }
   outCtx.putImageData(image, 0, 0);
-  return { mask: out, score, candidates: order.length };
+  return out;
+}
+
+/**
+ * Run the prompt decoder for the given clicks. Returns a white-on-black
+ * binary mask canvas at the source resolution plus the model's confidence.
+ * `pick` steps through the candidates, best first (see rankMasks), and wraps
+ * around; `candidates` is how many there are to step through.
+ */
+export async function decodeSamClicks(
+  embeddings: SamEmbeddings,
+  points: SamPoint[],
+  options: SamOptions = {},
+  pick = 0,
+): Promise<{ mask: HTMLCanvasElement; score: number; candidates: number }> {
+  const found = await decodeSamCandidates(embeddings, points, options);
+  const { order } = found;
+  const chosen = order[((pick % order.length) + order.length) % order.length] ?? 0;
+  return { mask: candidateMask(found, chosen), score: found.iou[chosen], candidates: order.length };
 }
