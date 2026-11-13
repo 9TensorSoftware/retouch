@@ -24,7 +24,7 @@ import type {
   ViewHandle,
 } from "./types";
 import { createDropZone } from "./ui/drop-zone";
-import { createEditor, type EditorHandle } from "./ui/editor/editor";
+import { createEditor, type EditorHandle, type EditorViewState } from "./ui/editor/editor";
 import type { EditorToolPlugin } from "./ui/editor/tool-registry";
 import { registerEditorTool } from "./ui/editor/tool-registry";
 import type { ExportOverlayHandle } from "./ui/export-overlay";
@@ -57,6 +57,8 @@ import {
   formatInfo,
   formatOfMime,
   type ImageFormat,
+  loadPickedFormat,
+  savePickedFormat,
 } from "./utils/image-formats";
 import { captureFrame, frameFileName, isImageEntry, releaseVideo } from "./utils/video";
 
@@ -176,6 +178,8 @@ export class Retouch {
   private editorView: EditorHandle | null = null;
   /** Undo steps the next editor mount carries on (a pixel change remounts it). */
   private carriedHistory: EditorHistory | undefined;
+  /** Compare, zoom and pan, carried into a remounted editor. */
+  private carriedView: EditorViewState | undefined;
   /** The state the mounted view shows; a step behind `state` while a transition is pending. */
   private viewState: AppState = "idle";
   /** Set just before a state change whose view swap should morph. */
@@ -617,6 +621,7 @@ export class Retouch {
   /** Rebuild the open editor on the entry as it now is, keeping its tool. */
   private remountEditor(): void {
     this.openTool = this.editorView?.tool();
+    this.carriedView = this.editorView?.view();
     this.unmountCurrentView();
     this.mountEditor();
   }
@@ -923,8 +928,9 @@ export class Retouch {
 
   /**
    * Export one entry and download it. A photo is saved as `format` when
-   * given; otherwise as the `export` option's format, or else its own — and
-   * as PNG when it has transparent areas its own format can't keep.
+   * given; otherwise as the format last picked from the editor's Download
+   * menu in this browser, the `export` option's format, or else its own —
+   * and as PNG when it has transparent areas that format can't keep.
    */
   async downloadImage(id: string, options: { format?: ImageFormat } = {}): Promise<void> {
     const entry = this.media.get(id);
@@ -949,7 +955,9 @@ export class Retouch {
 
   /** What a photo downloads as unless asked otherwise. */
   private async defaultDownloadFormat(entry: ImageEntry): Promise<ImageFormat> {
-    const own = this.options.export?.format ?? formatOfMime(entry.file.type) ?? "png";
+    // The user's own pick from the editor's menu beats the host's default.
+    const own =
+      loadPickedFormat() ?? this.options.export?.format ?? formatOfMime(entry.file.type) ?? "png";
     return (await encodableFormats()).includes(own) ? own : "png";
   }
 
@@ -963,7 +971,7 @@ export class Retouch {
     entry: ImageEntry,
     requested?: ImageFormat,
     confirmFlatten?: (format: ImageFormat) => Promise<FlattenChoice>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const name = entry.edits.metadata?.fileName ?? entry.file.name;
     let blob: Blob;
     let filename: string;
@@ -979,7 +987,7 @@ export class Retouch {
       );
       if (!formatInfo(format).alpha && canvasHasTransparency(canvas)) {
         const choice = confirmFlatten ? await confirmFlatten(format) : chosen ? "flatten" : "png";
-        if (choice === "cancel") return;
+        if (choice === "cancel") return false;
         if (choice === "png") format = "png";
       }
       blob = await encodeImage(
@@ -995,6 +1003,7 @@ export class Retouch {
       filename = entry.file.name;
     }
     saveBlob(blob, filename);
+    return true;
   }
 
   private exportFailed(entry: MediaEntry, err: unknown): void {
@@ -1093,6 +1102,8 @@ export class Retouch {
     if (!entry) return;
     const history = this.carriedHistory;
     this.carriedHistory = undefined;
+    const carriedView = this.carriedView;
+    this.carriedView = undefined;
     const view = createEditor({
       entry,
       history,
@@ -1122,11 +1133,13 @@ export class Retouch {
               formats: () => encodableFormats(),
               defaultFormat: () => this.defaultDownloadFormat(entry),
               save: (format, confirmFlatten) => this.downloadPhoto(entry, format, confirmFlatten),
+              remember: savePickedFormat,
             }
           : undefined,
       ai: this.options.ai,
       tools: this.options.tools,
       tool: this.openTool,
+      view: carriedView,
       rail: this.options.rail,
       onAiEvent: (event) => {
         if (event.type === "start") {

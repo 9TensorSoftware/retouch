@@ -97,7 +97,7 @@ import { createPreviewBase, renderLook, renderLookToCanvas } from "./preview";
 import { loadRailLayout, saveRailLayout } from "./rail-layout";
 import type { SheetHandle } from "./sheet";
 import { createSheet } from "./sheet";
-import { createStageView, type StageView } from "./stage-view";
+import { createStageView, type StageView, type ViewState } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools, resolveToolDef } from "./tool-registry";
@@ -226,6 +226,16 @@ export interface EditorOptions {
   onSetPoster?: () => Promise<void>;
   /** Images: download the photo as it is now, beside its name. */
   download?: EditorDownload;
+  /** What the editor this one replaces was showing, to pick up where it was. */
+  view?: EditorViewState;
+}
+
+/** How the photo is on show, apart from its edits: Compare, zoom and pan. */
+export interface EditorViewState {
+  compare: boolean;
+  stage: ViewState;
+  /** The original's own pane, side by side. */
+  before: ViewState | null;
 }
 
 export interface EditorHandle extends ViewHandle {
@@ -233,6 +243,8 @@ export interface EditorHandle extends ViewHandle {
   history(): EditorHistory | null;
   /** The tool open in the inspector. */
   tool(): EditorTool;
+  /** How the photo is on show, for an editor that replaces this one. */
+  view(): EditorViewState;
 }
 
 export function createEditor(options: EditorOptions): EditorHandle {
@@ -504,6 +516,8 @@ export function createEditor(options: EditorOptions): EditorHandle {
   // Declared up here: the first tool selection (below) already reads it.
   let compareOn = false;
   let beforeView: BeforeView | null = null;
+  /** From the editor this one replaces: its zoom and pan wait for the first refit. */
+  let carriedView: EditorViewState | null = entry.kind === "image" ? (options.view ?? null) : null;
   let beforeAbort: AbortController | null = null;
   let compareMode: "off" | CompareView = "off";
   // The view this browser's user picked; until they do, the one that shows a difference.
@@ -2162,6 +2176,13 @@ export function createEditor(options: EditorOptions): EditorHandle {
   function refit(): void {
     if (signal.aborted) return;
     renderer.render();
+    // Zoom and pan carried over need the stage laid out: the first refit.
+    if (carriedView) {
+      const { stage, before } = carriedView;
+      carriedView = null;
+      stageView.setView(stage);
+      if (before) beforeView?.stage.setView(before);
+    }
     if (activeTool === "crop") cropTool.refresh();
     if (activeTool === "masks") masksOverlay.refresh();
   }
@@ -2193,6 +2214,10 @@ export function createEditor(options: EditorOptions): EditorHandle {
     if (!signal.aborted && root.isConnected) root.focus();
   });
 
+  // Picking up from the editor this one replaces (a photo swap, an undo
+  // across one): Compare stays as it was, and zoom and pan follow on layout.
+  if (carriedView?.compare) setCompare(true);
+
   // Initial render
   renderer.render();
 
@@ -2200,6 +2225,11 @@ export function createEditor(options: EditorOptions): EditorHandle {
     root,
     history: exportHistory,
     tool: () => activeTool,
+    view: () => ({
+      compare: compareOn,
+      stage: stageView.getView(),
+      before: beforeView?.stage.getView() ?? null,
+    }),
     destroy({ fade = false } = {}) {
       abort.abort();
       if (entry.kind === "video") entry.video.pause();

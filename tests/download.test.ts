@@ -99,6 +99,7 @@ describe("downloading a photo", () => {
   }
 
   beforeEach(() => {
+    localStorage.removeItem("rt-download-format");
     restoreLayout = stubLayout(800, 600);
     saved = [];
     transparent.value = false;
@@ -184,6 +185,65 @@ describe("downloading a photo", () => {
       await settle();
       expect(menu?.hidden).toBe(true);
       expect(saved).toEqual(["corgi.jpg", "corgi.webp"]);
+    });
+
+    it("makes a format picked from the menu the default, here and for the next photo", async () => {
+      await openEditor();
+      const pick = (name: string) => {
+        button("Download as another format")?.click();
+        [...document.querySelectorAll<HTMLElement>('.rt-download-menu [role="menuitem"]')]
+          .find((i) => i.querySelector(".rt-flyout__name")?.textContent === name)
+          ?.click();
+      };
+      pick("WebP");
+      await settle();
+      expect(document.querySelector(".rt-download__format")?.textContent).toBe("WebP");
+      button("Download as WebP")?.click();
+      await settle();
+      expect(saved).toEqual(["corgi.webp", "corgi.webp"]);
+      // The gallery and the next editor go by it too.
+      await retouch.downloadImage("id-corgi.jpg");
+      expect(lastFormat()).toBe("webp");
+      retouch.closeEditor(false);
+      retouch.openEditor("id-corgi.jpg");
+      await settle();
+      expect(document.querySelector(".rt-download__format")?.textContent).toBe("WebP");
+    });
+
+    it("keeps the default when the button alone is used, or the pick is cancelled", async () => {
+      await openEditor();
+      button("Download as JPG")?.click();
+      await settle();
+      expect(localStorage.getItem("rt-download-format")).toBeNull();
+      retouch.destroy();
+      document.body.innerHTML = "";
+
+      // A transparent PNG: picking JPG asks first, and Escape saves nothing.
+      await open("logo.png", "image/png");
+      retouch.openEditor("id-logo.png");
+      await settle();
+      transparent.value = true;
+      const pickJpg = async () => {
+        button("Download as another format")?.click();
+        [...document.querySelectorAll<HTMLElement>('.rt-download-menu [role="menuitem"]')]
+          .find((i) => i.querySelector(".rt-flyout__name")?.textContent === "JPG")
+          ?.click();
+        await settle();
+        await settle();
+      };
+      await pickJpg();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await settle();
+      expect(saved).toEqual(["corgi.jpg"]);
+      expect(document.querySelector(".rt-download__format")?.textContent).toBe("PNG");
+
+      await pickJpg();
+      [...document.querySelectorAll<HTMLButtonElement>(".rt-confirm__card button")]
+        .find((b) => b.textContent === "Download JPG")
+        ?.click();
+      await settle();
+      expect(saved).toEqual(["corgi.jpg", "logo.jpg"]);
+      expect(document.querySelector(".rt-download__format")?.textContent).toBe("JPG");
     });
 
     it("applies or discards a crop frame first, as Done does", async () => {

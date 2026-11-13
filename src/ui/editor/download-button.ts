@@ -15,12 +15,15 @@ export interface EditorDownload {
   defaultFormat(): Promise<ImageFormat>;
   /**
    * Save the photo as it is now. `confirmFlatten` is asked before
-   * transparent areas go into a format that can't keep them.
+   * transparent areas go into a format that can't keep them. False when
+   * nothing was saved (the question was cancelled).
    */
   save(
     format: ImageFormat,
     confirmFlatten: (format: ImageFormat) => Promise<FlattenChoice>,
-  ): Promise<void>;
+  ): Promise<boolean>;
+  /** A format picked from the menu and saved in: the default from now on. */
+  remember(format: ImageFormat): void;
 }
 
 export interface DownloadButtonOptions {
@@ -43,8 +46,9 @@ export interface DownloadButtonHandle {
 
 /**
  * Download, split in two: the button saves in the default format (the
- * photo's own); the format beside it opens a menu of every format this
- * browser writes, and picking one saves in it.
+ * photo's own, until another is picked); the format beside it opens a menu
+ * of every format this browser writes, and picking one saves in it and
+ * makes it the default.
  */
 export function createDownloadButton(options: DownloadButtonOptions): DownloadButtonHandle {
   const { download, signal } = options;
@@ -108,7 +112,7 @@ export function createDownloadButton(options: DownloadButtonOptions): DownloadBu
           "click",
           () => {
             closeMenu(true);
-            void run(f.id);
+            void run(f.id, true);
           },
           { signal },
         );
@@ -129,7 +133,7 @@ export function createDownloadButton(options: DownloadButtonOptions): DownloadBu
     });
   paint();
 
-  async function run(format: ImageFormat): Promise<void> {
+  async function run(format: ImageFormat, picked = false): Promise<void> {
     if (busy) return;
     busy = true;
     root.classList.add("rt-download--busy");
@@ -137,7 +141,15 @@ export function createDownloadButton(options: DownloadButtonOptions): DownloadBu
     label.textContent = "Saving…";
     try {
       if (options.beforeSave && !(await options.beforeSave())) return;
-      await download.save(format, options.confirmFlatten);
+      const saved = await download.save(format, options.confirmFlatten);
+      // A pick from the menu is a choice, even of the format already on the button.
+      if (saved && picked) {
+        download.remember(format);
+        if (format !== defaultFormat) {
+          defaultFormat = format;
+          paint();
+        }
+      }
     } catch (error) {
       console.error("[Retouch] Download failed", error);
     } finally {

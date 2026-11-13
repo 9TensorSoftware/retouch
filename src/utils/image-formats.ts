@@ -55,6 +55,26 @@ export const IMAGE_FORMATS: readonly ImageFormatInfo[] = [
   },
 ];
 
+const PICKED_KEY = "rt-download-format";
+
+/** The format this browser's user last picked to download in, or nothing yet. */
+export function loadPickedFormat(): ImageFormat | null {
+  try {
+    const picked = localStorage.getItem(PICKED_KEY);
+    return IMAGE_FORMATS.find((f) => f.id === picked)?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePickedFormat(format: ImageFormat): void {
+  try {
+    localStorage.setItem(PICKED_KEY, format);
+  } catch {
+    // Storage blocked: the pick lasts as long as the page.
+  }
+}
+
 export function formatInfo(format: ImageFormat): ImageFormatInfo {
   return IMAGE_FORMATS.find((f) => f.id === format) ?? IMAGE_FORMATS[0];
 }

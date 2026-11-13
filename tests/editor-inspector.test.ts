@@ -162,6 +162,27 @@ describe("editor inspector", () => {
       expect(split().hidden).toBe(false);
     });
 
+    it("stays on, in its view, in the editor that replaces this one", () => {
+      tool("Adjust");
+      compare().click();
+      view("Side by side").click();
+      const carried = (editor as ReturnType<typeof createEditor>).view();
+      expect(carried.compare).toBe(true);
+      editor.destroy();
+      document.body.innerHTML = "";
+      // As after a photo swap: the same photo, a new editor, the old one's view.
+      editor = createEditor({ entry, onDone: vi.fn(), onCancel: vi.fn(), view: carried });
+      document.body.appendChild(editor.root);
+      expect(compare().getAttribute("aria-pressed")).toBe("true");
+      expect(pane()).not.toBeNull();
+      // Without one, an editor opens with Compare off.
+      editor.destroy();
+      document.body.innerHTML = "";
+      editor = createEditor({ entry, onDone: vi.fn(), onCancel: vi.fn() });
+      document.body.appendChild(editor.root);
+      expect(compare().getAttribute("aria-pressed")).toBe("false");
+    });
+
     it("remembers the picked view for the next editor", () => {
       tool("Adjust");
       compare().click();

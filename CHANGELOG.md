@@ -68,9 +68,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   tool), a clip graded live as it plays, and a video in the gallery to trim and grade.
 - **Download** beside the photo's name in the editor saves the photo as it is now, edits and new
   name included, in its own format. The format beside it opens a menu of PNG, JPG, WebP and AVIF,
-  those this browser can write, to save it as another. Saving transparent areas as JPG asks
-  first: fill them with white, or save a PNG instead. A crop frame not applied yet is asked
-  about first, as Done does.
+  those this browser can write, to save it as another, and the format picked there becomes the
+  default, remembered in this browser. Saving transparent areas as JPG asks first: fill them
+  with white, or save a PNG instead. A crop frame not applied yet is asked about first, as Done
+  does.
 - `downloadImage(id, { format })` saves a photo in the format given.
 - `decodeSamCandidates()` and `candidateMask()` in `@9tensor/retouch-ml`: every shape the
   Select model proposes for a set of clicks, and any one of them as a mask at any size.
@@ -84,8 +85,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   each click, shape pick and deselect. With the model saved, the photo is read as soon as the
   tool opens.
 - `downloadImage(id)` and the gallery's Download save a photo in its own format, a JPG as JPG,
-  instead of always as PNG, unless the `export` option names one. A photo with transparent areas
-  its own format can't keep goes out as PNG.
+  instead of always as PNG, unless a format was picked from the editor's Download menu or the
+  `export` option names one. A photo with transparent areas that format can't keep goes out as
+  PNG.
 - The AI models' browser cache has a new name, so each model downloads once more after updating.
 - AI tools that change a photo's pixels (Cutout, Erase, Denoise, Depth blur, Pixelate) are now
   steps in the editor's history: undo takes them back, and the history menu names them.
@@ -109,6 +111,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - Saving as JPG turned transparent areas black. They're white now.
 - Denoise, Cutout and Erase never showed their last step done: replacing the photo reset the
   panel while "Replace this photo" was still spinning. It now ends with every step checked.
+- Replacing the photo (Denoise, Cutout, Erase, Depth blur, pixelating, or undoing one of them)
+  turned Compare off and reset the zoom. Compare, its view, and the zoom and position now stay.
 - A **mask** dragged on the photo no longer snaps back to where it was when you next move one of
   its sliders, invert it, or add or delete a mask.
 - The tool panel no longer jumps when its **Reset** button comes and goes. The button was taller
