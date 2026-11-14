@@ -92,6 +92,7 @@ what you add yourself.
 | `ctx.ui` | Control builders; see below. |
 | `ctx.preview(edits?)` | A small picture of the photo with `edits` in place of the current ones, as an image URL. It shows adjustments, filter, curves, color mix and stylize; each one you pass replaces the photo's own. |
 | `ctx.reveal(result)` | Wipes a new version of the photo in over the stage; see [AI tools](#ai-tools). |
+| `ctx.tasks` | Work that runs in the background, said in the editor's header whichever tool is open; see [Background work](#background-work). |
 
 The usual pattern is: change `ctx.edits`, call `ctx.render()` while the gesture runs, and
 `ctx.record()` when it ends. A slider's `onInput` and `onChange` map onto exactly that.
@@ -312,6 +313,56 @@ with a function that takes the result back off; it's instant under reduced motio
 while a crop or warp means the result wouldn't line up. `@9tensor/retouch-ml` is built this
 way, and its [plugin.ts](../packages/ml/src/plugin.ts) is a full example.
 
+### Background work
+
+People switch tools while a run is going. Start the run as a task and the editor keeps it in
+view: the header, beside Cancel, shows what's running and how far along, with Stop, and then how
+it ended for a few seconds; a click on it opens the tool again.
+
+```ts
+async function go() {
+  const task = await ctx.tasks.start({
+    tool: "facefix", // your tool's id: the header goes back to it
+    action: "Restore faces", // what the button said
+    working: "Restoring the faces…",
+    changes: "photo", // it ends by replacing the photo's pixels
+  });
+  if (!task) return; // they kept another run going instead
+  try {
+    const result = await restore(ctx.entry, {
+      signal: task.signal,
+      onProgress: (done) => task.working("Restoring the faces…", { progress: done }),
+    });
+    if (task.signal.aborted) return; // stopped: leave the photo as it is
+    await commit(result);
+    task.done("Faces restored");
+  } catch (error) {
+    if (!task.signal.aborted) task.failed(`Restore failed: ${error.message}`);
+  }
+}
+```
+
+A task that `changes` the photo (`"photo"`), or ends by opening another image (`"view"`), can't
+share it: whatever else runs on the photo would be lost when it lands. So starting one next to
+another asks first, naming both: "Stop Erase and find faces", or "Let Erase finish", in which case
+`start()` resolves null. Done and Cancel ask the same about a task that would land after the
+editor closes. Tasks that leave the photo alone run side by side. `start()` also resolves null
+while the same tool already has a task running.
+
+| Task member | |
+|---|---|
+| `working(label, { detail, progress })` | How it's going; `progress` from 0 to 1 fills the header's ring. |
+| `bytes(loaded, total)` | A download's progress, said as bytes and then the time left. |
+| `done(label, detail?)` / `failed(label)` | How it ended. |
+| `signal` | Aborted when someone presses Stop: stop working, and commit nothing. |
+| `stop()` | Stop it from your own control, as Track's Stop does. |
+| `watch(listener)` | Hear of each change, to show it in the pane's `ui.status()` too. |
+| `state`, `label`, `detail`, `progress` | Where it stands now. |
+
+Pass `download: true` for a model download: it shows in the header like any task, never asks,
+and isn't tied to the photo. Tasks outlive the pane. A task that replaces the photo remounts the
+editor, and a pane mounted mid-run finds it with `ctx.tasks.running(id)` to show it to the end.
+
 ## Styling
 
 Panes built from `ctx.ui` follow the editor's theme and design, including future changes, with
@@ -336,4 +387,5 @@ listener, and wherever you set its value.
 `UiSlider`, `UiSliderOptions`, `UiButton`, `UiButtonOptions`, `UiChoice`, `UiChoiceOptions`,
 `UiTiles`, `UiTilesOptions`, `UiTileOption`, `UiNote`, `UiCard`, `UiCardOptions`, `UiModel`,
 `UiModelOptions`, `UiModelState`, `UiStatus`, `UiSteps`, `UiStepsOptions`, `UiStep`,
-`UiStepState`, `RailOptions` and `OpenEditorOptions` are exported from `@9tensor/retouch`.
+`UiStepState`, `ToolTasks`, `ToolTask`, `ToolTaskOptions`, `ToolTaskState`, `ToolTaskChange`,
+`RailOptions` and `OpenEditorOptions` are exported from `@9tensor/retouch`.

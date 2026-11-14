@@ -14,6 +14,7 @@ import {
   ICON_TOOL_TRIM,
 } from "../icons";
 import type { ObjectLayer, ObjectLayerOptions } from "./object-layer";
+import type { ToolTasks } from "./tasks";
 import type { ToolUi } from "./tool-ui";
 
 /** What a custom tool gets to work with. Mutate `edits`, then render + record. */
@@ -52,6 +53,12 @@ export interface ToolContext {
    * crop or warp means the result wouldn't line up.
    */
   reveal(result: HTMLCanvasElement | HTMLImageElement): Promise<() => void>;
+  /**
+   * Background work: a task shows in the editor's header while it runs,
+   * whichever tool is open, with Stop. Starting one that can't run alongside
+   * another (either changes the photo) asks first whether to stop that one.
+   */
+  tasks: ToolTasks;
 }
 
 /** The edits `ctx.preview()` can show. */

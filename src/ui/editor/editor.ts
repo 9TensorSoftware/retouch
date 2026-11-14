@@ -64,6 +64,7 @@ import {
 } from "../icons";
 import { keyTip } from "../key-tip";
 import { isApple, shortcutLabel } from "../platform";
+import { createActivity } from "./activity";
 import { createAdjustTool } from "./adjust-tool";
 import type { AiChatHandle } from "./ai-chat";
 import { createAiChat, getStoredAiKey } from "./ai-chat";
@@ -99,6 +100,7 @@ import type { SheetHandle } from "./sheet";
 import { createSheet } from "./sheet";
 import { createStageView, type StageView, type ViewState } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
+import { createTaskRegistry, type TaskRegistry } from "./tasks";
 import type { ToolContext, ToolPaneHandle } from "./tool-registry";
 import { getCustomTools, resolveToolDef } from "./tool-registry";
 import { createToolUi } from "./tool-ui";
@@ -228,6 +230,8 @@ export interface EditorOptions {
   download?: EditorDownload;
   /** What the editor this one replaces was showing, to pick up where it was. */
   view?: EditorViewState;
+  /** Tools' background work, kept by the host so it outlives a remount. */
+  tasks?: TaskRegistry;
 }
 
 /** How the photo is on show, apart from its edits: Compare, zoom and pan. */
@@ -316,6 +320,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
   if (tools.length === 0) tools.push(builtinIds[0]);
   let activeTool: EditorTool =
     options.tool && tools.includes(options.tool) ? options.tool : tools[0];
+  const tasks = options.tasks ?? createTaskRegistry();
 
   // Top bar
   const filenameEl = h("span", { class: "rt-editor__filename" }, entry.file.name);
@@ -480,12 +485,20 @@ export function createEditor(options: EditorOptions): EditorHandle {
     );
     topbarRight.appendChild(posterBtn);
   }
+  // What tools are doing in the background, beside Cancel, whichever tool is open.
+  const activity = createActivity({
+    tasks,
+    onGo: (tool) => {
+      if (tools.includes(tool)) requestTool(tool);
+    },
+    signal,
+  });
   // Done sits outside the action group so a crowded bar (narrow screens,
   // video's extra buttons) squeezes the actions, never the exit.
   const topbar = h(
     "div",
     { class: "rt-editor__topbar" },
-    h("div", { class: "rt-editor__topbar-left" }, cancelBtn),
+    h("div", { class: "rt-editor__topbar-left" }, cancelBtn, activity.root),
     h(
       "div",
       { class: "rt-editor__topbar-title" },
@@ -1056,6 +1069,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
       });
     },
     reveal: (result) => revealResult(result),
+    tasks: tasks.tasksFor(entry),
   };
 
   /**
@@ -2035,17 +2049,38 @@ export function createEditor(options: EditorOptions): EditorHandle {
     ...rootChildren,
   );
   const confirm = createConfirm(root, signal);
+  // A tool's task that clashes with another asks here, while this editor is open.
+  signal.addEventListener(
+    "abort",
+    tasks.setAsk((question) => confirm.ask(question)),
+  );
+
+  /**
+   * Leave once nothing would land on the photo after: a task that changes
+   * it, or opens another image, is stopped first if they say so.
+   */
+  function leaving(then: () => void): void {
+    if (tasks.landing(entry).length === 0) then();
+    else
+      void tasks.settle(entry, "close").then((leave) => {
+        if (leave) then();
+      });
+  }
 
   // Button handlers
   function cancel(): void {
-    Object.assign(entry.edits, editSnapshot);
-    entry.edits.metadata = editSnapshot.metadata;
-    onCancel();
+    leaving(() => {
+      Object.assign(entry.edits, editSnapshot);
+      entry.edits.metadata = editSnapshot.metadata;
+      onCancel();
+    });
   }
   /** Done, once a crop frame nobody applied is applied or discarded. */
   function finish(): void {
-    void settleCrop().then((leave) => {
-      if (leave) onDone();
+    leaving(() => {
+      void settleCrop().then((leave) => {
+        if (leave) onDone();
+      });
     });
   }
 

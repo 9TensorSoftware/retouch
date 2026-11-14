@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 
 ### Added
 
+- The editor's header says what's running in the background, beside Cancel, whichever tool is
+  open: an AI tool's run or its model's download, how far along it is (with the time left on a
+  download) and Stop, then for a few seconds how it ended. A click opens that tool again.
+- `ctx.tasks`, so any tool's background work shows there too: `start()` a task, report on it,
+  and stop when its `signal` says so. Downloads go in it with `download: true`.
 - What Detect, Track and Read text find is now a layer of its own over the photo or video, drawn
   and handled one way in all three. Point at a box or a row to bring it forward on both sides and
   dim the rest. Click to pick it, and click again, click the bare photo or press Esc to let go.
@@ -124,6 +129,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 ### Fixed
 
 - Saving as JPG turned transparent areas black. They're white now.
+- Starting something in another tool while a run that changes the photo was going lost it
+  without a word: Erase, say, finished, swapped the photo and rebuilt every tool, Find faces with
+  it, and Detect then ignored clicks until its lost run was over. Now the editor asks first: stop
+  Erase and find faces, or let Erase finish. Done and Cancel ask the same, so a run can't land on
+  the photo after the editor has closed. A stopped run changes nothing.
 - Denoise, Cutout and Erase never said they were done: replacing the photo reset the panel while
   the run was still spinning. They now end with a check: Noise removed, Background removed,
   Erased.

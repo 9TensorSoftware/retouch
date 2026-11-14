@@ -1,6 +1,7 @@
 import type { EditorToolPlugin, ToolContext } from "@9tensor/retouch";
 import { DEFAULT_EDITS } from "../../../src/constants";
 import { createObjectLayer } from "../../../src/ui/editor/object-layer";
+import { createTaskRegistry } from "../../../src/ui/editor/tasks";
 import { createToolUi } from "../../../src/ui/editor/tool-ui";
 import { DEFAULT_DENOISE_DATA_URL, DEFAULT_DENOISE_MODEL_URL } from "../src/denoise";
 import { installMlTools } from "../src/plugin";
@@ -53,6 +54,7 @@ function context(): ToolContext {
       }),
     preview: () => "",
     reveal: async () => () => {},
+    tasks: createTaskRegistry().tasksFor(entry),
   };
 }
 

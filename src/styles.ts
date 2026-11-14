@@ -1478,6 +1478,153 @@ body:has(> .rt-editor-overlay) {
   display: flex;
   align-items: center;
   gap: 12px;
+  /* Its share and no more: the activity gives way, so the title stays centered. */
+  min-width: 0;
+}
+
+.rt-editor__btn-cancel {
+  flex-shrink: 0;
+}
+
+/* ── Background work, beside Cancel: what's running, then how it ended ── */
+
+.rt-activity {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 3px 0 2px;
+  border-radius: 999px;
+  background: var(--rt-control);
+  animation: rt-pop-in var(--rt-dur-2) var(--rt-ease-decel);
+}
+
+.rt-activity[hidden] {
+  display: none;
+}
+
+.rt-activity__main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px 0 5px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--rt-text-1);
+  font: 500 var(--rt-type-sm) / 1 var(--rt-font-ui);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-activity__main:hover {
+  background: var(--rt-control-hover);
+}
+
+.rt-activity__label {
+  overflow: hidden;
+  max-width: 220px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rt-activity__detail {
+  flex-shrink: 0;
+  color: var(--rt-text-3);
+  font: 500 var(--rt-type-xs) / 1 var(--rt-font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rt-activity__more {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--rt-line-strong);
+  color: var(--rt-text-2);
+  font: 600 10px / 1 var(--rt-font-ui);
+}
+
+.rt-activity__detail[hidden],
+.rt-activity__more[hidden],
+.rt-activity__stop[hidden] {
+  display: none;
+}
+
+/* A ring that fills as it goes; a spinning arc when how far isn't known. */
+.rt-activity__mark {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.rt-activity[data-state="running"] .rt-activity__mark[data-progress="some"] {
+  background: conic-gradient(
+    #ffc457 0turn,
+    #5cc8ff calc(var(--rt-p) * 0.5turn),
+    #a58bff calc(var(--rt-p) * 1turn),
+    var(--rt-line-loud) calc(var(--rt-p) * 1turn)
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+}
+
+.rt-activity[data-state="running"] .rt-activity__mark[data-progress="none"] {
+  border: 2px solid var(--rt-line-loud);
+  border-top-color: var(--rt-text-1);
+  animation: rt-spin 900ms linear infinite;
+}
+
+.rt-activity[data-state="done"] .rt-activity__mark {
+  background: var(--rt-success);
+  color: #06140d;
+}
+
+.rt-activity[data-state="failed"] .rt-activity__mark {
+  background: var(--rt-danger);
+  color: #fff;
+}
+
+.rt-activity[data-state="failed"] .rt-activity__label {
+  color: var(--rt-danger-text);
+}
+
+.rt-activity__mark svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.75;
+}
+
+.rt-activity__stop {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--rt-text-2);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-activity__stop:hover {
+  background: var(--rt-control-hover);
+  color: var(--rt-text-1);
+}
+
+.rt-activity__stop svg {
+  width: 13px;
+  height: 13px;
 }
 
 .rt-editor__topbar-title {
@@ -3196,7 +3343,7 @@ body:has(> .rt-editor-overlay) {
 }
 
 .rt-confirm__card {
-  width: min(340px, 100%);
+  width: min(380px, 100%);
   box-sizing: border-box;
   padding: 20px 20px 16px;
   border: 1px solid var(--rt-line-strong);
@@ -3223,6 +3370,7 @@ body:has(> .rt-editor-overlay) {
 
 .rt-confirm__actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 18px;
@@ -6438,6 +6586,14 @@ body:has(> .rt-editor-overlay) .rt-toast:not(.rt-toast--visible) {
   }
   .rt-editor__topbar-left {
     flex: 0 0 auto;
+  }
+  .rt-activity__label,
+  .rt-activity__detail {
+    display: none;
+  }
+  .rt-activity__main {
+    gap: 6px;
+    padding-right: 5px;
   }
   .rt-editor__topbar-right {
     min-width: 0;

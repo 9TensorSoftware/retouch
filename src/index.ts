@@ -40,6 +40,13 @@ export type {
   ObjectLayerOptions,
 } from "./ui/editor/object-layer";
 export type {
+  ToolTask,
+  ToolTaskChange,
+  ToolTaskOptions,
+  ToolTaskState,
+  ToolTasks,
+} from "./ui/editor/tasks";
+export type {
   EditorToolPlugin,
   PreviewEdits,
   ToolContext,

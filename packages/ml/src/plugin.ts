@@ -6,6 +6,7 @@ import type {
   Retouch,
   ToolContext,
   ToolPaneHandle,
+  ToolTask,
   UiButton,
   UiModelState,
   UiStatus,
@@ -63,6 +64,7 @@ import {
   isModelSaved,
   modelDownload,
   modelDownloadFailed,
+  stopModelDownload,
   watchModelDownloads,
 } from "./model-cache";
 import {
@@ -149,6 +151,12 @@ interface ModelStatus {
   destroy(): void;
 }
 
+/** Whose model strip it is: the tool it's in, and what the header calls its download. */
+interface ModelOwner {
+  tool: string;
+  label: string;
+}
+
 /**
  * The model's state, leading a pane: Download with its size, then the
  * download's progress and time left, then Ready. The download is shared, so
@@ -158,6 +166,7 @@ interface ModelStatus {
 function modelStatus(
   ctx: ToolContext,
   model: ModelSpec,
+  owner: ModelOwner,
   onChange: () => void,
   name?: string,
 ): ModelStatus {
@@ -173,11 +182,7 @@ function modelStatus(
         ["Runs with", runsWith()],
       ],
     },
-    onDownload: () => {
-      downloadModel(model.urls)
-        .catch((error) => console.error(error))
-        .finally(update);
-    },
+    onDownload: () => void download(),
   });
   // Until the cache has been asked, a model not known to be saved stays unsaid.
   let checked = false;
@@ -195,6 +200,36 @@ function modelStatus(
     last = strip.state;
     if (!building) onChange();
   }
+  /** Download it as a task: the header shows it, with Stop, whichever tool is open. */
+  async function download(): Promise<void> {
+    const called = name ?? owner.label;
+    const task = await ctx.tasks.start({
+      tool: owner.tool,
+      action: `Download ${called}`,
+      working: `Downloading ${called}`,
+      download: true,
+    });
+    if (!task) return;
+    const size = model.mb === null ? 0 : model.mb * 1e6;
+    const unwatch = watchModelDownloads(() => {
+      const progress = modelDownload(model.urls);
+      if (progress) task.bytes(progress.loaded, progress.total || size);
+    });
+    task.signal.addEventListener("abort", () => stopModelDownload(model.urls));
+    try {
+      await downloadModel(model.urls);
+      task.done(`${called} is ready`);
+    } catch (error) {
+      if (!task.signal.aborted) {
+        task.failed(`${called} didn't download`);
+        console.error(error);
+      }
+    } finally {
+      unwatch();
+      update();
+    }
+  }
+
   const stop = watchModelDownloads(update);
   update();
   building = false;
@@ -314,18 +349,46 @@ function encodeCanvas(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
   });
 }
 
-// Guards runs across editor remounts: a pane's local busy flag dies with
-// the pane, but the underlying run keeps going.
-const activeRuns = new Set<string>();
+/** Thrown between tiles once a run is stopped, to skip the rest. */
+function stopped(): DOMException {
+  return new DOMException("Stopped", "AbortError");
+}
 
-// Replacing a photo remounts the editor, and the pane that did it with it:
-// for the length of the swap, the photo names the tool, so its new pane
-// opens with every step done instead of a blank one.
-const replacing = new WeakMap<object, string>();
+/**
+ * Show a task on a pane's status line as it goes, and how it ended.
+ * `onChange` hears each change, so the pane can turn its buttons back on.
+ */
+function follow(task: ToolTask, status: UiStatus, onChange: (task: ToolTask) => void): void {
+  const paint = (): void => {
+    if (task.state === "running") {
+      status.working(task.label, {
+        detail: task.detail || undefined,
+        progress: task.progress ?? undefined,
+      });
+    } else if (task.state === "done") status.done(task.label, task.detail || undefined);
+    else if (task.state === "failed") status.failed(task.label);
+    else status.clear();
+    onChange(task);
+  };
+  const unwatch = task.watch(() => {
+    paint();
+    if (task.state !== "running") unwatch();
+  });
+  paint();
+}
 
-/** In a pane just mounted: show the run that replaced the photo as done. */
-function showReplaced(ctx: ToolContext, tool: string, status: UiStatus, done: string): void {
-  if (replacing.get(ctx.entry) === tool) status.done(done);
+/**
+ * Tasks outlive panes: one that changes the photo remounts the editor, and
+ * the tool's new pane picks the task up from there, to the end.
+ */
+function resume(
+  ctx: ToolContext,
+  tool: string,
+  status: UiStatus,
+  onChange: (task: ToolTask) => void,
+): void {
+  const task = ctx.tasks.running(tool);
+  if (task) follow(task, status, onChange);
 }
 
 /** A run that splits into tiles: how far along, as a percentage and a bar. */
@@ -366,59 +429,70 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
   /**
    * Wipe the result in, then replace this photo's pixels with it: one undo
-   * step, named `label` in the history (the editor remounts on the same tool).
-   * `type` overrides the entry's own format, as a cutout needs PNG's alpha.
+   * step, named `history` (the editor remounts on the same tool, and the
+   * tool's new pane picks `task` up), then `task` is done, said as `done`.
+   * Resolves false if the task was stopped first, leaving the photo as it
+   * was. `type` overrides the entry's own format, as a cutout needs PNG's alpha.
    */
   async function replacePhoto(
     ctx: ToolContext,
     result: HTMLCanvasElement,
-    label: string,
-    { type = typeOf(ctx), tool }: { type?: string; tool?: string } = {},
-  ): Promise<void> {
-    const [blob] = await Promise.all([encodeCanvas(result, type), ctx.reveal(result)]);
+    task: ToolTask,
+    { history, done, type = typeOf(ctx) }: { history: string; done: string; type?: string },
+  ): Promise<boolean> {
+    if (task.signal.aborted) return false;
+    const [blob, putBack] = await Promise.all([encodeCanvas(result, type), ctx.reveal(result)]);
+    if (task.signal.aborted) {
+      putBack();
+      return false;
+    }
     const own = ctx.entry.file.name;
     const name =
       type === ctx.entry.file.type ? own : `${own.replace(/\.[^.]+$/, "")}${extensionFor(type)}`;
-    const entry = ctx.entry;
-    if (tool) replacing.set(entry, tool);
-    try {
-      await retouch.replaceImageSource(entry.id, new File([blob], name, { type }), { label });
-    } finally {
-      replacing.delete(entry);
-    }
+    await retouch.replaceImageSource(ctx.entry.id, new File([blob], name, { type }), {
+      label: history,
+    });
+    task.done(done);
+    return true;
   }
 
   /**
-   * Add a result to the gallery. With openResults it wipes in and the editor
-   * moves to it; otherwise the status says it's there, with a button to open it.
+   * Add a result to the gallery, as the end of `task`. With openResults it
+   * wipes in and the editor moves to it; otherwise the status says it's
+   * there, with a button to open it.
    */
   async function addToGallery(
     ctx: ToolContext,
     result: HTMLCanvasElement,
     suffix: string,
     type: string,
+    task: ToolTask,
     status: UiStatus,
   ): Promise<void> {
-    status.working("Adding it to your gallery…");
+    if (task.signal.aborted) return;
+    task.working("Adding it to your gallery…");
     const reveal = openResults ? ctx.reveal(result) : Promise.resolve(() => {});
-    const blob = await encodeCanvas(result, type);
+    const [blob, putBack] = await Promise.all([encodeCanvas(result, type), reveal]);
+    if (task.signal.aborted) {
+      putBack();
+      return;
+    }
     const name = resultFileName(ctx.entry.file.name, suffix, type);
     const before = retouch.getMedia().length;
     await retouch.addFiles([new File([blob], name, { type })]);
     const media = retouch.getMedia();
     const added = media.length > before ? media[media.length - 1] : undefined;
-    const putBack = await reveal;
     if (!added) {
       putBack();
-      status.failed("The gallery turned it down, most likely over its size limit.");
+      task.failed("The gallery turned it down, most likely over its size limit.");
       return;
     }
+    task.done("Added to your gallery");
     if (openResults) {
       retouch.closeEditor(true);
       retouch.openEditor(added.id);
       return;
     }
-    status.done("Added to your gallery");
     const open = ctx.ui.button({
       label: "Open it",
       variant: "primary",
@@ -451,53 +525,63 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
     ctx: ToolContext,
     def: {
       id: string;
+      /** The tool's name, for its download in the header. */
+      label: string;
       model: ModelSpec;
       action: string;
       working: string;
-      done: string;
+      changes?: "photo" | "view";
       run(hooks: { tile: (done: number, total: number) => void }): Promise<HTMLCanvasElement>;
-      finish(result: HTMLCanvasElement, status: UiStatus): Promise<void>;
+      /** Commit the result, and say the task is done. */
+      finish(result: HTMLCanvasElement, task: ToolTask, status: UiStatus): Promise<unknown>;
       failure(error: unknown): string;
     },
   ): ToolPaneHandle {
     const status = ctx.ui.status();
-    showReplaced(ctx, def.id, status, def.done);
-    let busy = false;
+    const busy = (): boolean => ctx.tasks.running(def.id) !== null;
     const button = ctx.ui.button({
       label: def.action,
       variant: "ai",
       onClick: () => void start(),
     });
-    const model = modelStatus(ctx, def.model, () => syncState());
+    const model = modelStatus(ctx, def.model, { tool: def.id, label: def.label }, () =>
+      syncState(),
+    );
 
     function syncState(): void {
-      button.setDisabled(busy || !model.ready());
+      button.setDisabled(busy() || !model.ready());
     }
 
     async function start(): Promise<void> {
-      if (busy || !model.ready() || activeRuns.has(def.id) || ctx.entry.kind !== "image") return;
-      busy = true;
-      activeRuns.add(def.id);
-      syncState();
+      if (busy() || !model.ready() || ctx.entry.kind !== "image") return;
+      const task = await ctx.tasks.start({
+        tool: def.id,
+        action: def.action,
+        working: def.working,
+        changes: def.changes,
+      });
+      if (!task) return;
       clearOutcome(status);
-      status.working(def.working);
+      follow(task, status, syncState);
       try {
         const result = await def.run({
-          tile: (done, total) => status.working(def.working, tileProgress(done, total)),
+          tile: (done, total) => {
+            if (task.signal.aborted) throw stopped();
+            task.working(def.working, tileProgress(done, total));
+          },
         });
-        await def.finish(result, status);
+        if (task.signal.aborted) return;
+        await def.finish(result, task, status);
       } catch (error) {
-        status.failed(def.failure(error));
+        if (task.signal.aborted) return;
+        task.failed(def.failure(error));
         console.error(error);
-      } finally {
-        busy = false;
-        activeRuns.delete(def.id);
-        syncState();
       }
     }
 
     const card = ctx.ui.card({});
     card.body.append(model.root, button.root, status.root);
+    resume(ctx, def.id, status, syncState);
     syncState();
     return { root: card.root, destroy: model.destroy };
   }
@@ -533,17 +617,22 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         return oneShot(ctx, {
           id: "cutout",
+          label: "Cutout",
           model,
           action: "Remove the background",
           working: "Removing the background…",
-          done: "Background removed",
+          changes: "photo",
           run: () =>
             ctx.entry.kind === "image"
               ? removeBackground(ctx.entry.image, cutoutOptions)
               : Promise.reject(new Error("Cutout needs an image")),
           // In place, as PNG so the cleared background stays clear.
-          finish: (result) =>
-            replacePhoto(ctx, result, "Remove background", { type: "image/png", tool: "cutout" }),
+          finish: (result, task) =>
+            replacePhoto(ctx, result, task, {
+              history: "Remove background",
+              done: "Background removed",
+              type: "image/png",
+            }),
           failure: (error) => errorText(error, "Cutout failed"),
         });
       },
@@ -564,8 +653,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         const note = ctx.ui.note("");
         const status = ctx.ui.status();
-        showReplaced(ctx, "erase", status, "Erased");
-        let busy = false;
+        const busy = (): boolean => ctx.tasks.running("erase") !== null;
 
         const brush = ctx.ui.slider({
           label: "Brush",
@@ -585,41 +673,40 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         });
         const surface = createEraseSurface(ctx.canvasArea, () => syncState());
         surface.setBrush(0.06);
-        const strip = modelStatus(ctx, model, () => syncState());
+        const strip = modelStatus(ctx, model, { tool: "erase", label: "Erase" }, () => syncState());
 
         function syncState(): void {
           const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
           const strokes = surface.hasStrokes();
-          if (!busy) note.set(!neutral ? NEEDS_FRAME : strokes ? "" : "Paint over what should go.");
-          run.setDisabled(busy || !strokes || !neutral || !strip.ready());
-          clear.setDisabled(busy || !strokes);
+          const working = busy();
+          if (!working) {
+            note.set(!neutral ? NEEDS_FRAME : strokes ? "" : "Paint over what should go.");
+          }
+          run.setDisabled(working || !strokes || !neutral || !strip.ready());
+          clear.setDisabled(working || !strokes);
         }
 
         async function start(): Promise<void> {
-          if (busy || !strip.ready() || activeRuns.has("erase") || ctx.entry.kind !== "image") {
-            return;
-          }
+          if (busy() || !strip.ready() || ctx.entry.kind !== "image") return;
           if (!surface.hasStrokes() || !geometryIsNeutral(ctx.edits as ImageEdits)) return;
-          busy = true;
-          activeRuns.add("erase");
-          syncState();
-          status.working("Erasing…");
+          const strokes = surface.getStrokes();
+          const task = await ctx.tasks.start({
+            tool: "erase",
+            action: "Erase",
+            working: "Erasing…",
+            changes: "photo",
+          });
+          if (!task || ctx.entry.kind !== "image") return;
+          follow(task, status, syncState);
           try {
-            const result = await inpaintStrokes(
-              ctx.entry.image,
-              surface.getStrokes(),
-              eraseOptions,
-            );
+            const result = await inpaintStrokes(ctx.entry.image, strokes, eraseOptions);
             // In place: the entry keeps its identity, the pixels change, and
             // the editor remounts (rebuilding this pane).
-            await replacePhoto(ctx, result, "Erase", { tool: "erase" });
+            await replacePhoto(ctx, result, task, { history: "Erase", done: "Erased" });
           } catch (error) {
-            status.failed(errorText(error, "Erase failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Erase failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("erase");
-            syncState();
           }
         }
 
@@ -631,6 +718,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           status.root,
           note.root,
         );
+        resume(ctx, "erase", status, syncState);
         syncState();
         return {
           root: card.root,
@@ -674,7 +762,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const guide = ctx.ui.note("");
         // Cutting out and erasing: under way, done, or why not.
         const outcome = ctx.ui.status();
-        showReplaced(ctx, "select", outcome, "Erased");
 
         // Phones and tablets tap; there's no pointing at things first.
         const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
@@ -686,8 +773,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         /** The model's shapes for the current clicks, and the ones worth offering. */
         let found: SamCandidates | null = null;
         let shapes: number[] = [];
-        /** Reading, cutting out or erasing: clicks wait. */
-        let busy = false;
+        /** Cutting out or erasing: clicks wait. */
+        const isBusy = (): boolean => ctx.tasks.running("select") !== null;
         let active = false;
 
         // ── The selection: its shapes as pictures, what to do with it, and fixing it ──
@@ -716,7 +803,13 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           onClick: () => clearSelection(),
         });
         // Erasing needs a model of its own; until it's here, it offers its download.
-        const eraser = modelStatus(ctx, fillModel, () => syncState(), "Erase");
+        const eraser = modelStatus(
+          ctx,
+          fillModel,
+          { tool: "select", label: "Erase" },
+          () => syncState(),
+          "Erase",
+        );
         const eraserRow = document.createElement("div");
         eraserRow.append(eraser.root);
         const selection = ctx.ui.section(
@@ -727,7 +820,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           ctx.ui.row(undo.root, deselect.root),
         );
 
-        const strip = modelStatus(ctx, model, () => {
+        const strip = modelStatus(ctx, model, { tool: "select", label: "Select" }, () => {
           syncState();
           if (active && strip.ready()) void ready();
         });
@@ -748,7 +841,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
         function syncState(): void {
           // An erase (or undoing one) swaps the photo: the old selection goes with it.
-          if (!busy && embeddedImage !== null && embeddedImage !== photo()) {
+          if (!isBusy() && embeddedImage !== null && embeddedImage !== photo()) {
             photoChanged();
             return;
           }
@@ -758,14 +851,14 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           // Deselect never rearranges the panel; only the pictures come and go.
           selection.hidden = !isReady();
           shapeRow.hidden = !some;
-          cut.setDisabled(!some || busy);
-          eraseIt.setDisabled(!some || busy || !eraser.ready());
+          cut.setDisabled(!some || isBusy());
+          eraseIt.setDisabled(!some || isBusy() || !eraser.ready());
           // Once it's ready, Erase it being on says as much.
           eraserRow.hidden = eraser.ready();
-          undo.setDisabled(!history.canUndo || busy);
-          deselect.setDisabled(history.current.points.length === 0 || busy);
-          surface.setCursor(!armed || !neutral() ? "idle" : busy || reading ? "busy" : "new");
-          if (busy) return;
+          undo.setDisabled(!history.canUndo || isBusy());
+          deselect.setDisabled(history.current.points.length === 0 || isBusy());
+          surface.setCursor(!armed || !neutral() ? "idle" : isBusy() || reading ? "busy" : "new");
+          if (isBusy()) return;
           if (!neutral()) guide.set(NEEDS_FRAME);
           else if (!armed) guide.set("");
           else if (reading) guide.set("Reading the photo…");
@@ -781,7 +874,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           }
           if (reading) return reading;
           const image = ctx.entry.image;
-          activeRuns.add("select");
           reading = (async () => {
             try {
               const read = await encodeSamImage(image, selectOptions);
@@ -794,7 +886,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
               return null;
             } finally {
               reading = null;
-              activeRuns.delete("select");
               syncState();
             }
           })();
@@ -901,7 +992,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         function onHover(x: number, y: number): void {
-          if (busy || !isReady() || !neutral()) return;
+          if (isBusy() || !isReady() || !neutral()) return;
           // Over what's already selected, there's nothing new to show.
           const index = chosen();
           if (found && index !== null && shapeContains(found, index, x, y)) {
@@ -914,7 +1005,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         function onClick(x: number, y: number): void {
-          if (busy || ctx.entry.kind !== "image" || !neutral()) return;
+          if (isBusy() || ctx.entry.kind !== "image" || !neutral()) return;
           if (!isReady() && !reading && !strip.ready()) {
             guide.set("Download it first.");
             return;
@@ -937,20 +1028,20 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         });
 
         async function undoStep(): Promise<void> {
-          if (busy || !history.undo()) return;
+          if (isBusy() || !history.undo()) return;
           await show();
           syncState();
         }
 
         async function redoStep(): Promise<void> {
-          if (busy || !history.redo()) return;
+          if (isBusy() || !history.redo()) return;
           await show();
           syncState();
         }
 
         /** Back to nothing selected, as one step Undo takes back. */
         function clearSelection(): void {
-          if (busy || history.current.points.length === 0) return;
+          if (isBusy() || history.current.points.length === 0) return;
           history.set({ points: [], shape: null });
           void show();
         }
@@ -961,7 +1052,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         document.addEventListener(
           "keydown",
           (e) => {
-            if (!active || busy) return;
+            if (!active || isBusy()) return;
             const over = e.target instanceof Element ? e.target : null;
             if (over?.closest('input, textarea, select, [contenteditable], [role="alertdialog"]')) {
               return;
@@ -994,11 +1085,15 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
 
         async function cutOut(): Promise<void> {
           const mask = selectionMask();
-          if (busy || !mask || ctx.entry.kind !== "image") return;
-          busy = true;
-          activeRuns.add("select");
-          syncState();
-          outcome.working("Cutting out…");
+          if (isBusy() || !mask || ctx.entry.kind !== "image") return;
+          const task = await ctx.tasks.start({
+            tool: "select",
+            action: "Cut out",
+            working: "Cutting out…",
+            changes: openResults ? "view" : undefined,
+          });
+          if (!task || ctx.entry.kind !== "image") return;
+          follow(task, outcome, syncState);
           try {
             const image = ctx.entry.image;
             const out = document.createElement("canvas");
@@ -1012,26 +1107,25 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             if (!maskCtx) throw new Error("[Retouch ML] Failed to read the mask");
             applyMatteAlpha(pixels.data, maskCtx.getImageData(0, 0, out.width, out.height).data);
             outCtx.putImageData(pixels, 0, 0);
-            await addToGallery(ctx, out, "cutout", "image/png", outcome);
+            await addToGallery(ctx, out, "cutout", "image/png", task, outcome);
           } catch (error) {
-            outcome.failed(errorText(error, "Cut out failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Cut out failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("select");
-            syncState();
           }
         }
 
         async function eraseObject(): Promise<void> {
           const mask = selectionMask();
-          if (busy || !mask || ctx.entry.kind !== "image" || activeRuns.has("erase")) return;
-          if (!eraser.ready()) return;
-          busy = true;
-          activeRuns.add("select");
-          activeRuns.add("erase");
-          syncState();
-          outcome.working("Erasing…");
+          if (isBusy() || !mask || ctx.entry.kind !== "image" || !eraser.ready()) return;
+          const task = await ctx.tasks.start({
+            tool: "select",
+            action: "Erase it",
+            working: "Erasing…",
+            changes: "photo",
+          });
+          if (!task || ctx.entry.kind !== "image") return;
+          follow(task, outcome, syncState);
           try {
             const image = ctx.entry.image;
             const maskCtx = mask.getContext("2d");
@@ -1057,15 +1151,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
               // The inpaint model honors a self-hosted `erase` URL when set.
               modelUrl: eraseModel?.modelUrl,
             });
-            await replacePhoto(ctx, result, "Erase selection", { tool: "select" });
+            await replacePhoto(ctx, result, task, { history: "Erase selection", done: "Erased" });
           } catch (error) {
-            outcome.failed(errorText(error, "Erase failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Erase failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("select");
-            activeRuns.delete("erase");
-            syncState();
           }
         }
 
@@ -1088,6 +1178,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const root = document.createElement("div");
         root.className = "rt-ml-select";
         root.append(card.root, selection);
+        resume(ctx, "select", outcome, syncState);
         syncState();
         return {
           root,
@@ -1132,12 +1223,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         const note = ctx.ui.note("");
         const status = ctx.ui.status();
-        showReplaced(ctx, "depth", status, "Background blurred");
 
         let prep: ReturnType<typeof prepareBokeh> | null = null;
         let depthMap: Awaited<ReturnType<typeof estimateDepth>> | null = null;
         let focus = 0.5;
-        let busy = false;
+        const isBusy = (): boolean => ctx.tasks.running("depth") !== null;
 
         const analyze = ctx.ui.button({
           label: "Measure depth",
@@ -1163,17 +1253,17 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const clear = ctx.ui.button({ label: "Clear", onClick: () => clearPreview() });
         const tune = ctx.ui.row(apply.root, clear.root);
 
-        const strip = modelStatus(ctx, model, () => syncState());
+        const strip = modelStatus(ctx, model, { tool: "depth", label: "Depth" }, () => syncState());
 
         function syncState(): void {
           const neutral = geometryIsNeutral(ctx.edits as ImageEdits);
-          analyze.setDisabled(busy || !neutral || !strip.ready());
+          analyze.setDisabled(isBusy() || !neutral || !strip.ready());
           analyze.root.hidden = prep !== null;
           aperture.root.hidden = prep === null;
           tune.hidden = prep === null;
-          apply.setDisabled(busy || !prep || !neutral);
-          clear.setDisabled(busy || !prep);
-          if (busy) return;
+          apply.setDisabled(isBusy() || !prep || !neutral);
+          clear.setDisabled(isBusy() || !prep);
+          if (isBusy()) return;
           if (!neutral) note.set(NEEDS_FRAME);
           else if (prep) note.set("Click what should stay sharp, tune Aperture, then Apply.");
           else note.set("");
@@ -1184,7 +1274,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         function clearPreview(): void {
-          if (busy) return;
+          if (isBusy()) return;
           prep = null;
           surface.setPreview(null);
           status.clear();
@@ -1192,66 +1282,70 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         const surface = createDepthSurface(ctx.canvasArea, (x, y) => {
-          if (!prep || !depthMap || busy) return;
+          if (!prep || !depthMap || isBusy()) return;
           focus = depthAt(depthMap, x, y);
           recompose();
         });
 
         async function measure(): Promise<void> {
-          if (busy || !strip.ready() || activeRuns.has("depth") || ctx.entry.kind !== "image") {
-            return;
-          }
+          if (isBusy() || !strip.ready() || ctx.entry.kind !== "image") return;
           if (!geometryIsNeutral(ctx.edits as ImageEdits)) return;
-          busy = true;
-          activeRuns.add("depth");
-          syncState();
-          status.working("Measuring the depth…");
+          const task = await ctx.tasks.start({
+            tool: "depth",
+            action: "Measure depth",
+            working: "Measuring the depth…",
+          });
+          if (!task || ctx.entry.kind !== "image") return;
+          follow(task, status, syncState);
           note.set("");
           try {
-            depthMap = await estimateDepth(ctx.entry.image, depthOptions);
+            const image = ctx.entry.image;
+            const map = await estimateDepth(image, depthOptions);
+            if (task.signal.aborted) return;
             await new Promise((r) => setTimeout(r, 0));
-            prep = prepareBokeh(ctx.entry.image, depthMap, 1280);
-            focus = suggestFocus(depthMap);
+            depthMap = map;
+            prep = prepareBokeh(image, map, 1280);
+            focus = suggestFocus(map);
             recompose();
-            status.done("Depth measured");
+            task.done("Depth measured");
           } catch (error) {
-            status.failed(errorText(error, "Measuring depth failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Measuring depth failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("depth");
-            syncState();
           }
         }
 
         async function applyBlur(): Promise<void> {
-          if (busy || !depthMap || ctx.entry.kind !== "image") return;
-          busy = true;
-          activeRuns.add("depth");
-          syncState();
-          status.working("Blurring the background…");
+          const map = depthMap;
+          if (isBusy() || !map || ctx.entry.kind !== "image") return;
+          const task = await ctx.tasks.start({
+            tool: "depth",
+            action: "Apply the blur",
+            working: "Blurring the background…",
+            changes: "photo",
+          });
+          if (!task || ctx.entry.kind !== "image") return;
+          follow(task, status, syncState);
           try {
             await new Promise((r) => setTimeout(r, 0));
             const image = ctx.entry.image;
-            prep ??= prepareBokeh(image, depthMap, 1280);
+            prep ??= prepareBokeh(image, map, 1280);
             await replacePhoto(
               ctx,
-              renderBokeh(prep, image, depthMap, focus, aperture.value / 100),
-              "Depth blur",
-              { tool: "depth" },
+              renderBokeh(prep, image, map, focus, aperture.value / 100),
+              task,
+              { history: "Depth blur", done: "Background blurred" },
             );
           } catch (error) {
-            status.failed(errorText(error, "Apply failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Apply failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("depth");
-            syncState();
           }
         }
 
         const card = ctx.ui.card({});
         card.body.append(strip.root, analyze.root, status.root, aperture.root, tune, note.root);
+        resume(ctx, "depth", status, syncState);
         syncState();
         return {
           root: card.root,
@@ -1298,7 +1392,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const kept = detectResults.get(entry);
         let found: Detection[] = kept?.found ?? [];
         let noun = kept?.noun ?? "object";
-        let busy = false;
+        const isBusy = (): boolean => ctx.tasks.running("detect") !== null;
 
         const objects = ctx.objects({
           label: "What was found",
@@ -1314,7 +1408,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         });
         const boxes = layerSwitch(ctx, objects);
 
-        const strip = modelStatus(ctx, model, () => syncState());
+        const strip = modelStatus(ctx, model, { tool: "detect", label: "Detect" }, () =>
+          syncState(),
+        );
 
         const findFaces = ctx.ui.button({
           label: "Find faces",
@@ -1394,41 +1490,60 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             note.set(summary());
           }
           const one = objects.selected !== null;
-          findFaces.setDisabled(busy || !strip.ready());
-          findObjects.setDisabled(busy || !strip.ready());
+          findFaces.setDisabled(isBusy() || !strip.ready());
+          findObjects.setDisabled(isBusy() || !strip.ready());
           actions.hidden = found.length === 0;
           addMasks.setLabel(one ? "Add mask" : "Add masks");
           cropTo.setLabel(one ? "Crop to it" : "Crop to them");
           for (const b of [addMasks, pixelate, cropTo])
-            b.setDisabled(busy || !neutral || found.length === 0);
+            b.setDisabled(isBusy() || !neutral || found.length === 0);
         }
 
         async function find(kind: "faces" | "objects"): Promise<void> {
-          if (busy || !strip.ready() || activeRuns.has("detect")) return;
-          busy = true;
-          activeRuns.add("detect");
-          syncState();
-          status.working(kind === "faces" ? "Looking for faces…" : "Looking for objects…");
+          if (isBusy() || !strip.ready()) return;
+          const task = await ctx.tasks.start({
+            tool: "detect",
+            action: kind === "faces" ? "Find faces" : "Find objects",
+            working: kind === "faces" ? "Looking for faces…" : "Looking for objects…",
+          });
+          if (!task) return;
+          follow(task, status, afterTask);
           note.set("");
           try {
             const results =
               kind === "faces"
                 ? await detectFaces(entry.image, detectOptions)
                 : await detectObjects(entry.image, objectOptions);
+            if (task.signal.aborted) return;
             found = [...results].sort((a, b) => b.score - a.score);
             noun = kind === "faces" ? "face" : "object";
             detectResults.set(entry, { found, noun });
             showFound(true);
-            status.done(foundLine());
+            task.done(foundLine());
             note.set(summary());
           } catch (error) {
-            status.failed(errorText(error, "Detection failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Detection failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("detect");
-            syncState();
           }
+        }
+
+        /**
+         * A task moved on. Once it's over, what was found is shown: a pane
+         * mounted mid-run hasn't seen it yet, and a stopped run leaves the
+         * last finds in place.
+         */
+        function afterTask(task: ToolTask): void {
+          if (task.state !== "running") {
+            const latest = detectResults.get(entry);
+            if (latest && latest.found !== found) {
+              found = latest.found;
+              noun = latest.noun;
+              showFound(false);
+            }
+            if (task.state === "stopped" && latest) status.done(foundLine());
+          }
+          syncState();
         }
 
         function maskThem(): void {
@@ -1464,11 +1579,15 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         async function pixelateThem(): Promise<void> {
-          if (busy || activeRuns.has("detect")) return;
-          busy = true;
-          activeRuns.add("detect");
-          syncState();
-          status.working("Pixelating…");
+          if (isBusy()) return;
+          const task = await ctx.tasks.start({
+            tool: "detect",
+            action: "Pixelate",
+            working: "Pixelating…",
+            changes: "photo",
+          });
+          if (!task) return;
+          follow(task, status, afterTask);
           try {
             const canvas = document.createElement("canvas");
             canvas.width = entry.image.naturalWidth;
@@ -1479,15 +1598,16 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             for (const f of targets()) pixelateRegion(canvas, f);
             // A mosaic moves nothing: the layer stays with the new pixels.
             detectResults.carry(entry, { found, noun });
-            await replacePhoto(ctx, canvas, "Pixelate", { tool: "detect" });
+            const replaced = await replacePhoto(ctx, canvas, task, {
+              history: "Pixelate",
+              done: "Pixelated",
+            });
+            if (!replaced) detectResults.drop(entry);
           } catch (error) {
             detectResults.drop(entry);
-            status.failed(errorText(error, "Pixelate failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Pixelate failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("detect");
-            syncState();
           }
         }
 
@@ -1513,7 +1633,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         showFound(false);
         // Reopened, or after a pixelate: what was found is still here.
         if (kept) status.done(foundLine());
-        showReplaced(ctx, "detect", status, "Pixelated");
+        resume(ctx, "detect", status, afterTask);
         syncState();
         return {
           root: card.root,
@@ -1551,9 +1671,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const edits = ctx.edits as VideoEdits;
         let result = trackResults.get(entry) ?? null;
         let picked: number | null = null;
-        let follow: Follow = "all";
-        let busy = false;
-        let abort: AbortController | null = null;
+        let following: Follow = "all";
+        const isBusy = (): boolean => ctx.tasks.running("track") !== null;
         /** The framing a Trim or Crop to it left, while its note is up. */
         let applied: string | null = null;
         const framing = () => JSON.stringify([edits.trim, edits.crop]);
@@ -1568,9 +1687,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             { value: "vehicles", label: "Vehicles" },
             { value: "animals", label: "Animals" },
           ],
-          value: follow,
+          value: following,
           onChange: (value) => {
-            follow = value;
+            following = value;
           },
         });
         const run = ctx.ui.button({
@@ -1578,8 +1697,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           variant: "ai",
           onClick: () => void start(),
         });
-        const stop = ctx.ui.button({ label: "Stop", onClick: () => abort?.abort() });
-        const strip = modelStatus(ctx, model, () => syncState());
+        const stop = ctx.ui.button({
+          label: "Stop",
+          onClick: () => ctx.tasks.running("track")?.stop(),
+        });
+        const strip = modelStatus(ctx, model, { tool: "track", label: "Track" }, () => syncState());
 
         const objects = ctx.objects({
           label: "Tracks",
@@ -1624,12 +1746,12 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           const turned = !turnsAreNeutral(edits);
           // Boxes are in the source frame: they line up through a crop, not a turn.
           objects.setFrame(turned ? null : edits.crop);
-          run.setDisabled(busy || !strip.ready());
-          stop.root.hidden = !busy;
+          run.setDisabled(isBusy() || !strip.ready());
+          stop.root.hidden = !isBusy();
           actions.hidden = !result || result.tracks.length === 0;
-          trimTo.setDisabled(busy || picked === null);
-          cropTo.setDisabled(busy || picked === null || turned);
-          save.setDisabled(busy);
+          trimTo.setDisabled(isBusy() || picked === null);
+          cropTo.setDisabled(isBusy() || picked === null || turned);
+          save.setDisabled(isBusy());
         }
 
         function showResult(): void {
@@ -1675,13 +1797,15 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         async function start(): Promise<void> {
-          if (busy || !strip.ready() || activeRuns.has("track")) return;
-          busy = true;
-          activeRuns.add("track");
-          abort = new AbortController();
-          syncState();
+          if (isBusy() || !strip.ready()) return;
+          const task = await ctx.tasks.start({
+            tool: "track",
+            action: "Track objects",
+            working: "Following each object…",
+          });
+          if (!task) return;
+          follow(task, status, syncState);
           note.set("");
-          status.working("Following each object…");
           // Its own element: the editor's keeps playing while this one seeks.
           const probe = document.createElement("video");
           probe.muted = true;
@@ -1694,11 +1818,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
               ...trackOptions,
               start: from,
               end: to,
-              labels: FOLLOW[follow],
+              labels: FOLLOW[following],
               minSize: trackOptions.minSize ?? 0.04,
-              signal: abort.signal,
+              signal: task.signal,
               onFrame: (frame, progress) => {
-                status.working("Following each object…", {
+                task.working("Following each object…", {
                   detail: `${at(frame.time - from)} of ${at(to - from)}`,
                   progress,
                 });
@@ -1706,22 +1830,19 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             });
             result = tracked;
             trackResults.set(entry, tracked);
+            task.done(foundLine());
             showResult();
           } catch (error) {
-            if (abort.signal.aborted) {
+            if (task.signal.aborted) {
               if (result) status.done(foundLine());
-              else status.clear();
               note.set("Stopped.");
             } else {
-              status.failed(errorText(error, "Tracking failed"));
+              task.failed(errorText(error, "Tracking failed"));
               console.error(error);
             }
           } finally {
             probe.removeAttribute("src");
             probe.load();
-            busy = false;
-            abort = null;
-            activeRuns.delete("track");
             syncState();
           }
         }
@@ -1774,6 +1895,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           note.root,
         );
         showResult();
+        resume(ctx, "track", status, syncState);
         return {
           root: card.root,
           onActivate() {
@@ -1818,7 +1940,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const status = ctx.ui.status();
         const output = ctx.ui.output({ label: "Text in the photo" });
         let found: TextLine[] = textResults.get(entry) ?? [];
-        let busy = false;
+        const isBusy = (): boolean => ctx.tasks.running("text") !== null;
 
         const objects = ctx.objects({
           label: "Lines of text",
@@ -1838,7 +1960,9 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const copy = ctx.ui.button({ label: "Copy text", onClick: () => void copyText() });
         const pixelate = ctx.ui.button({ label: "Pixelate it", onClick: () => void hideText() });
         const actions = ctx.ui.row(copy.root, pixelate.root, boxes.button.root);
-        const strip = modelStatus(ctx, model, () => syncState());
+        const strip = modelStatus(ctx, model, { tool: "text", label: "Read text" }, () =>
+          syncState(),
+        );
 
         /** What the actions work on: the picked line, or all of them. */
         function targets(): TextLine[] {
@@ -1887,34 +2011,49 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             note.set(summary());
           }
           const one = objects.selected !== null;
-          run.setDisabled(busy || !strip.ready());
+          run.setDisabled(isBusy() || !strip.ready());
           actions.hidden = found.length === 0;
           copy.setLabel(one ? "Copy line" : "Copy text");
-          copy.setDisabled(busy);
-          pixelate.setDisabled(busy || !neutral);
+          copy.setDisabled(isBusy());
+          pixelate.setDisabled(isBusy() || !neutral);
         }
 
         async function read(): Promise<void> {
-          if (busy || !strip.ready() || activeRuns.has("text")) return;
-          busy = true;
-          activeRuns.add("text");
-          syncState();
-          status.working("Reading…");
+          if (isBusy() || !strip.ready()) return;
+          const task = await ctx.tasks.start({
+            tool: "text",
+            action: "Read the text",
+            working: "Reading…",
+          });
+          if (!task) return;
+          follow(task, status, afterTask);
           note.set("");
           try {
-            found = await recognizeText(entry.image, textOptions);
+            const lines = await recognizeText(entry.image, textOptions);
+            if (task.signal.aborted) return;
+            found = lines;
             textResults.set(entry, found);
             showFound(true);
-            status.done(foundLine());
+            task.done(foundLine());
             note.set(summary());
           } catch (error) {
-            status.failed(errorText(error, "Reading failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Reading failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("text");
-            syncState();
           }
+        }
+
+        /** As Detect's: once a task is over, show what was read, and keep the last reading through a stop. */
+        function afterTask(task: ToolTask): void {
+          if (task.state !== "running") {
+            const latest = textResults.get(entry);
+            if (latest && latest !== found) {
+              found = latest;
+              showFound(false);
+            }
+            if (task.state === "stopped" && latest) status.done(foundLine());
+          }
+          syncState();
         }
 
         async function copyText(): Promise<void> {
@@ -1927,11 +2066,15 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         }
 
         async function hideText(): Promise<void> {
-          if (busy || activeRuns.has("text")) return;
-          busy = true;
-          activeRuns.add("text");
-          syncState();
-          status.working("Pixelating…");
+          if (isBusy()) return;
+          const task = await ctx.tasks.start({
+            tool: "text",
+            action: "Pixelate it",
+            working: "Pixelating…",
+            changes: "photo",
+          });
+          if (!task) return;
+          follow(task, status, afterTask);
           try {
             const canvas = document.createElement("canvas");
             canvas.width = entry.image.naturalWidth;
@@ -1942,15 +2085,16 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             for (const line of targets()) pixelateRegion(canvas, line);
             // A mosaic moves nothing: the layer stays with the new pixels.
             textResults.carry(entry, found);
-            await replacePhoto(ctx, canvas, "Pixelate text", { tool: "text" });
+            const replaced = await replacePhoto(ctx, canvas, task, {
+              history: "Pixelate text",
+              done: "Pixelated",
+            });
+            if (!replaced) textResults.drop(entry);
           } catch (error) {
             textResults.drop(entry);
-            status.failed(errorText(error, "Pixelate failed"));
+            if (task.signal.aborted) return;
+            task.failed(errorText(error, "Pixelate failed"));
             console.error(error);
-          } finally {
-            busy = false;
-            activeRuns.delete("text");
-            syncState();
           }
         }
 
@@ -1959,7 +2103,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         showFound(false);
         // Reopened, or after a pixelate: what was read is still here.
         if (textResults.get(entry)) status.done(foundLine());
-        showReplaced(ctx, "text", status, "Pixelated");
+        resume(ctx, "text", status, afterTask);
         syncState();
         return {
           root: card.root,
@@ -1996,10 +2140,12 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         return oneShot(ctx, {
           id: "upscale",
+          label: "Upscale",
           model,
           action: "Upscale 4×",
           working: "Upscaling…",
-          done: "Added to your gallery",
+          // Opening the result leaves this photo behind.
+          changes: openResults ? "view" : undefined,
           run: ({ tile }) =>
             ctx.entry.kind === "image"
               ? upscaleImage(ctx.entry.image, {
@@ -2010,7 +2156,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                   },
                 })
               : Promise.reject(new Error("Upscale needs an image")),
-          finish: (result, status) => addToGallery(ctx, result, "upscaled", typeOf(ctx), status),
+          finish: (result, task, status) =>
+            addToGallery(ctx, result, "upscaled", typeOf(ctx), task, status),
           failure: (error) => {
             const message = error instanceof Error ? error.message : "";
             return message.includes("input limit")
@@ -2047,10 +2194,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
       mount(ctx: ToolContext) {
         return oneShot(ctx, {
           id: "denoise",
+          label: "Denoise",
           model,
           action: "Remove the noise",
           working: "Removing the noise…",
-          done: "Noise removed",
+          changes: "photo",
           run: ({ tile }) =>
             ctx.entry.kind === "image"
               ? denoiseImage(ctx.entry.image, {
@@ -2062,7 +2210,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
                 })
               : Promise.reject(new Error("Denoise needs an image")),
           // In place: pixels map 1:1, so crop and mask edits stay valid.
-          finish: (result) => replacePhoto(ctx, result, "Denoise", { tool: "denoise" }),
+          finish: (result, task) =>
+            replacePhoto(ctx, result, task, { history: "Denoise", done: "Noise removed" }),
           failure: (error) => {
             const message = error instanceof Error ? error.message : "";
             return message.includes("input limit")

@@ -1,6 +1,7 @@
 import type { EditorToolPlugin, ToolContext } from "@9tensor/retouch";
 import { DEFAULT_EDITS } from "../../../src/constants";
 import { createObjectLayer } from "../../../src/ui/editor/object-layer";
+import { createTaskRegistry } from "../../../src/ui/editor/tasks";
 import { createToolUi } from "../../../src/ui/editor/tool-ui";
 import { DEFAULT_CUTOUT_MODEL_URL } from "../src/cutout";
 import { installMlTools } from "../src/plugin";
@@ -49,6 +50,7 @@ function context(kind: "image" | "video" = "image"): ToolContext {
       }),
     preview: () => "",
     reveal: async () => () => {},
+    tasks: createTaskRegistry().tasksFor(entry),
   };
 }
 
@@ -198,7 +200,9 @@ describe("ML tool panes", () => {
     body.push?.close();
     await flush();
     await flush();
-    expect(fetchSpy).toHaveBeenCalledWith(DEFAULT_CUTOUT_MODEL_URL);
+    expect(fetchSpy).toHaveBeenCalledWith(DEFAULT_CUTOUT_MODEL_URL, {
+      signal: expect.any(AbortSignal),
+    });
     expect(model(pane).state).toBe("ready");
     expect(action(pane)?.disabled).toBe(false);
     expect(cutout.ready?.()).toBe(true);

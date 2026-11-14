@@ -25,6 +25,8 @@ const finished = new Map<string, number>();
 const saved = new Set<string>();
 /** Files whose last download failed. */
 const failed = new Set<string>();
+/** How to stop each download under way. */
+const stoppers = new Map<string, AbortController>();
 const watchers = new Set<() => void>();
 let pending: ReturnType<typeof setTimeout> | null = null;
 
@@ -82,6 +84,14 @@ export function modelDownloadFailed(urls: readonly string[]): boolean {
   return urls.some((url) => failed.has(url)) && modelDownload(urls) === null;
 }
 
+/**
+ * Stop downloading these files. What was downloaded so far is dropped, and
+ * the files are back to not downloaded, not failed.
+ */
+export function stopModelDownload(urls: readonly string[]): void {
+  for (const url of urls) stoppers.get(url)?.abort();
+}
+
 /** Download and save every file, all at once, without loading the model. */
 export async function downloadModel(urls: readonly string[]): Promise<void> {
   await Promise.all(urls.map((url) => fetchModel(url)));
@@ -129,17 +139,21 @@ async function fetchModelUncached(
   if (underway.size === 0) finished.clear();
   failed.delete(url);
   underway.set(url, { loaded: 0, total: 0 });
+  const stopper = new AbortController();
+  stoppers.set(url, stopper);
   notify(true);
   try {
-    const buffer = await download(url, cache, onProgress);
+    const buffer = await download(url, cache, stopper.signal, onProgress);
     finished.set(url, buffer.byteLength);
     saved.add(url);
     return buffer;
   } catch (error) {
-    failed.add(url);
+    // Stopped on purpose isn't a failure: it can simply be downloaded again.
+    if (!stopper.signal.aborted) failed.add(url);
     throw error;
   } finally {
     underway.delete(url);
+    stoppers.delete(url);
     notify(true);
   }
 }
@@ -147,9 +161,10 @@ async function fetchModelUncached(
 async function download(
   url: string,
   cache: Cache | null,
+  signal: AbortSignal,
   onProgress?: (progress: FetchProgress) => void,
 ): Promise<ArrayBuffer> {
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(`[Retouch ML] Failed to download model (${response.status}): ${url}`);
   }
@@ -160,8 +175,20 @@ async function download(
   if (reader) {
     const chunks: Uint8Array[] = [];
     let loaded = 0;
+    // Stopping ends the wait for the next chunk too, however the stream behaves.
+    const stopped = new Promise<never>((_, reject) => {
+      const stop = (): void => {
+        reject(new DOMException("The download was stopped", "AbortError"));
+        void reader.cancel().catch(() => {});
+      };
+      if (signal.aborted) stop();
+      else signal.addEventListener("abort", stop, { once: true });
+    });
+    stopped.catch(() => {});
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await Promise.race([reader.read(), stopped]);
+      // A cancelled stream reads as finished: stopped, it's only part of the file.
+      signal.throwIfAborted();
       if (done) break;
       chunks.push(value);
       loaded += value.byteLength;
@@ -178,9 +205,11 @@ async function download(
     buffer = merged.buffer;
   } else {
     buffer = await response.arrayBuffer();
+    signal.throwIfAborted();
     onProgress?.({ loaded: buffer.byteLength, total: buffer.byteLength });
   }
 
+  signal.throwIfAborted();
   try {
     await cache?.put(url, new Response(buffer.slice(0), { headers: response.headers }));
   } catch {

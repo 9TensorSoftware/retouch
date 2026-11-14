@@ -25,6 +25,7 @@ import type {
 } from "./types";
 import { createDropZone } from "./ui/drop-zone";
 import { createEditor, type EditorHandle, type EditorViewState } from "./ui/editor/editor";
+import { createTaskRegistry } from "./ui/editor/tasks";
 import type { EditorToolPlugin } from "./ui/editor/tool-registry";
 import { registerEditorTool } from "./ui/editor/tool-registry";
 import type { ExportOverlayHandle } from "./ui/export-overlay";
@@ -191,6 +192,8 @@ export class Retouch {
   private openTool: EditorTool | undefined;
   /** Images whose Done-commit bake is still rendering. */
   private readonly baking = new Map<string, Promise<void>>();
+  /** Tools' background work: it carries on through a remount, and the header says so. */
+  private readonly tasks = createTaskRegistry();
   private exportAbort: AbortController | null = null;
   private readonly toasts: ToastHost;
   /** The gallery's layout, kept across re-renders (and remembered in this browser). */
@@ -1141,6 +1144,7 @@ export class Retouch {
       tool: this.openTool,
       view: carriedView,
       rail: this.options.rail,
+      tasks: this.tasks,
       onAiEvent: (event) => {
         if (event.type === "start") {
           this.emitter.emit("ai:start", { id: entry.id, prompt: event.prompt });
