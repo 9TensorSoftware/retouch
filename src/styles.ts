@@ -2311,6 +2311,28 @@ body:has(> .rt-editor-overlay) {
   white-space: nowrap;
 }
 
+/* A model on this device: a green dot, Ready. */
+.rt-flyout__badge--ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: var(--rt-text-2);
+  font-family: var(--rt-font-ui);
+}
+
+.rt-flyout__badge--ready::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rt-success);
+}
+
+.rt-flyout__badge[hidden] {
+  display: none;
+}
+
 /* ── Canvas area ───────────────────────────── */
 
 /* The stage: a light table, a soft neutral pool of light under the print.
@@ -3265,6 +3287,10 @@ body:has(> .rt-editor-overlay) {
   font: 500 var(--rt-type-xs) / 1.6 var(--rt-font-mono);
 }
 
+.rt-card__facts:empty {
+  display: none;
+}
+
 .rt-card__body {
   display: flex;
   flex-direction: column;
@@ -3601,6 +3627,13 @@ body:has(> .rt-editor-overlay) {
   box-shadow: 0 0 0 4px rgba(165, 139, 255, 0.12), 0 0 24px rgba(92, 200, 255, 0.18);
 }
 
+/* Waiting on its model: a plain outline, so the Download above leads. */
+.rt-dock__chip.rt-dock__chip--ai[disabled] {
+  background:
+    linear-gradient(var(--rt-surface-overlay), var(--rt-surface-overlay)) padding-box,
+    linear-gradient(var(--rt-line-loud), var(--rt-line-loud)) border-box;
+}
+
 .rt-dock__chip--ai svg {
   flex: none;
   width: 14px;
@@ -3706,6 +3739,216 @@ body:has(> .rt-editor-overlay) {
   height: 100%;
   background: linear-gradient(90deg, #ffc457, #5cc8ff, #a58bff);
   transition: width var(--rt-dur-2) var(--rt-ease);
+}
+
+/* ── A model's state, leading an AI card: Download, its progress, Ready ── */
+
+.rt-model {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rt-model__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+/* Download, and the same button filling up while it downloads. */
+.rt-model__main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 14px;
+  overflow: hidden;
+  border: 1.5px solid transparent;
+  border-radius: var(--rt-radius-md);
+  background:
+    linear-gradient(var(--rt-surface-overlay), var(--rt-surface-overlay)) padding-box,
+    var(--rt-prism) border-box;
+  color: var(--rt-text-1);
+  font: 600 var(--rt-type-md) / 1 var(--rt-font-ui);
+  cursor: pointer;
+  transition: box-shadow var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-model__main:hover:not([aria-disabled="true"]) {
+  box-shadow: 0 0 0 4px rgba(165, 139, 255, 0.12), 0 0 24px rgba(92, 200, 255, 0.18);
+}
+
+.rt-model__main:focus-visible,
+.rt-model__info:focus-visible {
+  outline: 2px solid var(--rt-focus);
+  outline-offset: 2px;
+}
+
+.rt-model__main > :not(.rt-model__fill) {
+  position: relative;
+}
+
+.rt-model__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+.rt-model__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-model__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rt-model__detail {
+  margin-left: auto;
+  color: var(--rt-text-2);
+  font: 500 var(--rt-type-sm) / 1 var(--rt-font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rt-model__label {
+  font-variant-numeric: tabular-nums;
+}
+
+.rt-model__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, rgba(255, 196, 87, 0.2), rgba(92, 200, 255, 0.2), rgba(165, 139, 255, 0.24));
+  box-shadow: inset 0 -2px 0 rgba(165, 139, 255, 0.7);
+  transition: width var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-model[data-state="downloading"] .rt-model__main {
+  cursor: default;
+}
+
+/* A spinning ring while it downloads, where the arrow was. */
+.rt-model[data-state="downloading"] .rt-model__icon::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--rt-line-loud);
+  border-top-color: var(--rt-text-1);
+  border-radius: 50%;
+  animation: rt-spin 900ms linear infinite;
+}
+
+/* No size from the server: the light sweeps instead of filling. */
+.rt-model--unknown .rt-model__fill {
+  width: 40%;
+  animation: rt-model-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes rt-model-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+.rt-model[data-state="failed"] .rt-model__detail {
+  color: var(--rt-danger-text);
+}
+
+/* The dot sits in the column the run's check mark uses below it. */
+.rt-model__ready {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  color: var(--rt-text-2);
+  font-size: var(--rt-type-sm);
+  font-weight: 500;
+  animation: rt-fade-in var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-model__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-inline: 5px;
+  border-radius: 50%;
+  background: var(--rt-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rt-success) 22%, transparent);
+}
+
+.rt-model__info {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--rt-text-3);
+  cursor: pointer;
+  transition: background-color var(--rt-dur-1) var(--rt-ease), color var(--rt-dur-1) var(--rt-ease);
+}
+
+.rt-model__info svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rt-model__info:hover,
+.rt-model__info[aria-expanded="true"] {
+  background: var(--rt-control);
+  color: var(--rt-text-1);
+}
+
+.rt-model__about {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--rt-line);
+  animation: rt-fade-in var(--rt-dur-2) var(--rt-ease);
+}
+
+.rt-model__about p {
+  margin: 0;
+  color: var(--rt-text-2);
+  font-size: var(--rt-type-sm);
+  line-height: 1.45;
+}
+
+.rt-model__about[hidden],
+.rt-model__main[hidden],
+.rt-model__ready[hidden] {
+  display: none;
+}
+
+/* A run on one line, marked like a step: working, done, failed. */
+.rt-status {
+  color: var(--rt-text-1);
+}
+
+.rt-status[data-state="done"] {
+  color: var(--rt-text-1);
+}
+
+.rt-status__label {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.rt-status[hidden] {
+  display: none;
 }
 
 @keyframes rt-breathe {

@@ -60,6 +60,7 @@ new Retouch({ target: "#editor", tools: ["crop", "adjust", "golden"] });
 | `shortcut` | `string` | One letter. A letter a built-in tool or the editor already uses is ignored (`I` opens the AI menu). |
 | `description` | `string` | For AI tools, one line on what it does, shown in the AI tools menu and the expanded rail. |
 | `badge` | `string` | A short tag beside it in the AI menu, such as a download size. |
+| `ready` | `() => boolean` | For a tool that downloads a model: whether it's on this device. Asked each time the AI menu opens; while it's true, the menu says Ready instead of the badge. |
 | `mount` | `(ctx) => ToolPaneHandle` | Builds the pane. |
 
 ## The pane's lifecycle
@@ -179,7 +180,7 @@ A block of read-only text your tool produced, such as the text Read text finds i
 selectable, scrolling past a few lines, its line breaks kept, hidden while it's empty. `label`
 names it for screen readers; `set(text)` replaces the text.
 
-### `card(options)` and `steps(options)`
+### `card(options)`, `model(options)`, `status()` and `steps(options)`
 
 For tools that download or run something; see the next section.
 
@@ -237,53 +238,79 @@ pinned to begin with:
 new Retouch({ target: "#editor", rail: { pinned: ["cutout", "erase"], expanded: false } });
 ```
 
-A tool that downloads a model should say so before anything is fetched. The kit has the parts:
+A tool that downloads a model should say so before anything is fetched, and every AI tool in
+the editor says it the same way. People see whether the model is here, how its download is going
+and how long it has left, and what the tool does; what the model is, and what it runs on, waits
+behind an info button. The kit has the parts:
 
 ```ts
 mount(ctx) {
-  const { root, body, setFact } = ctx.ui.card({
-    description: "Sharpens faces. Apply replaces this photo's pixels.",
-    facts: [
-      ["Model", "FaceFix v2"],
-      ["Download", "48 MB, once, then saved"],
-      ["Runs on", "This device"],
-    ],
+  const card = ctx.ui.card({});
+  const model = ctx.ui.model({
+    bytes: 48e6,
+    about: {
+      text: "It runs on this device, so your photo isn't uploaded.",
+      facts: [["Model", "FaceFix v2"], ["Size", "48 MB"]],
+    },
+    onDownload: () => void download(),
   });
-  const steps = ctx.ui.steps({
-    label: "Progress",
-    steps: [{ label: "Download the model", detail: "48 MB" }, { label: "Restore the faces" }],
-  });
-  const run = ctx.ui.button({ label: "Restore · 48 MB", variant: "ai", onClick: () => void go() });
-  const note = ctx.ui.note("");
-  body.append(run.root, steps.root, note.root);
+  const run = ctx.ui.button({ label: "Restore faces", variant: "ai", onClick: () => void go() });
+  const status = ctx.ui.status();
+  card.body.append(model.root, run.root, status.root);
+
+  model.set(saved() ? "ready" : "missing");
+  run.setDisabled(model.state !== "ready");
+
+  async function download() {
+    try {
+      await fetchWeights((loaded, total) => model.progress(loaded, total));
+      model.set("ready");
+      run.setDisabled(false);
+    } catch {
+      model.set("failed");
+    }
+  }
 
   async function go() {
     run.setDisabled(true);
-    steps.set(0, "active", { progress: 0 });
-    const model = await download((loaded, total) =>
-      steps.set(0, "active", { progress: loaded / total }),
-    );
-    steps.set(0, "done");
-    setFact("Download", "Saved on this device");
-    run.setLabel("Restore");
-    steps.set(1, "active");
-    const result = await restore(model, ctx.entry);
-    steps.set(1, "done");
-    const takeBack = await ctx.reveal(result); // wipes the result in over the photo
-    if (!(await commit(result))) takeBack(); // not committed: the photo goes back as it was
+    status.working("Restoring the faces…");
+    try {
+      const result = await restore(ctx.entry, (done) => status.working("Restoring the faces…", { progress: done }));
+      const takeBack = await ctx.reveal(result); // wipes the result in over the photo
+      if (await commit(result)) status.done("Faces restored");
+      else takeBack(); // not committed: the photo goes back as it was
+    } catch (error) {
+      status.failed(`Restore failed: ${error.message}`);
+    } finally {
+      run.setDisabled(false);
+    }
   }
 
-  return { root };
+  return { root: card.root };
 },
 ```
 
-`steps.set(index, state, { detail, progress })` moves a step through `"waiting"`, `"active"`
-(with a bar while `progress` is set), `"done"` and `"failed"`; `reset()` starts over.
-`ctx.reveal(result)` takes a canvas or image, lays it over the stage with the photo's current
-look, and wipes it in. It resolves when the wipe ends, with a function that takes the result
-back off; it's instant under reduced motion, and skipped while a crop or warp means the result
-wouldn't line up. `@9tensor/retouch-ml` is built this way, and its
-[plugin.ts](../packages/ml/src/plugin.ts) is a full example.
+`ui.model()` stays out of sight until its first `set()` or `progress()`, so a quick check of
+whether the model is saved doesn't flash a Download button. Then:
+
+| State | What it shows |
+|---|---|
+| `"missing"` | A Download button with the size (`bytes`; `null` leaves it off). |
+| `"downloading"` | `progress(loaded, total)` puts it here: the same button fills up, with how much is in ("12 of 27 MB") and, after a second, the time left at the recent rate. A `total` of 0 falls back to `bytes`. |
+| `"ready"` | A green dot and Ready. |
+| `"failed"` | Try again, which calls `onDownload` once more. |
+
+`name` labels a second download in one pane ("Download Erase"). `setFact(label, value)` changes a
+row of the info panel. `ui.status()` is a run on one line: `working(label, { detail, progress })`
+(a bar while `progress` is set), `done(label)` with a check, `failed(label)`, and `clear()`; each
+change is announced to screen readers. Put what to do next (follow-up buttons) right after it.
+
+`ui.steps()` still lists a run's steps, each `"waiting"`, `"active"`, `"done"` or `"failed"`,
+for a tool whose stages are worth naming. `ctx.reveal(result)` takes a canvas or image, lays it
+over the stage with the photo's current look, and wipes it in. It resolves when the wipe ends,
+with a function that takes the result back off; it's instant under reduced motion, and skipped
+while a crop or warp means the result wouldn't line up. `@9tensor/retouch-ml` is built this
+way, and its [plugin.ts](../packages/ml/src/plugin.ts) is a full example.
 
 ## Styling
 
@@ -307,6 +334,6 @@ listener, and wherever you set its value.
 
 `EditorToolPlugin`, `ToolContext`, `ToolPaneHandle`, `ToolGroup`, `PreviewEdits`, `ToolUi`,
 `UiSlider`, `UiSliderOptions`, `UiButton`, `UiButtonOptions`, `UiChoice`, `UiChoiceOptions`,
-`UiTiles`, `UiTilesOptions`, `UiTileOption`, `UiNote`, `UiCard`, `UiCardOptions`, `UiSteps`,
-`UiStepsOptions`, `UiStep`, `UiStepState`, `RailOptions` and `OpenEditorOptions` are exported
-from `@9tensor/retouch`.
+`UiTiles`, `UiTilesOptions`, `UiTileOption`, `UiNote`, `UiCard`, `UiCardOptions`, `UiModel`,
+`UiModelOptions`, `UiModelState`, `UiStatus`, `UiSteps`, `UiStepsOptions`, `UiStep`,
+`UiStepState`, `RailOptions` and `OpenEditorOptions` are exported from `@9tensor/retouch`.

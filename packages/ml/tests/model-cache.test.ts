@@ -30,6 +30,6 @@ describe("isModelCached", () => {
     useCaches(fakeCaches([]));
     expect(await isModelCached([])).toBe(false);
     useCaches(undefined);
-    expect(await isModelCached(["https://m/enc.onnx"])).toBe(false);
+    expect(await isModelCached(["https://m/never.onnx"])).toBe(false);
   });
 });

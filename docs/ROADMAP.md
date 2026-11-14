@@ -26,7 +26,7 @@ license audit behind the ML and advanced-feature rows is in
 | ✅ | — | Editor frame: grouped tool rail with an AI tools menu, right-hand inspector with a live RGB histogram, floating panels |
 | ✅ | — | Zoom & pan canvas (Cmd/Ctrl+wheel and trackpad pinch, wheel/Space/middle-drag pan, fit/1:1, sharp re-render up to the preview's resolution) |
 | ✅ | — | Controls v2: typed slider values, changed dots, semantic tracks; Adjust in sections, full-width Curves, Color mix swatches, preview tiles (Filters, Stylize, plugin looks), crop aspect tiles + straighten ruler, masks list, brush ring, before/after divider |
-| ✅ | — | AI surfaces: model cards (model, size, device), named downloads, run steps with progress, result wipe; Ask AI change cards with Undo and suggestions; ML panes on the plugin UI kit |
+| ✅ | — | AI surfaces: one model strip in every tool (Download with its size, progress and time left, Ready, details behind an info button), a run's status on one line, result wipe; Ask AI change cards with Undo and suggestions; ML panes on the plugin UI kit |
 | ✅ | — | Phones and tablets: bottom-sheet inspector, swipeable tool row, pinch-zoom and two-finger pan, 44 px touch targets, safe areas |
 | ✅ | — | Motion: the photo morphs between gallery and editor (view transitions), panel entrances, toasts that glide; all off under reduced motion |
 | ⬜ | P3 | Highlights/shadows recovery · custom LUT import · auto-enhance |
@@ -66,7 +66,7 @@ license audit behind the ML and advanced-feature rows is in
 | ✅ | — | `tools` option — feature-group tabs are registry-driven |
 | ✅ | — | Export options: format png/jpeg/webp, quality, max dimension (`export` option) |
 | ✅ | — | Theming: tokens in a cascade layer so host overrides always win, one-variable brand color, `theme: "light" \| "dark" \| "auto"` for the shell ([THEMING.md](THEMING.md)) |
-| ✅ | — | Plugin UI kit: `ctx.ui` controls, `ctx.preview` tiles, `ctx.reveal` result wipes, AI model cards and run steps ([PLUGINS.md](PLUGINS.md)) |
+| ✅ | — | Plugin UI kit: `ctx.ui` controls, `ctx.preview` tiles, `ctx.reveal` result wipes, AI model strips and run status ([PLUGINS.md](PLUGINS.md)) |
 | ✅ | — | README truth pass (docs match the real API) · CHANGELOG · CI (typecheck/lint/test/build/smoke) · release script for both packages |
 | ⬜ | P2 | URL import |
 | ⬜ | P2 | `getEdits()/setEdits()` JSON round-trip for host persistence |

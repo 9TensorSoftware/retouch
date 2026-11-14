@@ -187,6 +187,17 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
   let menu: HTMLElement | null = null;
   let launcher: HTMLButtonElement | null = null;
   const menuRows = new Map<EditorTool, { item: HTMLButtonElement; pin: HTMLButtonElement }>();
+  const badges: Array<{ def: ToolDef; badge: HTMLElement }> = [];
+
+  /** A model's size until it's on this device, then Ready. */
+  function paintBadges(): void {
+    for (const { def, badge } of badges) {
+      const ready = def.ready?.() ?? false;
+      badge.classList.toggle("rt-flyout__badge--ready", ready);
+      badge.textContent = ready ? "Ready" : (def.badge ?? "");
+      badge.hidden = !badge.textContent;
+    }
+  }
   // Resting the mouse on the launcher opens the menu; it stays while the
   // pointer is on either and closes soon after it leaves both. A click (or
   // the I key) opens it to stay, with focus inside.
@@ -207,6 +218,7 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     hideTip();
     clearTimeout(hoverTimer);
     hoverOpen = !focus;
+    paintBadges();
     menu.hidden = false;
     launcher.setAttribute("aria-expanded", "true");
     const r = launcher.getBoundingClientRect();
@@ -267,7 +279,11 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
         text.appendChild(h("span", { class: "rt-flyout__desc" }, def.description));
       }
       item.append(icon, text);
-      if (def.badge) item.appendChild(h("span", { class: "rt-flyout__badge" }, def.badge));
+      if (def.badge || def.ready) {
+        const badge = h("span", { class: "rt-flyout__badge" });
+        badges.push({ def, badge });
+        item.appendChild(badge);
+      }
       const key = keyOf(def);
       if (key) item.setAttribute("aria-keyshortcuts", key.toUpperCase());
       item.addEventListener(
@@ -298,6 +314,7 @@ export function createToolbar(options: ToolbarOptions): ToolbarHandle {
     );
     menu.hidden = true;
     paintPins();
+    paintBadges();
 
     menu.addEventListener(
       "pointerenter",

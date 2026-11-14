@@ -1,11 +1,16 @@
+import { createEta, formatDownload, formatProgress, formatTimeLeft } from "../../utils/eta";
 import { h } from "../h";
-import { ICON_CHECK, ICON_CHEVRON_DOWN, ICON_CLOSE } from "../icons";
+import { ICON_CHECK, ICON_CHEVRON_DOWN, ICON_CLOSE, ICON_DOWNLOAD, ICON_INFO } from "../icons";
 import type {
   UiCard,
   UiCardOptions,
   UiList,
   UiListItem,
   UiListOptions,
+  UiModel,
+  UiModelOptions,
+  UiModelState,
+  UiStatus,
   UiStep,
   UiStepState,
   UiSteps,
@@ -418,6 +423,200 @@ export function createSteps(options: UiStepsOptions): UiSteps {
       rows.forEach((row, i) => {
         set(i, "waiting", { detail: row.step.detail ?? "" });
       });
+      announcer.textContent = "";
+    },
+  };
+}
+
+// ── Model ─────────────────────────────────────────────────────────────────
+
+let modelIds = 0;
+
+/**
+ * Where an AI tool's model stands. Missing, it's a Download button with the
+ * size; downloading, the same button fills up, says how much is in and the
+ * time left; ready, a quiet line. The info button opens what the model is.
+ */
+export function createModel(options: UiModelOptions, signal?: AbortSignal): UiModel {
+  const listen = signal ? { signal } : undefined;
+  const eta = createEta();
+  let state: UiModelState | null = null;
+  let timeLeft = "";
+  let timeLeftAt = Number.NEGATIVE_INFINITY;
+  const name = options.name ? ` ${options.name}` : "";
+
+  const fill = h("i", { class: "rt-model__fill", "aria-hidden": "true" });
+  const icon = h("span", { class: "rt-model__icon", "aria-hidden": "true" });
+  const label = h("span", { class: "rt-model__label" });
+  const detail = h("span", { class: "rt-model__detail" });
+  const main = h("button", { type: "button", class: "rt-model__main" }, fill, icon, label, detail);
+  main.addEventListener(
+    "click",
+    () => {
+      if (state === "missing" || state === "failed") options.onDownload();
+    },
+    listen,
+  );
+
+  const ready = h(
+    "span",
+    { class: "rt-model__ready" },
+    h("span", { class: "rt-model__dot", "aria-hidden": "true" }),
+    options.name ? `${options.name} is ready` : "Ready",
+  );
+
+  const facts = h("dl", { class: "rt-card__facts" });
+  const values = new Map<string, HTMLElement>();
+  const setFact = (key: string, value: string): void => {
+    const existing = values.get(key);
+    if (existing) {
+      existing.textContent = value;
+      return;
+    }
+    const dd = h("dd", null, value);
+    values.set(key, dd);
+    facts.append(h("dt", null, key), dd);
+  };
+  for (const [key, value] of options.about?.facts ?? []) setFact(key, value);
+  const aboutId = `rt-model-about-${++modelIds}`;
+  const about = h(
+    "div",
+    { class: "rt-model__about", id: aboutId },
+    ...(options.about?.text ? [h("p", null, options.about.text)] : []),
+    facts,
+  );
+  about.hidden = true;
+  const info = h("button", {
+    type: "button",
+    class: "rt-model__info",
+    "aria-expanded": "false",
+    "aria-controls": aboutId,
+    "aria-label": "About this",
+    title: "About this",
+  });
+  info.innerHTML = ICON_INFO;
+  info.addEventListener(
+    "click",
+    () => {
+      about.hidden = !about.hidden;
+      info.setAttribute("aria-expanded", String(!about.hidden));
+    },
+    listen,
+  );
+
+  const announcer = h("span", { class: "rt-visually-hidden", "aria-live": "polite" });
+  const root = h(
+    "div",
+    { class: "rt-model" },
+    h("div", { class: "rt-model__row" }, main, ready, info),
+    about,
+    announcer,
+  );
+  root.hidden = true;
+
+  const size = options.bytes ? formatDownload(options.bytes) : "";
+
+  function paint(next: UiModelState): void {
+    const changed = next !== state;
+    state = next;
+    root.hidden = false;
+    root.dataset.state = next;
+    main.hidden = next === "ready";
+    ready.hidden = next !== "ready";
+    // Still focusable while it downloads, so focus doesn't drop to the page.
+    main.setAttribute("aria-disabled", String(next === "downloading"));
+    if (!changed) return;
+    icon.innerHTML = next === "downloading" ? "" : ICON_DOWNLOAD;
+    if (next === "missing") {
+      label.textContent = `Download${name}`;
+      detail.textContent = size;
+    } else if (next === "failed") {
+      label.textContent = "Try again";
+      detail.textContent = "Download failed";
+    } else if (next === "downloading") {
+      label.textContent = `Downloading${name}`;
+      detail.textContent = "";
+      fill.style.width = "0%";
+      eta.reset();
+      timeLeft = "";
+      timeLeftAt = Number.NEGATIVE_INFINITY;
+    }
+    const words = {
+      missing: "",
+      downloading: `Downloading${name}`,
+      ready: options.name ? `${options.name} is ready` : "Ready",
+      failed: "Download failed",
+    };
+    announcer.textContent = words[next];
+  }
+
+  return {
+    root,
+    get state() {
+      return state;
+    },
+    set: (next) => paint(next),
+    progress(loaded, total) {
+      paint("downloading");
+      const whole = total > 0 ? total : (options.bytes ?? 0);
+      const known = whole > 0;
+      root.classList.toggle("rt-model--unknown", !known);
+      fill.style.width = known ? `${Math.min(100, (loaded / whole) * 100)}%` : "";
+      const left = eta.push(loaded, whole);
+      // Once a second: a time that changes every chunk can't be read.
+      const now = performance.now();
+      if (left !== null && now - timeLeftAt >= 1000) {
+        timeLeft = formatTimeLeft(left);
+        timeLeftAt = now;
+      }
+      // The ring and the fill say it's downloading; the words say how far.
+      label.textContent = known ? formatProgress(loaded, whole) : formatDownload(loaded);
+      detail.textContent = timeLeft;
+    },
+    setFact,
+  };
+}
+
+// ── Status ────────────────────────────────────────────────────────────────
+
+/** A run on one line: working with a bar, done with a check, or failed with why. */
+export function createStatus(): UiStatus {
+  const mark = h("span", { class: "rt-step__mark", "aria-hidden": "true" });
+  const label = h("span", { class: "rt-status__label" });
+  const detail = h("span", { class: "rt-step__detail" });
+  const fill = h("i");
+  const bar = h("span", { class: "rt-step__bar", "aria-hidden": "true" }, fill);
+  const announcer = h("span", { class: "rt-visually-hidden", "aria-live": "polite" });
+  const root = h("div", { class: "rt-status rt-step" }, mark, label, detail, bar, announcer);
+  root.hidden = true;
+
+  function show(
+    state: "active" | "done" | "failed",
+    text: string,
+    note = "",
+    progress?: number,
+  ): void {
+    const changed = root.hidden || root.dataset.state !== state || label.textContent !== text;
+    root.hidden = false;
+    root.dataset.state = state;
+    mark.innerHTML = state === "done" ? ICON_CHECK : state === "failed" ? ICON_CLOSE : "";
+    label.textContent = text;
+    detail.textContent = note;
+    bar.hidden = progress === undefined;
+    if (progress !== undefined) {
+      fill.style.width = `${Math.round(Math.min(1, Math.max(0, progress)) * 100)}%`;
+    }
+    if (changed) announcer.textContent = text;
+  }
+
+  return {
+    root,
+    working: (text, update = {}) => show("active", text, update.detail, update.progress),
+    done: (text, note) => show("done", text, note),
+    failed: (text) => show("failed", text),
+    clear() {
+      root.hidden = true;
+      delete root.dataset.state;
       announcer.textContent = "";
     },
   };

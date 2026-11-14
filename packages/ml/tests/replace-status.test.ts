@@ -2,6 +2,7 @@ import type { EditorToolPlugin, ToolContext } from "@9tensor/retouch";
 import { DEFAULT_EDITS } from "../../../src/constants";
 import { createObjectLayer } from "../../../src/ui/editor/object-layer";
 import { createToolUi } from "../../../src/ui/editor/tool-ui";
+import { DEFAULT_DENOISE_DATA_URL, DEFAULT_DENOISE_MODEL_URL } from "../src/denoise";
 import { installMlTools } from "../src/plugin";
 
 vi.mock("../src/denoise", async (importOriginal) => {
@@ -66,6 +67,17 @@ describe("a tool that replaces the photo", () => {
     HTMLCanvasElement.prototype.toBlob = (callback: BlobCallback) => {
       callback(new Blob(["x"], { type: "image/jpeg" }));
     };
+    // The model is on this device, so Remove the noise is on.
+    const saved = [DEFAULT_DENOISE_MODEL_URL, DEFAULT_DENOISE_DATA_URL];
+    Object.defineProperty(globalThis, "caches", {
+      configurable: true,
+      value: {
+        open: async () => ({
+          match: async (url: RequestInfo | URL) =>
+            saved.includes(String(url)) ? new Response("w") : undefined,
+        }),
+      },
+    });
   });
 
   afterEach(() => {
@@ -73,7 +85,7 @@ describe("a tool that replaces the photo", () => {
     document.body.innerHTML = "";
   });
 
-  it("shows every step done in the pane the editor remounts with", async () => {
+  it("says it's done in the pane the editor remounts with", async () => {
     const tools = new Map<string, EditorToolPlugin>();
     const ctx = context();
     let remounted: ReturnType<EditorToolPlugin["mount"]> | null = null;
@@ -86,25 +98,25 @@ describe("a tool that replaces the photo", () => {
       },
     } as never);
     const denoise = tools.get("denoise") as EditorToolPlugin;
-    const states = (pane: ReturnType<EditorToolPlugin["mount"]> | null) =>
-      [...(pane?.root.querySelectorAll<HTMLElement>(".rt-step") ?? [])].map(
-        (step) => step.dataset.state,
-      );
+    const status = (pane: ReturnType<EditorToolPlugin["mount"]> | null) =>
+      pane?.root.querySelector<HTMLElement>(".rt-status");
 
-    // A pane opened any other way starts with its steps out of sight.
+    // A pane opened any other way has nothing to report.
     const pane = denoise.mount(ctx);
     document.body.appendChild(pane.root);
-    expect(pane.root.querySelector<HTMLElement>(".rt-steps-wrap")?.hidden).toBe(true);
+    await flush();
+    expect(status(pane)?.hidden).toBe(true);
 
     [...pane.root.querySelectorAll("button")]
-      .find((b) => b.textContent?.startsWith("Remove the noise"))
+      .find((b) => b.textContent === "Remove the noise")
       ?.click();
     await flush();
 
     expect(remounted).not.toBeNull();
-    expect(states(remounted)).toEqual(["done", "done", "done"]);
+    expect(status(remounted)?.dataset.state).toBe("done");
+    expect(status(remounted)?.textContent).toContain("Noise removed");
     // Only for that swap: the next time it opens, it's a fresh pane again.
     const later = denoise.mount(ctx);
-    expect(later.root.querySelector<HTMLElement>(".rt-steps-wrap")?.hidden).toBe(true);
+    expect(status(later)?.hidden).toBe(true);
   });
 });

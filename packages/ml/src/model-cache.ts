@@ -15,6 +15,78 @@ export interface FetchProgress {
 
 const inflight = new Map<string, Promise<ArrayBuffer>>();
 
+// ── What every pane can see: downloads under way, files saved, failures ──
+
+/** Files downloading now, and how far along each is. */
+const underway = new Map<string, FetchProgress>();
+/** Files downloaded during the current download, with their size, for its total. */
+const finished = new Map<string, number>();
+/** Files known to be on this device. */
+const saved = new Set<string>();
+/** Files whose last download failed. */
+const failed = new Set<string>();
+const watchers = new Set<() => void>();
+let pending: ReturnType<typeof setTimeout> | null = null;
+
+function notify(now = false): void {
+  if (!now) {
+    // Chunks arrive hundreds of times a second; a few updates a second read better.
+    pending ??= setTimeout(() => notify(true), 100);
+    return;
+  }
+  if (pending !== null) clearTimeout(pending);
+  pending = null;
+  for (const watcher of [...watchers]) watcher();
+}
+
+/** Hear about model downloads: progress, files saved, failures. Returns a function that stops it. */
+export function watchModelDownloads(listener: () => void): () => void {
+  watchers.add(listener);
+  return () => watchers.delete(listener);
+}
+
+/**
+ * How far along the download of these files is, across all of them, or null
+ * when none of them is downloading. `total` is 0 while any size is unknown.
+ */
+export function modelDownload(urls: readonly string[]): FetchProgress | null {
+  let loaded = 0;
+  let total = 0;
+  let known = true;
+  let active = false;
+  for (const url of urls) {
+    const file = underway.get(url);
+    if (file) {
+      active = true;
+      loaded += file.loaded;
+      total += file.total;
+      if (file.total <= 0) known = false;
+    } else {
+      const size = finished.get(url);
+      if (size !== undefined) {
+        loaded += size;
+        total += size;
+      }
+    }
+  }
+  return active ? { loaded, total: known ? total : 0 } : null;
+}
+
+/** True when every file is known to be on this device (checked by `isModelCached` or downloaded). */
+export function isModelSaved(urls: readonly string[]): boolean {
+  return urls.length > 0 && urls.every((url) => saved.has(url));
+}
+
+/** True when the last download of any of these files failed, and none has started since. */
+export function modelDownloadFailed(urls: readonly string[]): boolean {
+  return urls.some((url) => failed.has(url)) && modelDownload(urls) === null;
+}
+
+/** Download and save every file, all at once, without loading the model. */
+export async function downloadModel(urls: readonly string[]): Promise<void> {
+  await Promise.all(urls.map((url) => fetchModel(url)));
+}
+
 /**
  * Fetch a model file, reporting progress and caching the bytes. Falls back
  * to a plain fetch where the Cache API is unavailable (private windows).
@@ -45,6 +117,7 @@ async function fetchModelUncached(
     const hit = await cache.match(url);
     if (hit) {
       const buffer = await hit.arrayBuffer();
+      saved.add(url);
       onProgress?.({ loaded: buffer.byteLength, total: buffer.byteLength });
       return buffer;
     }
@@ -52,6 +125,30 @@ async function fetchModelUncached(
     cache = null;
   }
 
+  // A new download: what finished in an earlier one no longer counts toward its total.
+  if (underway.size === 0) finished.clear();
+  failed.delete(url);
+  underway.set(url, { loaded: 0, total: 0 });
+  notify(true);
+  try {
+    const buffer = await download(url, cache, onProgress);
+    finished.set(url, buffer.byteLength);
+    saved.add(url);
+    return buffer;
+  } catch (error) {
+    failed.add(url);
+    throw error;
+  } finally {
+    underway.delete(url);
+    notify(true);
+  }
+}
+
+async function download(
+  url: string,
+  cache: Cache | null,
+  onProgress?: (progress: FetchProgress) => void,
+): Promise<ArrayBuffer> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`[Retouch ML] Failed to download model (${response.status}): ${url}`);
@@ -68,6 +165,8 @@ async function fetchModelUncached(
       if (done) break;
       chunks.push(value);
       loaded += value.byteLength;
+      underway.set(url, { loaded, total });
+      notify();
       onProgress?.({ loaded, total });
     }
     const merged = new Uint8Array(loaded);
@@ -96,15 +195,28 @@ async function fetchModelUncached(
  * unavailable (private windows), since the run will download then.
  */
 export async function isModelCached(urls: readonly string[]): Promise<boolean> {
+  let cache: Cache;
   try {
-    const cache = await caches.open(CACHE_NAME);
-    for (const url of urls) {
-      if (!(await cache.match(url))) return false;
-    }
-    return urls.length > 0;
+    cache = await caches.open(CACHE_NAME);
   } catch {
-    return false;
+    // No Cache API: only what this page downloaded counts.
+    return isModelSaved(urls);
   }
+  let all = urls.length > 0;
+  for (const url of urls) {
+    let hit = false;
+    try {
+      hit = (await cache.match(url)) !== undefined;
+    } catch {
+      hit = saved.has(url);
+    }
+    if (hit) saved.add(url);
+    else {
+      saved.delete(url);
+      all = false;
+    }
+  }
+  return all;
 }
 
 /** Drop every cached model (frees storage; next run re-downloads). */
@@ -114,4 +226,6 @@ export async function clearModelCache(): Promise<void> {
   } catch {
     // Cache API unavailable — nothing to clear.
   }
+  saved.clear();
+  notify(true);
 }

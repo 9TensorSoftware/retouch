@@ -2,7 +2,7 @@ import { loadOrt, loadSession, type RuntimeOptions, runResilient } from "./runti
 
 /**
  * Click-to-select via SlimSAM-77 (Apache-2.0): the image encodes once into
- * embeddings (~38 MB of model across two files), then every click runs only
+ * embeddings (~40 MB of model across two files), then every click runs only
  * the small prompt decoder, so refinement feels instant.
  *
  * Conventions verified against the exports: encoder takes RGB /255 with

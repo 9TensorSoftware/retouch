@@ -93,12 +93,14 @@ const retouch = new Retouch({ target: "#editor" });
 installMlTools(retouch);
 ```
 
-In the editor, every tool opens on a card naming its model, its download size
-and where it runs, and its run button names the download ("Erase · 208 MB")
-until the model is saved on the device. Runs show their steps —
-download with a progress bar, run, then add to the gallery or replace the photo
-— and results wipe in over the photo. With a self-hosted `modelUrl` the size
-is unknown, so the button says "Download and …" instead.
+In the editor, every tool leads with where its model stands: a Download button
+with the size, then the same button filling up with how much is in and the
+time left, then Ready. Which model it is, and what it runs on, sit behind an
+info button. The tool's own button says what it does and comes on once the
+model is here; the run shows on one line under it, then what to do next, and
+results wipe in over the photo. The AI tools menu says Ready beside each tool
+whose model is saved. With a self-hosted `modelUrl` the size shows once the
+download starts.
 
 Every tool is also a plain function you can call without the editor. Each
 takes an `HTMLImageElement | HTMLCanvasElement` plus options, and accepts

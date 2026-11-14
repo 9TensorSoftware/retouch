@@ -75,6 +75,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - `downloadImage(id, { format })` saves a photo in the format given.
 - `decodeSamCandidates()` and `candidateMask()` in `@9tensor/retouch-ml`: every shape the
   Select model proposes for a set of clicks, and any one of them as a mask at any size.
+- Every AI tool leads with where its model stands, the same way in each: a **Download** button
+  with the size, then the same button filling up with how much is in and the time left, then
+  **Ready**. Which model it is, its size and what it runs on sit behind an info button. The
+  tool's own button says what it does and comes on once the model is here; the run shows on one
+  line under it, with a check when it's done, then what to do next. A download carries on, and
+  shows, when the tool is reopened or another tool needs the same model. The AI tools menu says
+  Ready beside each tool whose model is saved.
+- `ctx.ui.model()`: a model's Download, its progress and time left, Ready, and an info panel.
+  `ctx.ui.status()`: a run on one line, working, done or failed. `ready` on a registered tool
+  marks it Ready in the AI tools menu.
 
 ### Changed
 
@@ -89,6 +99,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   `export` option names one. A photo with transparent areas that format can't keep goes out as
   PNG.
 - The AI models' browser cache has a new name, so each model downloads once more after updating.
+- AI run buttons say only what they do ("Erase", not "Erase · 208 MB") and no longer start a
+  download: **Download** does, once. Select's **Start selecting** is gone with it, and **Erase
+  it** offers Erase's download right under it while that model isn't saved. Detect downloads its
+  face and object models together. The sizes shown are what actually downloads: Cutout 26 MB,
+  Select 40 MB, Detect 4.9 MB, Track 3.7 MB.
 - AI tools that change a photo's pixels (Cutout, Erase, Denoise, Depth blur, Pixelate) are now
   steps in the editor's history: undo takes them back, and the history menu names them.
   `replaceImageSource(id, file, { label })` adds such a step; the editor stays on the same tool.
@@ -109,8 +124,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 ### Fixed
 
 - Saving as JPG turned transparent areas black. They're white now.
-- Denoise, Cutout and Erase never showed their last step done: replacing the photo reset the
-  panel while "Replace this photo" was still spinning. It now ends with every step checked.
+- Denoise, Cutout and Erase never said they were done: replacing the photo reset the panel while
+  the run was still spinning. They now end with a check: Noise removed, Background removed,
+  Erased.
 - Replacing the photo (Denoise, Cutout, Erase, Depth blur, pixelating, or undoing one of them)
   turned Compare off and reset the zoom. Compare, its view, and the zoom and position now stay.
 - A **mask** dragged on the photo no longer snaps back to where it was when you next move one of

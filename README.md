@@ -194,13 +194,12 @@ bokeh** — click to focus and blur by real estimated depth — and one-click
 Web (WebGPU with WASM fallback), download on first use, and cache in the
 browser.
 
-Nothing downloads behind your back. Each tool opens on a card naming its model,
-its download size and where it runs ("This device · WebGPU"), and its run
-button says what it will fetch — **Erase · 208 MB** — until the model is
-saved, after which it just says **Erase**. Select doesn't start its
-download from a click on the photo; it asks first. A run shows its steps
-(download with a progress bar, run, then add to the gallery or replace the
-photo), and the result wipes in over the photo before it lands:
+Nothing downloads behind your back, and every tool says where its model
+stands the same way: a **Download** button with the size, then how much is in
+and the time left while it downloads, then **Ready**. Which model it is and
+what it runs on sit behind an info button. The tool's own button says what it
+does and comes on once the model is here. A run shows how it's going on one
+line, and the result wipes in over the photo before it lands:
 
 ```ts
 import { installMlTools } from "@9tensor/retouch-ml";
@@ -264,8 +263,8 @@ new Retouch({
 Custom tools write through the same non-destructive edit model as the
 built-ins, so previews, undo/redo, AI ops, and export work unchanged. `ctx.ui`
 builds pane controls that match the built-in tools (rows, sections, sliders,
-buttons, choices, preview tiles, lists, notes, and for AI tools a model card and run
-steps), so a tool never styles anything itself; `ctx.preview(edits)` draws the
+buttons, choices, preview tiles, lists, notes, and for AI tools a model's
+download and Ready state and a run's status), so a tool never styles anything itself; `ctx.preview(edits)` draws the
 photo with a look for a tile, and `ctx.reveal(result)` wipes a result in before
 it's committed. Tools in the `"ai"` group get their own section of the rail and
 the AI tools menu, where `description` and `badge` show. `@9tensor/retouch-ml`

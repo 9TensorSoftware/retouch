@@ -1,6 +1,14 @@
 import { h } from "../h";
 import { ICON_SPARKLE } from "../icons";
-import { createCard, createList, createSection, createSteps, createTiles } from "./controls";
+import {
+  createCard,
+  createList,
+  createModel,
+  createSection,
+  createStatus,
+  createSteps,
+  createTiles,
+} from "./controls";
 import { createSlider } from "./slider";
 
 type Content = Node | string;
@@ -189,6 +197,48 @@ export interface UiSteps {
   reset(): void;
 }
 
+/** Options for `ctx.ui.model()`. */
+export interface UiModelOptions {
+  /** The download's size in bytes, shown on its button; null when it isn't known. */
+  bytes: number | null;
+  /** What it's for, when a pane has more than one download ("Erase"): "Download Erase". */
+  name?: string;
+  /** The info panel: a line on what it is, then label–value rows (the model, where it runs). */
+  about?: { text?: string; facts?: ReadonlyArray<readonly [label: string, value: string]> };
+  /** Download, or Try again, was pressed. */
+  onDownload: () => void;
+}
+
+/**
+ * Where a model stands: "missing" offers the download, "downloading" shows
+ * how far along it is and the time left, "ready" says so, and "failed" offers
+ * to try again.
+ */
+export type UiModelState = "missing" | "downloading" | "ready" | "failed";
+
+export interface UiModel {
+  root: HTMLElement;
+  /** Null until the first `set()` or `progress()`; it stays out of sight till then. */
+  readonly state: UiModelState | null;
+  set(state: Exclude<UiModelState, "downloading">): void;
+  /** Bytes so far, and the total (0 when unknown): shows the download under way. */
+  progress(loaded: number, total: number): void;
+  /** Change a row of the info panel, or add it. */
+  setFact(label: string, value: string): void;
+}
+
+export interface UiStatus {
+  root: HTMLElement;
+  /** Under way: what's happening, and optionally a note on the right and 0–1 progress for a bar. */
+  working(label: string, update?: { detail?: string; progress?: number }): void;
+  /** Finished, with the result in a few words ("Background removed"). */
+  done(label: string, detail?: string): void;
+  /** It didn't work, and why. */
+  failed(label: string): void;
+  /** Nothing to show. */
+  clear(): void;
+}
+
 /** One tile for `ctx.ui.tiles()`. */
 export interface UiTileOption<T extends string> {
   value: T;
@@ -258,6 +308,14 @@ export interface ToolUi {
   card(options: UiCardOptions): UiCard;
   /** A run's steps (download, run, save), each waiting, active, done or failed. */
   steps(options: UiStepsOptions): UiSteps;
+  /**
+   * Where an AI tool's model stands, to lead its card: a Download button with
+   * the size, then the download's progress and time left, then Ready. An info
+   * button opens what it is: the model, its size, where it runs.
+   */
+  model(options: UiModelOptions): UiModel;
+  /** A run on one line: working (with a bar when there's progress), done, or failed. */
+  status(): UiStatus;
 }
 
 /** Listeners are bound to `signal`, so they go away with the editor. */
@@ -361,6 +419,10 @@ export function createToolUi(signal?: AbortSignal): ToolUi {
     card: (options) => createCard(options),
 
     steps: (options) => createSteps(options),
+
+    model: (options) => createModel(options, signal),
+
+    status: () => createStatus(),
 
     note(text) {
       const root = h(

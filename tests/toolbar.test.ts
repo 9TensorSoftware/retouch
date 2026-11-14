@@ -13,11 +13,14 @@ registerEditorTool({
   badge: "25 MB",
   mount: pane,
 });
+let upscaleSaved = false;
 registerEditorTool({
   id: "test-ai-b",
   label: "Upscale",
   icon: "<svg></svg>",
   group: "ai",
+  badge: "67 MB",
+  ready: () => upscaleSaved,
   mount: pane,
 });
 registerEditorTool({
@@ -120,6 +123,19 @@ describe("toolbar AI tools", () => {
     expect(items[1].querySelector(".rt-flyout__desc")?.textContent).toBe("Remove the background");
     expect(items[1].querySelector(".rt-flyout__badge")?.textContent).toBe("25 MB");
     expect(tb.order).toEqual(["crop", "test-ai-b", "test-ai-a"]);
+    tb.destroy();
+  });
+
+  it("says Ready in place of the size once the model is on this device", () => {
+    const { tb } = mount(["crop", "test-ai-a", "test-ai-b"]);
+    const badge = () =>
+      tb.root.querySelector('[data-tool="test-ai-b"] .rt-flyout__badge') as HTMLElement;
+    expect(badge().textContent).toBe("67 MB");
+    upscaleSaved = true;
+    tb.openAiMenu();
+    expect(badge().textContent).toBe("Ready");
+    expect(badge().classList.contains("rt-flyout__badge--ready")).toBe(true);
+    upscaleSaved = false;
     tb.destroy();
   });
 

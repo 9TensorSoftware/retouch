@@ -1,7 +1,9 @@
 import {
   createCard,
+  createModel,
   createSection,
   createSegmented,
+  createStatus,
   createSteps,
   createTiles,
 } from "../src/ui/editor/controls";
@@ -202,5 +204,108 @@ describe("createSteps", () => {
     steps.reset();
     expect(rows.map((r) => r.dataset.state)).toEqual(["waiting", "waiting", "waiting"]);
     expect(rows[0].querySelector(".rt-step__detail")?.textContent).toBe("25 MB");
+  });
+});
+
+describe("createModel", () => {
+  const parts = (model: ReturnType<typeof createModel>) => ({
+    label: model.root.querySelector(".rt-model__label")?.textContent,
+    detail: model.root.querySelector(".rt-model__detail")?.textContent,
+    main: model.root.querySelector(".rt-model__main") as HTMLButtonElement,
+    ready: model.root.querySelector(".rt-model__ready") as HTMLElement,
+    announced: model.root.querySelector("[aria-live]")?.textContent,
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("stays out of sight until it knows, then offers the download with its size", () => {
+    const onDownload = vi.fn();
+    const model = createModel({ bytes: 208e6, onDownload });
+    expect(model.root.hidden).toBe(true);
+    expect(model.state).toBeNull();
+    model.set("missing");
+    expect(model.root.hidden).toBe(false);
+    expect(parts(model)).toMatchObject({ label: "Download", detail: "208 MB" });
+    parts(model).main.click();
+    expect(onDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it("fills while it downloads, gives the time left once it can, and holds clicks", () => {
+    vi.useFakeTimers();
+    const onDownload = vi.fn();
+    const model = createModel({ bytes: 100e6, onDownload });
+    model.progress(0, 100e6);
+    expect(model.state).toBe("downloading");
+    expect(parts(model)).toMatchObject({ label: "0 of 100 MB", detail: "" });
+    expect(parts(model).main.getAttribute("aria-disabled")).toBe("true");
+    expect(parts(model).announced).toBe("Downloading");
+    parts(model).main.click();
+    expect(onDownload).not.toHaveBeenCalled();
+    // 10 MB a second for two seconds: 80 MB to go is 8 seconds.
+    for (let t = 1; t <= 8; t++) {
+      vi.advanceTimersByTime(250);
+      model.progress(t * 2.5e6, 100e6);
+    }
+    expect(parts(model)).toMatchObject({ label: "20 of 100 MB", detail: "8 s left" });
+    expect(model.root.querySelector<HTMLElement>(".rt-model__fill")?.style.width).toBe("20%");
+  });
+
+  it("says Ready, quietly, and offers to try again when a download fails", () => {
+    const model = createModel({ bytes: null, name: "Erase", onDownload: vi.fn() });
+    model.set("missing");
+    expect(parts(model)).toMatchObject({ label: "Download Erase", detail: "" });
+    model.set("failed");
+    expect(parts(model)).toMatchObject({ label: "Try again", detail: "Download failed" });
+    model.set("ready");
+    expect(parts(model).main.hidden).toBe(true);
+    expect(parts(model).ready.hidden).toBe(false);
+    expect(parts(model).ready.textContent).toBe("Erase is ready");
+  });
+
+  it("keeps what the model is behind the info button", () => {
+    const model = createModel({
+      bytes: 26e6,
+      about: { text: "Runs here.", facts: [["Model", "MODNet"]] },
+      onDownload: vi.fn(),
+    });
+    const info = model.root.querySelector(".rt-model__info") as HTMLButtonElement;
+    const about = model.root.querySelector(".rt-model__about") as HTMLElement;
+    expect(about.hidden).toBe(true);
+    expect(info.getAttribute("aria-controls")).toBe(about.id);
+    info.click();
+    expect(about.hidden).toBe(false);
+    expect(info.getAttribute("aria-expanded")).toBe("true");
+    model.setFact("Saved", "In this browser");
+    expect([...about.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual([
+      "Model",
+      "Saved",
+    ]);
+    expect(about.textContent).toContain("Runs here.");
+  });
+});
+
+describe("createStatus", () => {
+  it("shows a run working, with a bar while there's progress, then done or failed", () => {
+    const status = createStatus();
+    const label = () => status.root.querySelector(".rt-status__label")?.textContent;
+    const bar = () => status.root.querySelector<HTMLElement>(".rt-step__bar");
+    expect(status.root.hidden).toBe(true);
+    status.working("Upscaling…");
+    expect(status.root.dataset.state).toBe("active");
+    expect(bar()?.hidden).toBe(true);
+    status.working("Upscaling…", { detail: "40%", progress: 0.4 });
+    expect(bar()?.hidden).toBe(false);
+    expect(status.root.querySelector(".rt-step__detail")?.textContent).toBe("40%");
+    status.done("Added to your gallery");
+    expect(status.root.dataset.state).toBe("done");
+    expect(label()).toBe("Added to your gallery");
+    expect(status.root.querySelector(".rt-step__mark svg")).not.toBeNull();
+    status.failed("Upscale failed");
+    expect(status.root.dataset.state).toBe("failed");
+    expect(status.root.querySelector("[aria-live]")?.textContent).toBe("Upscale failed");
+    status.clear();
+    expect(status.root.hidden).toBe(true);
   });
 });

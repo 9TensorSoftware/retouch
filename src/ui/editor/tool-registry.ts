@@ -108,6 +108,12 @@ export interface EditorToolPlugin {
   description?: string;
   /** A short tag shown beside it in that menu, e.g. a model's download size. */
   badge?: string;
+  /**
+   * For a tool that downloads a model: whether it's on this device, asked each
+   * time the AI tools menu opens. While it is, the menu says Ready instead of
+   * showing the badge.
+   */
+  ready?: () => boolean;
   mount(ctx: ToolContext): ToolPaneHandle;
 }
 
@@ -119,6 +125,7 @@ export interface ToolDef {
   shortcut?: string;
   description?: string;
   badge?: string;
+  ready?: () => boolean;
 }
 
 export const BUILTIN_TOOL_DEFS: Record<BuiltinEditorTool, ToolDef> = {
@@ -200,6 +207,7 @@ export function resolveToolDef(id: string): ToolDef {
       shortcut: pluginShortcut(custom.shortcut),
       description: custom.description,
       badge: custom.badge,
+      ready: custom.ready,
     };
   }
   return { id, label: id, icon: FALLBACK_ICON, group: "plugins" };

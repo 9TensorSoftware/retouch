@@ -118,7 +118,7 @@ describe("Select", () => {
   let pane: ReturnType<EditorToolPlugin["mount"]>;
   let overlay: HTMLElement;
 
-  const guide = () => pane.root.children[1]?.textContent;
+  const guide = () => pane.root.querySelector(".rt-dock__status")?.textContent;
   const sections = () =>
     [...pane.root.querySelectorAll<HTMLElement>(".rt-section")]
       .filter((s) => !s.hidden)
@@ -169,8 +169,10 @@ describe("Select", () => {
     expect(sections()).toEqual(["Selection"]);
     expect(button("Cut out").disabled).toBe(true);
     expect(button("Deselect").disabled).toBe(true);
-    // The model card stays on top, as in every other tool.
-    expect(pane.root.firstElementChild?.classList.contains("rt-card")).toBe(true);
+    // The model's state leads, as in every other tool.
+    const card = pane.root.firstElementChild;
+    expect(card?.classList.contains("rt-card")).toBe(true);
+    expect(card?.querySelector(".rt-model")?.getAttribute("data-state")).toBe("ready");
   });
 
   it("outlines what's under the mouse before anything is clicked", async () => {
