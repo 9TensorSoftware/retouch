@@ -26,8 +26,21 @@ export interface ToolContext {
   edits: ImageEdits | VideoEdits;
   /** Push the current edits to the canvas and every tool UI. */
   render(): void;
-  /** Record an undoable history step (call after a user-driven change). */
-  record(): void;
+  /**
+   * Record an undoable history step (call after a user-driven change). With
+   * a `label`, the step is taken at once under that name in the history
+   * menu: for a change the edits don't describe, as to an `undoable` state.
+   */
+  record(label?: string): void;
+  /**
+   * Keep some of the tool's own state in the editor's history, beside the
+   * edits, so Undo, Redo and the history menu take it back and forth too:
+   * `get` is read for every step (it must survive `structuredClone`), and
+   * `set` is handed a step's state when the history goes to it, or the
+   * state `get` first returned for a step taken before. Call
+   * `record(label)` after the user changes it.
+   */
+  undoable<T>(state: ToolUndoable<T>): void;
   /** The element hosting the canvas, for overlays. */
   canvasArea: HTMLElement;
   /** Builders for pane controls that match the built-in tools. */
@@ -59,6 +72,14 @@ export interface ToolContext {
    * another (either changes the photo) asks first whether to stop that one.
    */
   tasks: ToolTasks;
+}
+
+/** A tool's own state, kept in the editor's history (`ctx.undoable`). */
+export interface ToolUndoable<T> {
+  /** The tool it belongs to: one state per tool. */
+  tool: string;
+  get(): T;
+  set(state: T): void;
 }
 
 /** The edits `ctx.preview()` can show. */

@@ -101,7 +101,7 @@ import { createSheet } from "./sheet";
 import { createStageView, type StageView, type ViewState } from "./stage-view";
 import { createStylizeTool } from "./stylize-tool";
 import { createTaskRegistry, type TaskRegistry } from "./tasks";
-import type { ToolContext, ToolPaneHandle } from "./tool-registry";
+import type { ToolContext, ToolPaneHandle, ToolUndoable } from "./tool-registry";
 import { getCustomTools, resolveToolDef } from "./tool-registry";
 import { createToolUi } from "./tool-ui";
 import { createToolbar } from "./toolbar";
@@ -265,6 +265,50 @@ export function createEditor(options: EditorOptions): EditorHandle {
   let history: HistoryController<EditorStep> | null = null;
   const recordEdit = (): void => {
     if (!suppressRecord) history?.record();
+  };
+
+  /** Tools' own state kept in the history (`ctx.undoable`), and what each was at first. */
+  const undoables = new Map<string, { state: ToolUndoable<unknown>; initial: unknown }>();
+  /** A tool's state as of `step`; a step taken before it had any has its first. */
+  const toolState = (step: EditorStep, tool: string): unknown => {
+    const kept = step.tools;
+    return kept && tool in kept ? kept[tool] : undoables.get(tool)?.initial;
+  };
+  const sameTools = (a: EditorStep, b: EditorStep): boolean =>
+    [...undoables.keys()].every(
+      (tool) => JSON.stringify(toolState(a, tool)) === JSON.stringify(toolState(b, tool)),
+    );
+  function restoreTools(step: EditorStep): void {
+    for (const [tool, { state }] of undoables) state.set(structuredClone(toolState(step, tool)));
+  }
+  /** Tools' states for the step being taken: as they are, or as of `from`. */
+  const toolStates = (from: EditorStep | null): Record<string, unknown> =>
+    Object.fromEntries(
+      [...undoables].map(([tool, { state }]) => [
+        tool,
+        structuredClone(from ? toolState(from, tool) : state.get()),
+      ]),
+    );
+  /** The name a tool gave the step being taken, for the history menu. */
+  let stepLabel: string | undefined;
+  /** Set while an edit still settling is taken: tools' states stay as they were. */
+  let toolsAsOf: EditorStep | null = null;
+  /** ctx.record: a plain record waits out a drag; a named one is its own step, now. */
+  const recordStep = (label?: unknown): void => {
+    if (typeof label !== "string") {
+      recordEdit();
+      return;
+    }
+    if (suppressRecord || !history) return;
+    // An edit still settling is a step of its own, before this one. The tool
+    // has already changed its state, so that step keeps the one before.
+    toolsAsOf = history.entries()[history.cursor()];
+    history.flush();
+    toolsAsOf = null;
+    stepLabel = label;
+    history.record();
+    history.flush();
+    stepLabel = undefined;
   };
 
   // The Perspective and Lens sliders redraw the frame through a whole-frame
@@ -1047,7 +1091,13 @@ export function createEditor(options: EditorOptions): EditorHandle {
     entry,
     edits: entry.edits,
     render: () => syncToolsFromEdits(),
-    record: recordEdit,
+    record: recordStep,
+    undoable: (state) => {
+      undoables.set(state.tool, {
+        state: state as ToolUndoable<unknown>,
+        initial: structuredClone(state.get()),
+      });
+    },
     canvasArea,
     ui: createToolUi(signal),
     objects: (options) =>
@@ -1283,9 +1333,16 @@ export function createEditor(options: EditorOptions): EditorHandle {
   };
 
   history = createHistory<EditorStep>({
-    snapshot: () => ({ edits: structuredClone(entry.edits), photo: options.photo?.() }),
+    snapshot: () => {
+      const step: EditorStep = { edits: structuredClone(entry.edits), photo: options.photo?.() };
+      if (undoables.size > 0) step.tools = toolStates(toolsAsOf);
+      if (stepLabel) step.label = stepLabel;
+      return step;
+    },
     same: (a, b) =>
-      a.photo?.image === b.photo?.image && JSON.stringify(a.edits) === JSON.stringify(b.edits),
+      a.photo?.image === b.photo?.image &&
+      JSON.stringify(a.edits) === JSON.stringify(b.edits) &&
+      sameTools(a, b),
     initial: options.history
       ? { entries: options.history.steps, cursor: options.history.cursor }
       : undefined,
@@ -1323,9 +1380,13 @@ export function createEditor(options: EditorOptions): EditorHandle {
         v.speed = state.speed;
         v.deflicker = state.deflicker;
       }
+      restoreTools(step);
       syncToolsFromEdits();
     },
   });
+  // Carried over a remount (a pixel change, or undo across one): tools pick
+  // their state up from the step it's on, as a selection undone back to.
+  if (options.history) restoreTools(history.entries()[history.cursor()]);
 
   /** Whether a feature group's edits are away from neutral (its rail dot). */
   function toolTouched(tool: EditorTool): boolean {

@@ -64,6 +64,7 @@ function context(tasks: TaskRegistry): ToolContext {
     edits: entry.edits,
     render: vi.fn(),
     record: vi.fn(),
+    undoable: vi.fn(),
     canvasArea,
     ui: createToolUi(),
     objects: (options) =>

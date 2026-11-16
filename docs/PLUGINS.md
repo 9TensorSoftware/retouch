@@ -86,7 +86,8 @@ what you add yourself.
 | `ctx.entry` | The entry being edited: its source media, file and edits. |
 | `ctx.edits` | The live edit state (`ImageEdits`, or `VideoEdits` for a video). Change it in place. |
 | `ctx.render()` | Draws the current edits on the stage and syncs every tool's controls. |
-| `ctx.record()` | Adds an undo step. Call it once per user gesture, after the change. |
+| `ctx.record(label?)` | Adds an undo step. Call it once per user gesture, after the change. With a `label`, the step is taken at once under that name in the history menu: for a change the edits don't describe. |
+| `ctx.undoable({ tool, get, set })` | Keeps some of the tool's own state in the editor's history; see [State of your own](#state-of-your-own). |
 | `ctx.canvasArea` | The element around the canvas, for overlays of your own. |
 | `ctx.objects(options)` | A layer of things found in the media, over it and apart from its pixels; see [Object layers](#object-layers). |
 | `ctx.ui` | Control builders; see below. |
@@ -96,6 +97,35 @@ what you add yourself.
 
 The usual pattern is: change `ctx.edits`, call `ctx.render()` while the gesture runs, and
 `ctx.record()` when it ends. A slider's `onInput` and `onChange` map onto exactly that.
+
+### State of your own
+
+Some of what a tool does isn't an edit, but still belongs in the history: Select's selection is
+one. Hand it to `ctx.undoable`, and the editor's Undo, Redo and history menu take it back and
+forth along with the edits:
+
+```ts
+let picked: string[] = [];
+ctx.undoable<string[]>({
+  tool: "my-tool",
+  get: () => picked,
+  set: (state) => {
+    picked = state;
+    redraw();
+  },
+});
+
+function pick(next: string[]): void {
+  picked = next;
+  ctx.record("Pick");
+}
+```
+
+`get` is read for every step, so return something `structuredClone` can copy. `set` gets a
+step's state when the history goes to it, and what `get` first returned for a step taken before
+the tool kept anything. A step that changes nothing, edits or state, isn't taken. The state rides
+along when the editor remounts on new pixels, so undoing a tool's result can bring back what led
+to it, as undoing Select's Erase it brings back the selection.
 
 ## Controls
 
@@ -388,4 +418,4 @@ listener, and wherever you set its value.
 `UiTiles`, `UiTilesOptions`, `UiTileOption`, `UiNote`, `UiCard`, `UiCardOptions`, `UiModel`,
 `UiModelOptions`, `UiModelState`, `UiStatus`, `UiSteps`, `UiStepsOptions`, `UiStep`,
 `UiStepState`, `ToolTasks`, `ToolTask`, `ToolTaskOptions`, `ToolTaskState`, `ToolTaskChange`,
-`RailOptions` and `OpenEditorOptions` are exported from `@9tensor/retouch`.
+`ToolUndoable`, `RailOptions` and `OpenEditorOptions` are exported from `@9tensor/retouch`.

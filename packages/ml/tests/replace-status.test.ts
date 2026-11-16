@@ -44,6 +44,7 @@ function context(): ToolContext {
     edits: entry.edits,
     render: vi.fn(),
     record: vi.fn(),
+    undoable: vi.fn(),
     canvasArea,
     ui: createToolUi(),
     objects: (options) =>

@@ -52,6 +52,7 @@ export type {
   ToolContext,
   ToolGroup,
   ToolPaneHandle,
+  ToolUndoable,
 } from "./ui/editor/tool-registry";
 export type {
   ToolUi,

@@ -1,4 +1,4 @@
-import type { EditorToolPlugin, ToolContext } from "@9tensor/retouch";
+import type { EditorToolPlugin, ToolContext, ToolUndoable } from "@9tensor/retouch";
 import { DEFAULT_EDITS } from "../../../src/constants";
 import { createObjectLayer } from "../../../src/ui/editor/object-layer";
 import { createTaskRegistry } from "../../../src/ui/editor/tasks";
@@ -61,6 +61,35 @@ function register(): Map<string, EditorToolPlugin> {
   return tools;
 }
 
+/** The editor's history, as far as a tool sees it: named steps of its state. */
+function createSteps() {
+  let kept: ToolUndoable<unknown> | null = null;
+  const steps: { label: string; state: unknown }[] = [];
+  let at = 0;
+  const go = (to: number): void => {
+    at = to;
+    kept?.set(structuredClone(steps[at].state));
+  };
+  return {
+    undoable(state: ToolUndoable<unknown>): void {
+      kept = state;
+      steps.push({ label: "Original", state: structuredClone(state.get()) });
+    },
+    record(label?: string): void {
+      if (!label || !kept) return;
+      steps.length = at + 1;
+      steps.push({ label, state: structuredClone(kept.get()) });
+      at = steps.length - 1;
+    },
+    labels: () => steps.map((s) => s.label),
+    tool: () => kept?.tool,
+    undo: () => go(at - 1),
+    redo: () => go(at + 1),
+  };
+}
+
+let history: ReturnType<typeof createSteps>;
+
 function context(): ToolContext {
   const image = new Image();
   Object.defineProperty(image, "naturalWidth", { value: 800 });
@@ -82,7 +111,8 @@ function context(): ToolContext {
     entry: entry as never,
     edits: entry.edits,
     render: vi.fn(),
-    record: vi.fn(),
+    record: vi.fn((label?: string) => history.record(label)),
+    undoable: (state) => history.undoable(state as ToolUndoable<unknown>),
     canvasArea,
     ui: createToolUi(),
     objects: (options) =>
@@ -140,6 +170,7 @@ describe("Select", () => {
 
   beforeEach(async () => {
     decodes.length = 0;
+    history = createSteps();
     modelSaved();
     ctx = context();
     pane = register().get("select")?.mount(ctx) as ReturnType<EditorToolPlugin["mount"]>;
@@ -207,29 +238,35 @@ describe("Select", () => {
     // Nothing selected: Esc is the editor's again.
     expect(key("Escape")).toBe(false);
 
-    button("Undo").click();
+    history.undo();
     await flush();
     expect(tiles()).toEqual(["Small", "Medium", "Large"]);
     button("Deselect").click();
     await flush();
     expect(tiles()).toEqual([]);
+    expect(history.labels()).toEqual(["Original", "Select", "Deselect"]);
   });
 
-  it("steps through the selection with ⌘Z and ⇧⌘Z, then leaves ⌘Z to the editor", async () => {
+  it("makes each click and shape a step in the editor's history, which takes them back", async () => {
+    expect(history.tool()).toBe("select");
     pointer("pointerdown", 0.4, 0.4);
     await flush();
     button("Large").click();
-    expect(key("z", { metaKey: true })).toBe(true);
+    expect(history.labels()).toEqual(["Original", "Select", "Large selection"]);
+
+    history.undo();
     await flush();
     expect(pressed()).toBe("Medium");
-    expect(key("z", { metaKey: true, shiftKey: true })).toBe(true);
+    history.redo();
     await flush();
     expect(pressed()).toBe("Large");
-    key("z", { metaKey: true });
-    key("z", { metaKey: true });
+    history.undo();
+    history.undo();
     await flush();
     expect(tiles()).toEqual([]);
+    // ⌘Z is the editor's, and the pane has no Undo of its own beside it.
     expect(key("z", { metaKey: true })).toBe(false);
+    expect(button("Undo")).toBeUndefined();
   });
 
   it("makes every click a new selection with its own shapes, Shift or not, and draws no dot", async () => {

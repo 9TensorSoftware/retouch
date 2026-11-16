@@ -118,6 +118,26 @@ describe("editor inspector", () => {
       expect(views().hidden).toBe(true);
     });
 
+    it("marks the photo while the divider is on, so what tools draw keeps off Before", () => {
+      tool("Adjust");
+      const photo = document.querySelector(".rt-editor__canvas-container") as HTMLElement;
+      const marked = () => photo.classList.contains("rt-editor__canvas-container--split");
+      compare().click();
+      expect(marked()).toBe(true);
+      expect(photo.style.getPropertyValue("--rt-split")).toBe("50%");
+      document
+        .querySelector(".rt-split__grip")
+        ?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      expect(photo.style.getPropertyValue("--rt-split")).toMatch(/^52/);
+      // Side by side has an Original pane of its own: nothing to keep off.
+      view("Side by side").click();
+      expect(marked()).toBe(false);
+      view("Divider").click();
+      expect(marked()).toBe(true);
+      compare().click();
+      expect(marked()).toBe(false);
+    });
+
     it("switches between the divider and side by side", () => {
       tool("Adjust");
       compare().click();

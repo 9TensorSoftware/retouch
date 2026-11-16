@@ -88,9 +88,10 @@ import {
   type SamPoint,
 } from "./sam";
 import {
-  createSelectionHistory,
   createSelectSurface,
   distinctShapes,
+  EMPTY_SELECTION,
+  type Selection,
   shapeContains,
   shapeLabels,
   shapeThumbnail,
@@ -766,7 +767,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         // Phones and tablets tap; there's no pointing at things first.
         const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
         const click = touch ? "tap" : "click";
-        const history = createSelectionHistory();
+        /**
+         * The clicks and the shape picked. Each change is a step in the
+         * editor's history, so its Undo and history menu take it back.
+         */
+        let current: Selection = EMPTY_SELECTION;
         let embeddings: SamEmbeddings | null = null;
         let embeddedImage: unknown = null;
         let reading: Promise<SamEmbeddings | null> | null = null;
@@ -792,11 +797,6 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           title: `Take it out of this photo (${undoKeys} brings it back)`,
           onClick: () => void eraseObject(),
         });
-        const undo = ctx.ui.button({
-          label: "Undo",
-          title: `Undo (${undoKeys})`,
-          onClick: () => void undoStep(),
-        });
         const deselect = ctx.ui.button({
           label: "Deselect",
           title: touch ? "Deselect" : "Deselect (Esc)",
@@ -817,7 +817,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           shapeRow,
           ctx.ui.row(cut.root, eraseIt.root),
           eraserRow,
-          ctx.ui.row(undo.root, deselect.root),
+          ctx.ui.row(deselect.root),
         );
 
         const strip = modelStatus(ctx, model, { tool: "select", label: "Select" }, () => {
@@ -829,12 +829,12 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         const photo = (): HTMLImageElement | null =>
           ctx.entry.kind === "image" ? ctx.entry.image : null;
         const isReady = (): boolean => embeddings !== null && embeddedImage === photo();
-        const hasSelection = (): boolean => found !== null && history.current.points.length > 0;
+        const hasSelection = (): boolean => found !== null && current.points.length > 0;
 
         /** The shape on show: the one picked, else the model's favourite. */
         function chosen(): number | null {
           if (!found || shapes.length === 0) return null;
-          const pick = history.current.shape;
+          const pick = current.shape;
           if (pick !== null && shapes.includes(pick)) return pick;
           return shapes.includes(found.order[0]) ? found.order[0] : shapes[0];
         }
@@ -855,8 +855,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           eraseIt.setDisabled(!some || isBusy() || !eraser.ready());
           // Once it's ready, Erase it being on says as much.
           eraserRow.hidden = eraser.ready();
-          undo.setDisabled(!history.canUndo || isBusy());
-          deselect.setDisabled(history.current.points.length === 0 || isBusy());
+          deselect.setDisabled(current.points.length === 0 || isBusy());
           surface.setCursor(!armed || !neutral() ? "idle" : isBusy() || reading ? "busy" : "new");
           if (isBusy()) return;
           if (!neutral()) guide.set(NEEDS_FRAME);
@@ -918,7 +917,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
         /** Show the selection history is on now. */
         async function show(): Promise<void> {
           clearOutcome(outcome);
-          const { points } = history.current;
+          const { points } = current;
           if (points.length === 0) {
             found = null;
             shapes = [];
@@ -930,7 +929,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           }
           try {
             const result = await decode(points);
-            if (history.current.points !== points || !result) return;
+            if (current.points !== points || !result) return;
             found = result;
             // One click can mean a part or the whole: offer each shape.
             shapes = distinctShapes(result);
@@ -959,7 +958,11 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
               value: index === null ? null : String(index),
               columns: 3,
               onChange: (value) => {
-                history.set({ points: history.current.points, shape: Number(value) });
+                const shape = Number(value);
+                select(
+                  { points: current.points, shape },
+                  `${labels[shapes.indexOf(shape)] ?? "Other"} selection`,
+                );
                 paint();
               },
             });
@@ -1014,7 +1017,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           const next = [{ x, y, label: 1 as const }];
           hoverAt = null;
           surface.setHover(null);
-          history.set({ points: next, shape: null });
+          select({ points: next, shape: null }, "Select");
           void show();
         }
 
@@ -1027,27 +1030,36 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           onClick,
         });
 
-        async function undoStep(): Promise<void> {
-          if (isBusy() || !history.undo()) return;
-          await show();
-          syncState();
+        /** A new selection, as a step in the editor's history named `label`. */
+        function select(next: Selection, label: string): void {
+          current = next;
+          ctx.record(label);
         }
 
-        async function redoStep(): Promise<void> {
-          if (isBusy() || !history.redo()) return;
-          await show();
-          syncState();
-        }
+        // Undo, Redo and the history menu bring a selection back, even
+        // across an erase: the editor remounts on the old photo, and the
+        // clicks are read again on it.
+        ctx.undoable<Selection>({
+          tool: "select",
+          get: () => current,
+          set: (next) => {
+            if (JSON.stringify(next) === JSON.stringify(current)) return;
+            current = next;
+            hoverAt = null;
+            surface.setHover(null);
+            void show();
+          },
+        });
 
         /** Back to nothing selected, as one step Undo takes back. */
         function clearSelection(): void {
-          if (isBusy() || history.current.points.length === 0) return;
-          history.set({ points: [], shape: null });
+          if (isBusy() || current.points.length === 0) return;
+          select(EMPTY_SELECTION, "Deselect");
           void show();
         }
 
-        // While Select is open, Esc deselects and ⌘Z steps through the
-        // selection, before the editor's own: Esc would close it, ⌘Z undo an edit.
+        // While Select is open, Esc deselects before the editor's own Esc,
+        // which would close it.
         const keys = new AbortController();
         document.addEventListener(
           "keydown",
@@ -1057,20 +1069,8 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
             if (over?.closest('input, textarea, select, [contenteditable], [role="alertdialog"]')) {
               return;
             }
-            const mod = e.metaKey || e.ctrlKey;
-            const z = e.key === "z" || e.key === "Z";
-            let take = false;
-            if (e.key === "Escape" && history.current.points.length > 0) {
-              take = true;
-              clearSelection();
-            } else if (mod && z && !e.shiftKey && history.canUndo) {
-              take = true;
-              void undoStep();
-            } else if (mod && ((z && e.shiftKey) || e.key === "y") && history.canRedo) {
-              take = true;
-              void redoStep();
-            }
-            if (!take) return;
+            if (e.key !== "Escape" || current.points.length === 0) return;
+            clearSelection();
             e.preventDefault();
             e.stopPropagation();
           },
@@ -1164,7 +1164,7 @@ export function installMlTools(retouch: Retouch, options: MlToolsOptions = {}): 
           if (embeddedImage === null || embeddedImage === photo()) return;
           embeddings = null;
           embeddedImage = null;
-          history.reset();
+          current = EMPTY_SELECTION;
           found = null;
           shapes = [];
           remembered.clear();

@@ -63,7 +63,8 @@ const KEY_STEP = 0.02;
 /**
  * The before/after divider: a line across the photo with a grip you drag
  * (or move with the arrow keys). Left of it the renderer draws the photo
- * without its look edits; right of it, as edited.
+ * without its look edits; right of it, as edited. What tools draw over the
+ * photo (a selection, boxes, strokes) shows on the After side only.
  */
 export function createCompareSplit(options: CompareSplitOptions): CompareSplitHandle {
   const { container, renderer, signal } = options;
@@ -93,7 +94,8 @@ export function createCompareSplit(options: CompareSplitOptions): CompareSplitHa
 
   function set(next: number): void {
     fraction = Math.min(1, Math.max(0, next));
-    root.style.setProperty("--rt-split", `${fraction * 100}%`);
+    // On the container, so what tools draw over the photo can keep off the Before side.
+    container.style.setProperty("--rt-split", `${fraction * 100}%`);
     const percent = Math.round(fraction * 100);
     grip.setAttribute("aria-valuenow", String(percent));
     grip.setAttribute("aria-valuetext", `${percent}% before, ${100 - percent}% after`);
@@ -164,6 +166,7 @@ export function createCompareSplit(options: CompareSplitOptions): CompareSplitHa
     setVisible(next) {
       visible = next;
       root.hidden = !next;
+      container.classList.toggle("rt-editor__canvas-container--split", next);
       renderer.setSplit(next ? fraction : null);
     },
     get fraction() {

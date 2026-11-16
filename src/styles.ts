@@ -4840,9 +4840,9 @@ input.rt-dock__slider-value:focus-visible {
 }
 
 /* Compare: the before/after divider on the photo. Sized in --rt-px so the
-   line, grip and tags keep their size however far the stage zooms. */
+   line, grip and tags keep their size however far the stage zooms. Its
+   place, --rt-split, is set on the canvas container. */
 .rt-split {
-  --rt-split: 50%;
   position: absolute;
   inset: 0;
   z-index: 4;
@@ -4927,6 +4927,19 @@ input.rt-dock__slider-value:focus-visible {
 
 .rt-split__tag--after {
   right: calc(12 * var(--rt-px, 1px));
+}
+
+/* Before is the photo as it was: what tools draw over it (a selection,
+   found boxes, brush strokes, mask handles, a result wiping in) stays right
+   of the divider, and so do their clicks. Every layer has the photo's box. */
+.rt-editor__canvas-container--split .canvas-container > :not(.lower-canvas, .upper-canvas),
+.rt-editor__canvas-container--split > :is(.rt-mask-overlay, .rt-liquify-overlay, .rt-reveal) {
+  clip-path: polygon(
+    var(--rt-split) -1000%,
+    1000% -1000%,
+    1000% 1000%,
+    var(--rt-split) 1000%
+  );
 }
 
 /* Masks pane: add buttons, the list, the selected mask's sliders */

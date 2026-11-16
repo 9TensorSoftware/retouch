@@ -519,6 +519,8 @@ export interface EditorStep {
   photo?: PhotoState;
   /** What the step did when its edits don't say (a tool replaced the pixels). */
   label?: string;
+  /** Tools' own state kept in the history (`ctx.undoable`), by tool id. */
+  tools?: Record<string, unknown>;
 }
 
 /** The editor's undo stack, carried across the remount a pixel change causes. */

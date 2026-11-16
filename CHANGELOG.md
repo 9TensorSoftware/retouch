@@ -13,6 +13,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   download) and Stop, then for a few seconds how it ended. A click opens that tool again.
 - `ctx.tasks`, so any tool's background work shows there too: `start()` a task, report on it,
   and stop when its `signal` says so. Downloads go in it with `download: true`.
+- `ctx.undoable()`, to keep some of a tool's own state in the editor's history beside the edits,
+  and `ctx.record(label)`, to take a step at once under a name of the tool's own.
 - What Detect, Track and Read text find is now a layer of its own over the photo or video, drawn
   and handled one way in all three. Point at a box or a row to bring it forward on both sides and
   dim the rest. Click to pick it, and click again, click the bare photo or press Esc to let go.
@@ -96,9 +98,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
 - **Select** works differently. Pointing at the photo outlines what a click would select; a
   click selects it, and a click on something else selects that instead. The panel shows each
   shape the model offers for the click (Small, Medium, Large) as a picture to pick from. Esc or
-  **Deselect** clears it without closing the editor, and **Undo** (⌘Z, ⇧⌘Z to redo) takes back
-  each click, shape pick and deselect. With the model saved, the photo is read as soon as the
-  tool opens.
+  **Deselect** clears it without closing the editor. Each click, shape pick and deselect is a
+  step in the editor's history, named in its menu, so its Undo and Redo (⌘Z, ⇧⌘Z) take them
+  back, and undoing **Erase it** brings back what was selected. With the model saved, the photo
+  is read as soon as the tool opens.
 - `downloadImage(id)` and the gallery's Download save a photo in its own format, a JPG as JPG,
   instead of always as PNG, unless a format was picked from the editor's Download menu or the
   `export` option names one. A photo with transparent areas that format can't keep goes out as
@@ -134,6 +137,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   it, and Detect then ignored clicks until its lost run was over. Now the editor asks first: stop
   Erase and find faces, or let Erase finish. Done and Cancel ask the same, so a run can't land on
   the photo after the editor has closed. A stopped run changes nothing.
+- Compare's divider put what a tool draws over the photo on both sides: in Select, the selection
+  dimmed and outlined Before as well, so the two sides looked alike. Before is the photo as it was
+  now. A selection, found boxes, brush strokes and mask handles stay on After, and clicks on
+  Before don't reach the tool.
 - Denoise, Cutout and Erase never said they were done: replacing the photo reset the panel while
   the run was still spinning. They now end with a check: Noise removed, Background removed,
   Erased.
