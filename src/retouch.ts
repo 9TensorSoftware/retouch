@@ -495,7 +495,8 @@ export class Retouch {
    */
   private async bakeEntry(entry: ImageEntry): Promise<void> {
     const edits = structuredClone(entry.edits);
-    const type = entry.file.type === "image/jpeg" ? "jpeg" : "png";
+    // A shaped crop leaves transparent pixels, which a JPG would fill in.
+    const type = entry.file.type === "image/jpeg" && edits.cropShapes.length === 0 ? "jpeg" : "png";
     try {
       // Metadata edits aren't pixels: they stay edits, and go in on export.
       const blob = await exportImage(
@@ -1062,11 +1063,10 @@ export class Retouch {
     if (entry.kind === "video" && entry.posterPicked) return;
     try {
       const source = entry.kind === "video" ? captureFrame(entry.video) : entry.image;
-      const blob = await exportImage(source, entry.edits, {
-        format: "jpeg",
-        quality: 0.85,
-        maxDimension: 512,
-      });
+      // A cutout or a shaped crop keeps its transparency: a JPG would fill it in white.
+      const canvas = await renderEditedImage(source, entry.edits, 512);
+      const format = canvasHasTransparency(canvas) ? "png" : "jpeg";
+      const blob = await encodeImage(canvas, { format, quality: 0.85 });
       revokeThumbnailUrl(entry.thumbnailUrl);
       entry.thumbnailUrl = URL.createObjectURL(blob);
       if (this.viewState === "gallery") this.remountGallery();
@@ -1216,6 +1216,8 @@ export class Retouch {
       thumbnailUrl: createThumbnailUrl(file),
       edits: {
         crop,
+        // Videos have no shaped crops.
+        cropShapes: [],
         rotation,
         keystoneV,
         keystoneH,

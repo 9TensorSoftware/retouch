@@ -152,7 +152,7 @@ Opens as a modal overlay: a neutral graphite stage that keeps focus — and colo
 
 | Tool | Description |
 |------|-------------|
-| **Crop** | Drag the frame over a rule-of-thirds grid, free or locked to an aspect tile (square, 4:3, 3:2, 16:9, 9:16), then press **Apply** (or Enter); **Cancel** (or Esc) puts the frame back. Nothing is cropped until it's applied: leaving Crop, or pressing Done, with a frame that wasn't applied asks whether to apply it or discard it. The inspector's **Reset** brings the full frame back. A **straighten ruler** (drag it, or use the arrow keys) and rotate/flip buttons sit right in the pane. Works on video too. |
+| **Crop** | Drag the frame over a rule-of-thirds grid, free or locked to an aspect tile (square, 4:3, 3:2, 16:9, 9:16), then press **Apply** (or Enter); **Cancel** (or Esc) puts the frame back. **Shapes** crop to an ellipse, a circle, a star, a heart, a hexagon or a triangle in the same frame; round a rectangle's **Corners**; or draw the outline **Freehand** or by **Points** (click the first point to close it; Backspace takes the last one back). A **Soft edge** fades the cut in, and **Keep: Outside** punches the shape out instead. What a shape leaves out turns transparent (PNG and WebP keep it; a JPG download offers PNG or a white fill), and a shape cut inside another keeps only what both hold. Shapes are for photos. Nothing is cropped until it's applied: leaving Crop, or pressing Done, with a frame that wasn't applied asks whether to apply it or discard it. The inspector's **Reset** brings the full frame back, shapes and all. A **straighten ruler** (drag it, or use the arrow keys) and rotate/flip buttons sit right in the pane. Works on video too. |
 | **Transform** | Rotate 90° and flip H/V that keep the crop over your content, a straighten slider (0.1° steps) that auto-crops to the largest inscribed window (no black corners), vertical/horizontal **perspective (keystone) correction**, **lens corrections** — barrel/pincushion distortion and corner devignetting — and **content-aware width** (seam carving in a worker, images only). |
 | **Liquify** | Brush-based push warp: drag on the image to bend and reshape content under a **brush ring** sized to the brush (`[` and `]` resize it), with size and strength controls. Displacements live in a coarse grid in the edit model, so strokes preview live, undo cleanly, and apply to image and video exports alike. |
 | **Adjust** | All 14 controls at once, in four folding sections — **Light** (exposure, brightness, contrast, dehaze), **Color** (temperature, tint, vibrance, saturation, hue), **Effects** (clarity, vignette, grain) and **Detail** (sharpen, blur) — real-time, live on playing video. Color sliders show what they do on their tracks (cool to warm, green to magenta, around the hue wheel). Includes a **white-balance eyedropper**: click a neutral area and temperature/tint correct themselves. |
@@ -355,6 +355,7 @@ The editor is a keyboard-operable, accessible modal (`role="dialog"`, focus trap
 | `\` | Compare before and after (images) |
 | `[` / `]` (Liquify) | Smaller / larger brush |
 | `Enter` (Crop tab) · `Space` (video) | Apply crop · play/pause |
+| `Backspace` (Crop, placing points) | Take the last point back |
 
 Hover a rail button for its name and key, or switch the rail to show names
 (the toggle at its foot): it widens to list every tool with its key, and each
@@ -494,7 +495,7 @@ const off = retouch.on("export:progress", ({ id, progress }) => …);
 Values: `Retouch`, `refreshRangeFill`, `isImageEntry`, `isVideoEntry`, `ACCEPTED_TYPES`,
 `ACCEPTED_VIDEO_TYPES`, `VERSION`.
 Types: `RetouchOptions`, `RailOptions`, `RetouchEventMap`, `AppState`, `ShellTheme`, `MediaEntry`, `ImageEntry`,
-`VideoEntry`, `MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `TrimRange`,
+`VideoEntry`, `MediaKind`, `ImageEdits`, `VideoEdits`, `Adjustments`, `CropRect`, `CropShape`, `TrimRange`,
 `EditMask`, `FilterPreset`, `AspectRatioPreset`, `Orientation`, `GalleryViewMode`, `EditorTool`,
 `BuiltinEditorTool`, `ImageExportOptions`, `GifExportOptions`, `GifLoopMode`, `FileRejectionReason`, `AiOptions`, `AiRequest`,
 `AiEditOps`, `EditorToolPlugin`, `ToolContext`, `ToolGroup`, `ToolPaneHandle`, `PreviewEdits`,

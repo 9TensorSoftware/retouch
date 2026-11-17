@@ -9,6 +9,7 @@ import {
 import type {
   Adjustments,
   CropRect,
+  CropShape,
   Curves,
   EditMask,
   FilterPreset,
@@ -19,6 +20,7 @@ import type {
   WarpField,
 } from "../../types";
 import { createCanvas } from "../../utils/canvas";
+import { applyCropShapes } from "../../utils/crop-shape";
 import type { CurveLuts } from "../../utils/curves";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "../../utils/curves";
 import { applyDetailToContext, detailIsNeutral } from "../../utils/detail";
@@ -100,6 +102,8 @@ export class CanvasRenderer {
   private filter: FilterPreset;
   private filterStrength: number;
   private crop: CropRect;
+  /** Shapes cut from the cropped frame; they come and go with the crop. */
+  private cropShapes: CropShape[] = [];
   /** The committed crop stays applied in every tool; compare lifts it briefly. */
   private cropApplied = true;
   private imageRect: ImageRect = { x: 0, y: 0, width: 0, height: 0 };
@@ -151,6 +155,7 @@ export class CanvasRenderer {
     this.filter = edits.filter;
     this.filterStrength = edits.filterStrength;
     this.crop = { ...edits.crop };
+    this.cropShapes = structuredClone(edits.cropShapes);
 
     this.video = "videoWidth" in source ? source : null;
     if (this.video) {
@@ -205,6 +210,7 @@ export class CanvasRenderer {
       this.paintListener?.();
       if (this.split !== null) this.keepEditedFrame(el);
       this.drawSplit(renderCtx, el.width, el.height);
+      this.cutShapes(renderCtx, el);
     });
 
     if (this.video) {
@@ -344,6 +350,11 @@ export class CanvasRenderer {
   setCrop(crop: CropRect): void {
     this.crop = { ...crop };
     if (this.cropApplied) this.updateFrameGeometry();
+  }
+
+  /** Track the shapes cut from the cropped frame; the next render draws them. */
+  setCropShapes(shapes: readonly CropShape[]): void {
+    this.cropShapes = structuredClone([...shapes]);
   }
 
   /**
@@ -529,7 +540,14 @@ export class CanvasRenderer {
     ctx.drawImage(kept, 0, 0);
     ctx.restore();
     this.drawSplit(ctx, el.width, el.height);
+    this.cutShapes(ctx, el);
     return true;
+  }
+
+  /** Cut the crop's shapes from the painted frame, both sides of the divider alike. */
+  private cutShapes(ctx: CanvasRenderingContext2D, el: HTMLCanvasElement): void {
+    if (!this.cropApplied || this.cropShapes.length === 0) return;
+    applyCropShapes(ctx, el.width, el.height, this.cropShapes);
   }
 
   /** Draw the "before" side from this image instead of the source (same aspect ratio). */

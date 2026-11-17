@@ -87,7 +87,8 @@ export function listChanges(
   const flipped = next.flipH !== prev.flipH || next.flipV !== prev.flipV;
   if (turned) out.push(`Turn ${(next.orientation - prev.orientation + 360) % 360}°`);
   if (flipped) out.push("Flip");
-  if (!turned && !flipped && !same(next.crop, prev.crop)) out.push("Crop");
+  const recropped = !same(next.crop, prev.crop) || !same(next.cropShapes, prev.cropShapes);
+  if (!turned && !flipped && recropped) out.push("Crop");
   if (next.rotation !== prev.rotation) out.push(`Straighten ${signed(next.rotation, 1)}°`);
   if (next.keystoneV !== prev.keystoneV || next.keystoneH !== prev.keystoneH) {
     out.push("Perspective");

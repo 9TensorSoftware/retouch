@@ -1,6 +1,6 @@
 import { Retouch } from "../src/retouch";
 import type { MediaEntry } from "../src/types";
-import { exportImage } from "../src/utils/image";
+import { renderEditedImage } from "../src/utils/image";
 import { stubLayout } from "./editor-helpers";
 
 // jsdom decodes no images, so files become entries here without loading.
@@ -11,6 +11,8 @@ vi.mock("../src/utils/image", async (importOriginal) => {
     ...actual,
     revokeThumbnailUrl: vi.fn(),
     exportImage: vi.fn(async () => new Blob(["out"], { type: "image/jpeg" })),
+    renderEditedImage: vi.fn(async () => document.createElement("canvas")),
+    encodeImage: vi.fn(async () => new Blob(["out"], { type: "image/jpeg" })),
     loadImage: vi.fn(async () => {
       const image = new Image();
       Object.defineProperty(image, "naturalWidth", { value: 1200 });
@@ -134,8 +136,9 @@ describe("Retouch motion", () => {
     retouch.openEditor("id-a.png");
     await vt.run();
 
-    let release: (blob: Blob) => void = () => {};
-    vi.mocked(exportImage).mockImplementationOnce(
+    let release: (canvas: HTMLCanvasElement) => void = () => {};
+    // The thumbnail is still being drawn when the gallery comes back.
+    vi.mocked(renderEditedImage).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           release = resolve;
@@ -145,7 +148,7 @@ describe("Retouch motion", () => {
     expect(retouch.state).toBe("gallery");
     expect(document.querySelector(".rt-editor-overlay")).not.toBeNull();
     const done = vt.run();
-    release(new Blob(["thumb"], { type: "image/jpeg" }));
+    release(document.createElement("canvas"));
     await done;
     const frame = container.querySelector<HTMLImageElement>('[data-id="id-a.png"] img');
     expect(frame?.getAttribute("src")).toBe("blob:fresh-thumbnail");

@@ -91,6 +91,25 @@ export const ICON_ROTATE_CW = icon(
 );
 export const ICON_FLIP_H = icon('<path d="M12 2v20M8 7H4v10h4zM16 7h4v10h-4z"/>');
 export const ICON_FLIP_V = icon('<path d="M2 12h20M7 8V4h10v4zM7 16v4h10v-4z"/>');
+
+// Crop shapes
+export const ICON_SHAPE_RECT = icon('<rect x="4" y="5.5" width="16" height="13" rx="1"/>');
+export const ICON_SHAPE_ELLIPSE = icon('<ellipse cx="12" cy="12" rx="9" ry="6.5"/>');
+export const ICON_SHAPE_CIRCLE = icon('<circle cx="12" cy="12" r="8"/>');
+export const ICON_SHAPE_STAR = icon(
+  '<path d="M12 3.5l2.4 6.3 6.6.3-5.2 4.1 1.8 6.5L12 17l-5.6 3.7 1.8-6.5L3 10.1l6.6-.3z"/>',
+);
+export const ICON_SHAPE_HEART = icon(
+  '<path d="M12 19.5s-7.5-4.6-7.5-10.2A4.2 4.2 0 0112 6.9a4.2 4.2 0 017.5 2.4c0 5.6-7.5 10.2-7.5 10.2z"/>',
+);
+export const ICON_SHAPE_HEXAGON = icon('<path d="M12 3.5l7.4 4.25v8.5L12 20.5l-7.4-4.25v-8.5z"/>');
+export const ICON_SHAPE_TRIANGLE = icon('<path d="M12 4.5l8.5 15h-17z"/>');
+export const ICON_SHAPE_LASSO = icon(
+  '<path d="M12 4.5c4.7 0 8.5 2.3 8.5 5.3s-3.8 5.2-8.5 5.2-8.5-2.3-8.5-5.2 3.8-5.3 8.5-5.3z"/><path d="M6.5 13.8c-1.2 1.6-.6 3.7 1.4 3.9 1.6.2 2 1.6 1.1 2.8"/>',
+);
+export const ICON_SHAPE_POLYGON = icon(
+  '<path d="M5 17.5L4 7.5l8-3.5 8 5.5-3 9z"/><circle cx="5" cy="17.5" r="1.4"/><circle cx="4" cy="7.5" r="1.4"/><circle cx="12" cy="4" r="1.4"/><circle cx="20" cy="9.5" r="1.4"/><circle cx="17" cy="18.5" r="1.4"/>',
+);
 export const ICON_EYEDROPPER = icon(
   '<path d="M13.6 4.4l6 6M15.5 8.5L6.2 17.8a2 2 0 01-.9.5l-2.8.7.7-2.8a2 2 0 01.5-.9l9.3-9.3a2.1 2.1 0 013 3z"/>',
 );

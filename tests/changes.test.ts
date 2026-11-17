@@ -37,6 +37,16 @@ describe("listChanges", () => {
     expect(listChanges(base(), cropped)).toEqual(["Crop", "Straighten +2.5°"]);
   });
 
+  it("calls a shape cut from the frame a crop, and a turn that moves it a turn", () => {
+    const shaped = base();
+    shaped.cropShapes = [{ points: [0.5, 0, 1, 1, 0, 1], feather: 0, invert: false }];
+    expect(listChanges(base(), shaped)).toEqual(["Crop"]);
+    const turned = structuredClone(shaped);
+    turned.orientation = 90;
+    turned.cropShapes = [{ points: [1, 0.5, 0, 1, 0, 0], feather: 0, invert: false }];
+    expect(listChanges(shaped, turned)).toEqual(["Turn 90°"]);
+  });
+
   it("covers trim, sound and speed for video", () => {
     const prev = createDefaultVideoEdits(10);
     const next = structuredClone(prev);

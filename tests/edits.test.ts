@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_EDITS } from "../src/constants";
 import type { ImageEdits } from "../src/types";
-import { imageEditsAreNeutral } from "../src/utils/edits";
+import { framingIsNeutral, imageEditsAreNeutral } from "../src/utils/edits";
 
 const neutral = (): ImageEdits => structuredClone(DEFAULT_EDITS);
 
@@ -125,6 +125,12 @@ describe("imageEditsAreNeutral", () => {
         e.liquify = { cols: 3, rows: 3, dx, dy: new Array(9).fill(0) };
       },
     ],
+    [
+      "a shaped crop",
+      (e) => {
+        e.cropShapes = [{ points: [0.5, 0, 1, 1, 0, 1], feather: 0, invert: false }];
+      },
+    ],
   ];
 
   for (const [name, mutate] of cases) {
@@ -134,6 +140,13 @@ describe("imageEditsAreNeutral", () => {
       expect(imageEditsAreNeutral(edits)).toBe(false);
     });
   }
+
+  it("counts a shaped crop as framing, even with the frame itself untouched", () => {
+    const edits = neutral();
+    expect(framingIsNeutral(edits)).toBe(true);
+    edits.cropShapes = [{ points: [0.2, 0.2, 0.8, 0.2, 0.5, 0.8], feather: 0, invert: true }];
+    expect(framingIsNeutral(edits)).toBe(false);
+  });
 
   it("stays true for a filter at zero strength", () => {
     const edits = neutral();

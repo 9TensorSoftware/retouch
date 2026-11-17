@@ -217,6 +217,23 @@ export interface CropRect {
   height: number;
 }
 
+/**
+ * A shaped crop: an outline over the cropped frame, with what's outside it
+ * (or, inverted, inside it) turned transparent. Each shape cuts what the
+ * ones before it left, so an outline drawn inside a circle keeps only what
+ * both hold. Images only.
+ */
+export interface CropShape {
+  /** The closed outline, as x, y pairs normalized over the cropped frame (0–1). */
+  points: number[];
+  /** Curve through the points, as a hand-drawn line does, rather than joining them straight. */
+  smooth?: boolean;
+  /** Soft edge, 0–100: the kept side fades in from the outline over up to a quarter of the shape's short side. */
+  feather: number;
+  /** Keep what's outside the outline instead, punching the shape out. */
+  invert: boolean;
+}
+
 export interface Adjustments {
   /** 0–200, default 100. */
   brightness: number;
@@ -376,6 +393,8 @@ export type MetadataEdits = Partial<Record<MetadataKey, string>>;
 export interface ImageEdits {
   /** Normalized over the oriented (rotated/flipped) source. */
   crop: CropRect;
+  /** Shapes cut from the cropped frame, in order; empty for a plain rectangle. Images only. */
+  cropShapes: CropShape[];
   /** Fine straighten angle in degrees, -45 to 45, applied after crop. */
   rotation: number;
   /** Vertical keystone (perspective) correction, -100 to 100. */

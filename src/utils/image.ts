@@ -1,6 +1,7 @@
 import { FabricImage, StaticCanvas } from "fabric";
 import { createDefaultVideoEdits, DEFAULT_EDITS } from "../constants";
 import type { FileRejectionReason, ImageEdits, ImageExportOptions, MediaEntry } from "../types";
+import { applyCropShapes } from "./crop-shape";
 import { applyCurvesToContext, buildCurveLuts, curvesAreIdentity } from "./curves";
 import { applyDetailToContext, detailIsNeutral } from "./detail";
 import { buildFabricFilters, drawVignette } from "./filters";
@@ -349,6 +350,12 @@ export async function renderEditedImage(
   if (adjustments.vignette > 0) {
     const outCtx = outCanvas.getContext("2d");
     if (outCtx) drawVignette(outCtx, outCanvas.width, outCanvas.height, adjustments.vignette);
+  }
+
+  // A shaped crop goes last: what it leaves out is transparent, vignette and all.
+  if (edits.cropShapes.length > 0) {
+    const outCtx = outCanvas.getContext("2d");
+    if (outCtx) applyCropShapes(outCtx, outCanvas.width, outCanvas.height, edits.cropShapes);
   }
 
   return outCanvas;

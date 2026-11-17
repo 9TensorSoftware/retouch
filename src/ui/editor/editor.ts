@@ -24,6 +24,16 @@ import type {
   ViewHandle,
 } from "../../types";
 import { createCanvas } from "../../utils/canvas";
+import {
+  boundsOf,
+  flipShapeX,
+  flipShapeY,
+  reframeShape,
+  rotateShapeCCW,
+  rotateShapeCW,
+  shapeOutline,
+  shapeTouchesFrame,
+} from "../../utils/crop-shape";
 import { curvesAreIdentity } from "../../utils/curves";
 import { framingIsNeutral } from "../../utils/edits";
 import { framingOf, outlineOf } from "../../utils/framing";
@@ -149,7 +159,11 @@ function describeStep(prev: ImageEdits | VideoEdits, next: ImageEdits | VideoEdi
   const pc = prev.crop;
   const nc = next.crop;
   const cropChanged =
-    pc.x !== nc.x || pc.y !== nc.y || pc.width !== nc.width || pc.height !== nc.height;
+    pc.x !== nc.x ||
+    pc.y !== nc.y ||
+    pc.width !== nc.width ||
+    pc.height !== nc.height ||
+    JSON.stringify(next.cropShapes) !== JSON.stringify(prev.cropShapes);
   // A 90° turn/flip remaps the crop as a side effect — don't double-report it.
   if (cropChanged && !transformed) parts.push("Crop");
   if ("trim" in next && "trim" in prev) {
@@ -723,39 +737,81 @@ export function createEditor(options: EditorOptions): EditorHandle {
     onChange: () => syncCropButtons(),
   });
 
-  /** True when a crop is committed (the preview shows less than the source). */
+  /** True when a crop is committed (the preview shows less than the source, or a shape of it). */
   function hasCommittedCrop(): boolean {
     const c = entry.edits.crop;
-    return c.x > 1e-6 || c.y > 1e-6 || c.width < 1 - 1e-6 || c.height < 1 - 1e-6;
+    return (
+      c.x > 1e-6 ||
+      c.y > 1e-6 ||
+      c.width < 1 - 1e-6 ||
+      c.height < 1 - 1e-6 ||
+      entry.edits.cropShapes.length > 0
+    );
   }
 
   function syncCropButtons(): void {
     syncHeadReset();
-    dock.setCropPending(!cropTool.isSelectionFull());
+    dock.syncCrop();
     syncOutline();
   }
 
-  /** The committed crop with the marquee's selection composed into it. */
-  function selectedCrop(): CropRect {
-    const sel = cropTool.getSelection();
-    const c = entry.edits.crop;
+  /**
+   * The part of the visible frame the pending crop keeps: a shape's bounds,
+   * or the marquee. A shape punched out keeps the frame it's in.
+   */
+  function pendingFrame(): CropRect {
+    const shape = cropTool.getShape();
+    if (!shape) return cropTool.getSelection();
+    if (shape.invert) return { x: 0, y: 0, width: 1, height: 1 };
+    const b = boundsOf(shapeOutline(shape));
+    const x = clamp(b.x, 0, 1);
+    const y = clamp(b.y, 0, 1);
     return {
-      x: clamp(c.x + sel.x * c.width, 0, 1),
-      y: clamp(c.y + sel.y * c.height, 0, 1),
-      width: clamp(sel.width * c.width, 0.01, 1),
-      height: clamp(sel.height * c.height, 0.01, 1),
+      x,
+      y,
+      width: Math.max(0.01, Math.min(b.x + b.width, 1) - x),
+      height: Math.max(0.01, Math.min(b.y + b.height, 1) - y),
     };
   }
 
-  /** Compose the pending selection into the committed crop. */
+  /** The committed crop with a part of its frame (`within`, 0–1 over it) composed in. */
+  function selectedCrop(within: CropRect = pendingFrame()): CropRect {
+    const c = entry.edits.crop;
+    return {
+      x: clamp(c.x + within.x * c.width, 0, 1),
+      y: clamp(c.y + within.y * c.height, 0, 1),
+      width: clamp(within.width * c.width, 0.01, 1),
+      height: clamp(within.height * c.height, 0.01, 1),
+    };
+  }
+
+  /**
+   * Compose the pending crop into the committed one. The frame closes in on
+   * what's kept, and a shape joins the ones already cut, all of them
+   * restated over the new frame.
+   */
   function applyCrop(): void {
-    if (cropTool.isSelectionFull()) return;
-    entry.edits.crop = selectedCrop();
+    if (!cropTool.canApply()) return;
+    const shape = cropTool.getShape();
+    const within = pendingFrame();
+    const crop = selectedCrop(within);
+    // The frame as composed, clamps and all, so the shapes land where they were drawn.
+    const c = entry.edits.crop;
+    const kept = {
+      x: (crop.x - c.x) / c.width,
+      y: (crop.y - c.y) / c.height,
+      width: crop.width / c.width,
+      height: crop.height / c.height,
+    };
+    entry.edits.crop = crop;
+    entry.edits.cropShapes = [...entry.edits.cropShapes, ...(shape ? [shape] : [])]
+      .map((s) => reframeShape(s, kept))
+      .filter(shapeTouchesFrame);
     renderer.setCrop(entry.edits.crop);
+    renderer.setCropShapes(entry.edits.cropShapes);
     renderer.render();
     cropTool.resetSelection();
     cropTool.refresh();
-    dock.setAspect("free");
     syncCropButtons();
     recordEdit();
   }
@@ -764,16 +820,20 @@ export function createEditor(options: EditorOptions): EditorHandle {
   function discardCrop(): void {
     cropTool.resetSelection();
     cropTool.refresh();
-    dock.setAspect("free");
     syncCropButtons();
   }
 
   /**
    * A crop applies only when someone says so. Leaving Crop with a frame
-   * that wasn't applied asks first; resolves false to stay in Crop.
+   * that wasn't applied asks first; resolves false to stay in Crop. Points
+   * too few to make an outline just go.
    */
   async function settleCrop(): Promise<boolean> {
-    if (cropTool.isSelectionFull()) return true;
+    if (!cropTool.hasPending()) return true;
+    if (!cropTool.canApply()) {
+      discardCrop();
+      return true;
+    }
     const choice = await confirm.ask({
       title: "Apply the crop?",
       detail: "The frame you set isn't applied yet.",
@@ -787,7 +847,13 @@ export function createEditor(options: EditorOptions): EditorHandle {
 
   /** Switch tools at someone's request, settling an unapplied crop first. */
   function requestTool(tool: EditorTool): void {
-    if (activeTool !== "crop" || tool === "crop" || cropTool.isSelectionFull()) {
+    if (activeTool !== "crop" || tool === "crop" || !cropTool.hasPending()) {
+      selectTool(tool);
+      return;
+    }
+    // Points too few to make an outline: nothing to ask about.
+    if (!cropTool.canApply()) {
+      discardCrop();
       selectTool(tool);
       return;
     }
@@ -998,25 +1064,30 @@ export function createEditor(options: EditorOptions): EditorHandle {
     if (op === "rotate-cw") {
       e.orientation = rotateOrientation(e.orientation, 1);
       e.crop = rotateCropCW(e.crop);
+      e.cropShapes = e.cropShapes.map(rotateShapeCW);
     } else if (op === "rotate-ccw") {
       e.orientation = rotateOrientation(e.orientation, -1);
       e.crop = rotateCropCCW(e.crop);
+      e.cropShapes = e.cropShapes.map(rotateShapeCCW);
     } else if (op === "flip-h") {
       // A screen-space horizontal flip mirrors the source's other axis when
       // the source is rotated onto its side.
       if (e.orientation % 180 === 0) e.flipH = !e.flipH;
       else e.flipV = !e.flipV;
       e.crop = flipCropX(e.crop);
+      e.cropShapes = e.cropShapes.map(flipShapeX);
     } else {
       if (e.orientation % 180 === 0) e.flipV = !e.flipV;
       else e.flipH = !e.flipH;
       e.crop = flipCropY(e.crop);
+      e.cropShapes = e.cropShapes.map(flipShapeY);
     }
   }
 
   function applyTransformOp(op: TransformOp): void {
     transformStep(op);
     renderer.setCrop(entry.edits.crop);
+    renderer.setCropShapes(entry.edits.cropShapes);
     renderer.setTransform(entry.edits.orientation, entry.edits.flipH, entry.edits.flipV);
     renderer.render();
     cropTool.resetSelection();
@@ -1227,6 +1298,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
             scheduleCarveIfNeeded();
           }
         : undefined,
+    cropShapes: entry.kind === "image",
     onApplyCrop: applyCrop,
     onCancelCrop: discardCrop,
   });
@@ -1310,6 +1382,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
     dock.setSeamWidth(entry.edits.seamWidth);
     scheduleCarveIfNeeded();
     renderer.setCrop(entry.edits.crop);
+    renderer.setCropShapes(entry.edits.cropShapes);
     if (entry.kind === "video") {
       transport?.setTrim(entry.edits.trim);
       transport?.setMuted(entry.edits.mute);
@@ -1321,7 +1394,6 @@ export function createEditor(options: EditorOptions): EditorHandle {
     renderer.render();
     cropTool.resetSelection();
     cropTool.refresh();
-    dock.setAspect("free");
     syncCropButtons();
     suppressRecord = false;
   }
@@ -1355,6 +1427,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
       }
       const state = step.edits;
       entry.edits.crop = { ...state.crop };
+      entry.edits.cropShapes = structuredClone(state.cropShapes ?? []);
       entry.edits.rotation = state.rotation;
       entry.edits.keystoneV = state.keystoneV;
       entry.edits.keystoneH = state.keystoneH;
@@ -1465,7 +1538,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
         return {
           touched: () =>
             hasCommittedCrop() ||
-            !cropTool.isSelectionFull() ||
+            cropTool.hasPending() ||
             e.rotation !== 0 ||
             e.orientation !== 0 ||
             e.flipH ||
@@ -1473,6 +1546,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
           reset: () => {
             resetOrientation();
             e.crop = { x: 0, y: 0, width: 1, height: 1 };
+            e.cropShapes = [];
             e.rotation = 0;
           },
         };
@@ -1901,7 +1975,21 @@ export function createEditor(options: EditorOptions): EditorHandle {
       entry.edits.seamWidth = ops.seamWidth;
       scheduleCarveIfNeeded();
     }
-    if (ops.crop) entry.edits.crop = { ...ops.crop };
+    if (ops.crop) {
+      // Shapes sit on the frame: restate them over the new one.
+      const from = entry.edits.crop;
+      const to = ops.crop;
+      const at = {
+        x: (to.x - from.x) / from.width,
+        y: (to.y - from.y) / from.height,
+        width: to.width / from.width,
+        height: to.height / from.height,
+      };
+      entry.edits.crop = { ...to };
+      entry.edits.cropShapes = entry.edits.cropShapes
+        .map((s) => reframeShape(s, at))
+        .filter(shapeTouchesFrame);
+    }
     if (entry.kind === "video") {
       const v = entry.edits as VideoEdits;
       if (ops.trim) v.trim = { ...ops.trim };
@@ -2167,7 +2255,7 @@ export function createEditor(options: EditorOptions): EditorHandle {
         e.preventDefault();
         if (isFormField(e.target)) (e.target as HTMLElement).blur();
         // An unapplied crop frame goes back first; the next Esc cancels
-        else if (activeTool === "crop" && !cropTool.isSelectionFull()) discardCrop();
+        else if (activeTool === "crop" && cropTool.hasPending()) discardCrop();
         else cancel();
         return;
       }
@@ -2224,6 +2312,11 @@ export function createEditor(options: EditorOptions): EditorHandle {
       if (e.key === "Enter" && activeTool === "crop") {
         e.preventDefault();
         applyCrop();
+        return;
+      }
+      // Placing points: Backspace takes the last one back.
+      if ((e.key === "Backspace" || e.key === "Delete") && activeTool === "crop") {
+        if (cropTool.removeLastPoint()) e.preventDefault();
         return;
       }
 

@@ -1,9 +1,24 @@
 import { ASPECT_RATIOS } from "../../constants";
 import type { AspectRatioPreset, EditorTool, ImageEdits, ViewHandle } from "../../types";
+import { type CropShapeMode, isDrawnMode } from "../../utils/crop-shape";
 import { h, keycap } from "../h";
-import { ICON_FLIP_H, ICON_FLIP_V, ICON_ROTATE_CCW, ICON_ROTATE_CW } from "../icons";
+import {
+  ICON_FLIP_H,
+  ICON_FLIP_V,
+  ICON_ROTATE_CCW,
+  ICON_ROTATE_CW,
+  ICON_SHAPE_CIRCLE,
+  ICON_SHAPE_ELLIPSE,
+  ICON_SHAPE_HEART,
+  ICON_SHAPE_HEXAGON,
+  ICON_SHAPE_LASSO,
+  ICON_SHAPE_POLYGON,
+  ICON_SHAPE_RECT,
+  ICON_SHAPE_STAR,
+  ICON_SHAPE_TRIANGLE,
+} from "../icons";
 import type { AdjustToolHandle } from "./adjust-tool";
-import { createSection } from "./controls";
+import { createSection, createSegmented } from "./controls";
 import type { CropToolHandle } from "./crop-tool";
 import type { CurvesToolHandle } from "./curves-tool";
 import type { FiltersToolHandle } from "./filters-tool";
@@ -39,6 +54,8 @@ export interface ContextDockOptions {
   onLensChange: (distortion: number, devignette: number) => void;
   /** Content-aware width changed (images only; omit to hide the slider). */
   onSeamWidthChange?: (percent: number) => void;
+  /** Offer shaped crops: shapes, outlines, round corners, soft edges (images only). */
+  cropShapes?: boolean;
   /** Apply the crop frame on the photo. */
   onApplyCrop: () => void;
   /** Put the crop frame back without applying it. */
@@ -49,10 +66,12 @@ export interface ContextDockHandle extends ViewHandle {
   setActiveTool(tool: EditorTool): void;
   /** Sync the straighten controls after an external change (does not fire onRotationChange). */
   setRotation(degrees: number): void;
-  /** Reflect the crop tool's aspect preset in the tiles. */
-  setAspect(preset: AspectRatioPreset): void;
-  /** Whether a crop frame is waiting to be applied: Apply and Cancel work only then. */
-  setCropPending(pending: boolean): void;
+  /**
+   * Bring the crop controls in line with the crop tool: its shape, aspect
+   * and edge settings, and Apply and Cancel, which work only while a crop
+   * is waiting.
+   */
+  syncCrop(): void;
   /** Sync the keystone sliders after an external change (does not fire onKeystoneChange). */
   setKeystone(vertical: number, horizontal: number): void;
   /** Sync the lens sliders after an external change (does not fire onLensChange). */
@@ -68,6 +87,18 @@ const ASPECT_PRESETS: { id: AspectRatioPreset; label: string }[] = [
   { id: "3:2", label: "3:2" },
   { id: "16:9", label: "16:9" },
   { id: "9:16", label: "9:16" },
+];
+
+const CROP_SHAPES: { id: CropShapeMode; label: string; icon: string }[] = [
+  { id: "rect", label: "Rectangle", icon: ICON_SHAPE_RECT },
+  { id: "ellipse", label: "Ellipse", icon: ICON_SHAPE_ELLIPSE },
+  { id: "circle", label: "Circle", icon: ICON_SHAPE_CIRCLE },
+  { id: "lasso", label: "Freehand", icon: ICON_SHAPE_LASSO },
+  { id: "polygon", label: "Points", icon: ICON_SHAPE_POLYGON },
+  { id: "star", label: "Star", icon: ICON_SHAPE_STAR },
+  { id: "heart", label: "Heart", icon: ICON_SHAPE_HEART },
+  { id: "hexagon", label: "Hexagon", icon: ICON_SHAPE_HEXAGON },
+  { id: "triangle", label: "Triangle", icon: ICON_SHAPE_TRIANGLE },
 ];
 
 const TRANSFORM_BUTTONS: { op: TransformOp; label: string; icon: string }[] = [
@@ -116,7 +147,24 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     return group;
   }
 
-  // ── Crop pane: aspect tiles · straighten ruler · rotate/flip ──
+  // ── Crop pane: shape · aspect tiles · edge · straighten ruler · rotate/flip ──
+
+  // The shape to crop to: a frame holding one, or an outline drawn on the photo.
+  const shapeBtns = new Map<CropShapeMode, HTMLButtonElement>();
+  const shapeGrid = h("div", { class: "rt-crop-shapes", role: "group", "aria-label": "Shape" });
+  for (const def of CROP_SHAPES) {
+    const btn = h("button", {
+      type: "button",
+      class: "rt-dock__icon-btn rt-crop-shapes__btn",
+      title: def.label,
+      "aria-label": def.label,
+      "aria-pressed": "false",
+    });
+    btn.innerHTML = def.icon;
+    btn.addEventListener("click", () => cropTool.setShapeMode(def.id), { signal });
+    shapeBtns.set(def.id, btn);
+    shapeGrid.appendChild(btn);
+  }
 
   const aspectBtns = new Map<AspectRatioPreset, HTMLButtonElement>();
   const aspectGrid = h("div", { class: "rt-aspects", role: "group", "aria-label": "Aspect ratio" });
@@ -124,10 +172,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
   const cropHint = document.createTextNode("");
   function setActiveAspect(preset: AspectRatioPreset): void {
     for (const [id, b] of aspectBtns) b.setAttribute("aria-pressed", String(id === preset));
-    cropHint.textContent =
-      ASPECT_RATIOS[preset] == null
-        ? "Drag the frame's edges and corners on the photo, then press Apply"
-        : "Drag a corner to resize the frame; it keeps its shape. Then press Apply";
+    syncHint();
   }
   for (const preset of ASPECT_PRESETS) {
     // The glyph is the shape itself, scaled into a 22 px box.
@@ -153,7 +198,84 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     aspectBtns.set(preset.id, btn);
     aspectGrid.appendChild(btn);
   }
-  setActiveAspect(cropTool.getAspectRatio());
+
+  // The edge: round corners (a rectangle's), a soft edge, and which side is kept.
+  const percent = (v: number): string => `${v}%`;
+  const corners = createSlider(
+    {
+      label: "Corners",
+      min: 0,
+      max: 100,
+      value: 0,
+      format: percent,
+      onInput: (v) => cropTool.setShapeOptions({ radius: v }),
+    },
+    signal,
+  );
+  const softEdge = createSlider(
+    {
+      label: "Soft edge",
+      min: 0,
+      max: 100,
+      value: 0,
+      format: percent,
+      onInput: (v) => cropTool.setShapeOptions({ feather: v }),
+    },
+    signal,
+  );
+  const keep = createSegmented<"inside" | "outside">(
+    {
+      label: "Keep",
+      options: [
+        { value: "inside", label: "Inside", title: "Keep what's inside the shape" },
+        {
+          value: "outside",
+          label: "Outside",
+          title: "Keep what's outside, punching the shape out",
+        },
+      ],
+      value: "inside",
+      onChange: (v) => cropTool.setShapeOptions({ invert: v === "outside" }),
+    },
+    signal,
+  );
+  const keepRow = h(
+    "div",
+    { class: "rt-crop-pane__keep" },
+    h("span", { class: "rt-dock__row-title" }, "Keep"),
+    keep.root,
+  );
+  const edgeGroup = h("div", { class: "rt-crop-pane__edge" }, corners.root, softEdge.root, keepRow);
+
+  // Placing points: Backspace takes the last one back.
+  const pointKeys = h(
+    "span",
+    { class: "rt-keys" },
+    " ",
+    keycap("Backspace"),
+    " takes the last point back.",
+  );
+
+  function syncHint(): void {
+    const mode = cropTool.getShapeMode();
+    const outside = cropTool.getShapeOptions().invert;
+    pointKeys.hidden = mode !== "polygon";
+    if (mode === "lasso") {
+      cropHint.textContent = outside
+        ? "Draw around what to cut out, then press Apply"
+        : "Draw around what to keep, then press Apply";
+    } else if (mode === "polygon") {
+      cropHint.textContent =
+        "Click to place points and click the first one to close, then press Apply";
+    } else if (mode !== "rect") {
+      cropHint.textContent = "Drag the frame to place the shape, then press Apply";
+    } else {
+      cropHint.textContent =
+        ASPECT_RATIOS[cropTool.getAspectRatio()] == null
+          ? "Drag the frame's edges and corners on the photo, then press Apply"
+          : "Drag a corner to resize the frame; it keeps its shape. Then press Apply";
+    }
+  }
 
   const formatDegrees = (v: number): string => `${signed(v, 1)}°`;
   const ruler = createRuler(
@@ -191,7 +313,9 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
     "div",
     { class: "rt-dock__pane rt-crop-pane" },
     h("div", { class: "rt-crop-pane__actions" }, cropCancel, cropApply),
+    ...(options.cropShapes ? [shapeGrid] : []),
     aspectGrid,
+    ...(options.cropShapes ? [edgeGroup] : []),
     ruler.root,
     transformButtons(),
     h(
@@ -200,8 +324,25 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       cropHint,
       h("span", { class: "rt-keys" }, " or ", keycap("Enter"), "."),
       h("span", { class: "rt-touch" }, "."),
+      pointKeys,
     ),
   );
+
+  function syncCrop(): void {
+    const mode = cropTool.getShapeMode();
+    const shape = cropTool.getShapeOptions();
+    for (const [id, b] of shapeBtns) b.setAttribute("aria-pressed", String(id === mode));
+    // An outline has no frame to shape, and a circle is always round.
+    aspectGrid.hidden = isDrawnMode(mode) || mode === "circle";
+    corners.root.hidden = mode !== "rect";
+    corners.set(shape.radius);
+    softEdge.set(shape.feather);
+    keep.set(shape.invert ? "outside" : "inside");
+    setActiveAspect(cropTool.getAspectRatio());
+    cropCancel.disabled = !cropTool.hasPending();
+    cropApply.disabled = !cropTool.canApply();
+  }
+  syncCrop();
 
   // ── Transform pane: turns and straighten · perspective · lens ──
 
@@ -337,13 +478,7 @@ export function createContextDock(options: ContextDockOptions): ContextDockHandl
       seamSlider.set(percent);
       seamSlider.setLabel(busy ? "Carving…" : "Width", "Content-aware width");
     },
-    setAspect(preset) {
-      setActiveAspect(preset);
-    },
-    setCropPending(pending) {
-      cropCancel.disabled = !pending;
-      cropApply.disabled = !pending;
-    },
+    syncCrop,
     destroy() {
       abort.abort();
       root.remove();

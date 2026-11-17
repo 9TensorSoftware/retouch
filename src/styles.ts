@@ -2982,6 +2982,63 @@ body:has(> .rt-editor-overlay) {
 .rt-crop--locked .rt-crop__handle--w,
 .rt-crop--locked .rt-crop__handle--e { display: none; }
 
+/* A shape in the frame: the frame turns to a guide, and the shape dims what goes. */
+.rt-crop--shaped .rt-crop__selection {
+  border-style: dashed;
+  border-width: var(--rt-px, 1px);
+}
+
+.rt-crop__shape {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.rt-crop__scrim {
+  fill: var(--rt-scrim);
+  fill-rule: evenodd;
+}
+
+.rt-crop__outline {
+  fill: none;
+  stroke: var(--rt-on-media);
+  stroke-width: calc(2 * var(--rt-px, 1px));
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* The side the next point would add, following the pointer. */
+.rt-crop__outline--next {
+  stroke-dasharray: calc(4 * var(--rt-px, 1px)) calc(4 * var(--rt-px, 1px));
+  opacity: 0.7;
+}
+
+.rt-crop__vertex {
+  r: calc(5 * var(--rt-px, 1px));
+  fill: var(--rt-on-media);
+  stroke: var(--rt-scrim);
+  stroke-width: var(--rt-px, 1px);
+  pointer-events: auto;
+  cursor: move;
+}
+
+/* The first point, once there are enough: a click joins the outline up. */
+.rt-crop__vertex--close {
+  r: calc(7 * var(--rt-px, 1px));
+  fill: var(--rt-accent);
+  cursor: pointer;
+}
+
+/* An outline is drawn on the photo itself. */
+.rt-crop__draw {
+  position: absolute;
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+}
+
 /* ── Context dock (controls below the canvas) ─
    One horizontal pane per tool, floating on the shared surface. */
 
@@ -3327,6 +3384,49 @@ body:has(> .rt-editor-overlay) {
 
 .rt-crop-pane__actions .rt-dock__chip {
   justify-content: center;
+}
+
+/* The shape to crop to: frames, outlines, figures. */
+.rt-crop-shapes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.rt-crop-shapes__btn {
+  width: auto;
+  height: 34px;
+  border-radius: var(--rt-radius-md);
+}
+
+.rt-crop-shapes__btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.rt-crop-shapes__btn[aria-pressed="true"] {
+  background: var(--rt-accent-soft);
+  color: var(--rt-text-1);
+  box-shadow: inset 0 0 0 1px var(--rt-accent);
+}
+
+/* Corners, soft edge, and which side of the shape is kept. */
+.rt-crop-pane__edge {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rt-crop-pane__keep {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rt-editor__inspector .rt-crop-pane__keep .rt-dock__row-title {
+  flex-basis: auto;
+  margin-top: 0;
 }
 
 /* ── Confirm: a small question over the editor ── */

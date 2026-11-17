@@ -24,6 +24,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   across a box on a zoomed photo still pans.
 - `ctx.objects()`: the same layer for any tool, with its rows, hover and pick wired together.
 - `setHighlight()` on `ctx.ui.list()`: light a row as if pointed at, scrolling the list to it.
+- Crop to a shape. Beside the rectangle, Crop has an ellipse, a circle, a star, a heart, a hexagon
+  and a triangle, each in the same frame with the same handles and aspect tiles; **Corners** to
+  round a rectangle's; **Freehand**, an outline drawn on the photo; and **Points**, an outline
+  placed a click at a time, closed on its first point (Backspace takes the last one back). A
+  **Soft edge** fades the cut in, and **Keep: Outside** punches the shape out of the photo
+  instead. What a shape leaves out turns transparent, in the preview, the export and the gallery,
+  and a shape cut inside another keeps only what both hold. Shapes turn and flip with the photo,
+  and undo, history and Reset treat them as part of the crop. Photos only.
+- `CropShape`, and `cropShapes` on `ImageEdits`: the shapes cut from the cropped frame, as
+  outlines normalized over it.
 - A crosshair follows the mouse over the photo, with the pixel it's on beside it, counted in the
   photo as it'll come out. It's on by default; a button on the zoom bar turns it off, and the
   choice is remembered.
@@ -106,6 +116,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   instead of always as PNG, unless a format was picked from the editor's Download menu or the
   `export` option names one. A photo with transparent areas that format can't keep goes out as
   PNG.
+- Gallery thumbnails keep a photo's transparent areas (a cutout, a shaped crop) instead of filling
+  them with white.
 - The AI models' browser cache has a new name, so each model downloads once more after updating.
 - AI run buttons say only what they do ("Erase", not "Erase · 208 MB") and no longer start a
   download: **Download** does, once. Select's **Start selecting** is gone with it, and **Erase

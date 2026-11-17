@@ -89,6 +89,7 @@ export function createDefaultStylize(): StylizeEffect {
 
 export const DEFAULT_EDITS: ImageEdits = {
   crop: { ...DEFAULT_CROP },
+  cropShapes: [],
   rotation: 0,
   keystoneV: 0,
   keystoneH: 0,
