@@ -146,6 +146,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); bot
   Erased.
 - Replacing the photo (Denoise, Cutout, Erase, Depth blur, pixelating, or undoing one of them)
   turned Compare off and reset the zoom. Compare, its view, and the zoom and position now stay.
+- Replacing the photo blinked as if the page had reloaded: the editor rebuilt on the new pixels
+  faded in from clear, showing the page behind it, and its panels slid in again. It's there at
+  once now, with the photo drawn from its first frame.
 - A **mask** dragged on the photo no longer snaps back to where it was when you next move one of
   its sliders, invert it, or add or delete a mask.
 - The tool panel no longer jumps when its **Reset** button comes and goes. The button was taller

@@ -27,3 +27,16 @@ export function glide(elements: HTMLElement[], change: () => void): void {
     });
   }
 }
+
+/**
+ * Jump the entrance animations of `root` and everything in it to their end,
+ * for a view taking another's place as it was: it's there at once, rather
+ * than arriving. Endless ones, a spinner, carry on.
+ */
+export function skipEntrance(root: HTMLElement): void {
+  if (typeof root.getAnimations !== "function") return;
+  for (const animation of root.getAnimations({ subtree: true })) {
+    if (animation.effect?.getComputedTiming().endTime === Number.POSITIVE_INFINITY) continue;
+    animation.finish();
+  }
+}

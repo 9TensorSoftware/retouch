@@ -11,6 +11,12 @@ vi.mock("../src/utils/image", async (importOriginal) => {
     ...actual,
     revokeThumbnailUrl: vi.fn(),
     exportImage: vi.fn(async () => new Blob(["out"], { type: "image/jpeg" })),
+    loadImage: vi.fn(async () => {
+      const image = new Image();
+      Object.defineProperty(image, "naturalWidth", { value: 1200 });
+      Object.defineProperty(image, "naturalHeight", { value: 800 });
+      return image;
+    }),
     processFiles: async (files: File[]) => {
       const entries: MediaEntry[] = files.map((file) => {
         const image = new Image();
@@ -170,6 +176,34 @@ describe("Retouch motion", () => {
     expect(container.querySelector(".rt-gallery")).not.toBeNull();
     await new Promise((r) => setTimeout(r, 300));
     expect(overlay.isConnected).toBe(false);
+  });
+
+  it("shows the editor rebuilt on new pixels at once, rather than opening it again", async () => {
+    reducedMotion(false);
+    await galleryWith("a.png");
+    retouch.openEditor("id-a.png");
+    const opened = document.querySelector(".rt-editor-overlay");
+    // jsdom runs no CSS: each element stands in its own entrance, there to be finished.
+    const finished: Element[] = [];
+    Object.defineProperty(HTMLElement.prototype, "getAnimations", {
+      configurable: true,
+      value(this: HTMLElement) {
+        return [
+          {
+            effect: { getComputedTiming: () => ({ endTime: 300 }) },
+            finish: () => finished.push(this),
+          },
+        ];
+      },
+    });
+    try {
+      await retouch.replaceImageSource("id-a.png", png("a.png"), { label: "Remove background" });
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, "getAnimations");
+    }
+    const rebuilt = document.querySelector(".rt-editor-overlay");
+    expect(rebuilt).not.toBe(opened);
+    expect(finished).toEqual([rebuilt]);
   });
 
   it("cascades new frames in, once, and the gallery rises in from the drop zone", async () => {

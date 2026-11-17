@@ -443,10 +443,11 @@ export class CanvasRenderer {
     const drawH = Math.round(sourceH * scale);
 
     // Size the fabric canvas to the drawn image dimensions. Only on a change:
-    // resizing blanks the canvas until the next paint, which a render made
-    // inside an animation frame (a Liquify stroke) would put on screen.
+    // resizing blanks the canvas, so a resized one is drawn at once (below)
+    // rather than on the next frame, which would put it on screen blank.
     const canvasSize = `${drawW}x${drawH}@${this.fabricCanvas.getRetinaScaling()}`;
-    if (canvasSize !== this.canvasSize) {
+    const resized = canvasSize !== this.canvasSize;
+    if (resized) {
       this.canvasSize = canvasSize;
       this.fabricCanvas.setDimensions({ width: drawW, height: drawH });
     }
@@ -467,7 +468,8 @@ export class CanvasRenderer {
 
     this.imageRect = { x: 0, y: 0, width: drawW, height: drawH };
 
-    this.fabricCanvas.requestRenderAll();
+    if (resized) this.fabricCanvas.renderAll();
+    else this.fabricCanvas.requestRenderAll();
     this.renderListener?.();
   }
 

@@ -32,7 +32,7 @@ import type { ExportOverlayHandle } from "./ui/export-overlay";
 import { createExportOverlay } from "./ui/export-overlay";
 import { createGallery, loadGalleryView, saveGalleryView } from "./ui/gallery";
 import { h } from "./ui/h";
-import { motionOK } from "./ui/motion";
+import { motionOK, skipEntrance } from "./ui/motion";
 import { isTouchFirst, shortcutLabel } from "./ui/platform";
 import type { RejectionLimits, Toast, ToastHost } from "./ui/toast";
 import { createToastHost, rejectionDetail, rejectionMessage, rejectionSummary } from "./ui/toast";
@@ -621,12 +621,17 @@ export class Retouch {
     this.remountEditor();
   }
 
-  /** Rebuild the open editor on the entry as it now is, keeping its tool. */
+  /**
+   * Rebuild the open editor on the entry as it now is, keeping its tool. It
+   * takes the old one's place as it was, so it skips the opening: fading in
+   * from clear would flash the page behind it.
+   */
   private remountEditor(): void {
     this.openTool = this.editorView?.tool();
     this.carriedView = this.editorView?.view();
     this.unmountCurrentView();
     this.mountEditor();
+    if (this.currentView) skipEntrance(this.currentView.root);
   }
 
   openEditor(id: string, options: OpenEditorOptions = {}): void {

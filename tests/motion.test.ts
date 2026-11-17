@@ -1,4 +1,4 @@
-import { glide, motionOK } from "../src/ui/motion";
+import { glide, motionOK, skipEntrance } from "../src/ui/motion";
 
 function reducedMotion(reduce: boolean): void {
   vi.stubGlobal("matchMedia", () => ({ matches: reduce }));
@@ -55,5 +55,31 @@ describe("motion", () => {
     glide([moved.el], change);
     expect(change).toHaveBeenCalledTimes(1);
     expect(moved.animate).not.toHaveBeenCalled();
+  });
+});
+
+describe("skipEntrance", () => {
+  /** A stand-in animation ending at `endTime`, with a spy for finish. */
+  const animation = (endTime: number) => ({
+    effect: { getComputedTiming: () => ({ endTime }) },
+    finish: vi.fn(),
+  });
+
+  it("ends what's arriving, in the element and everything in it, and leaves a spinner going", () => {
+    const root = document.createElement("div");
+    const arriving = animation(300);
+    const spinner = animation(Number.POSITIVE_INFINITY);
+    const getAnimations = vi.fn(() => [arriving, spinner]);
+    Object.defineProperty(root, "getAnimations", { value: getAnimations });
+    skipEntrance(root);
+    expect(getAnimations).toHaveBeenCalledWith({ subtree: true });
+    expect(arriving.finish).toHaveBeenCalledTimes(1);
+    expect(spinner.finish).not.toHaveBeenCalled();
+  });
+
+  it("does nothing where the browser can't list animations", () => {
+    const root = document.createElement("div");
+    Object.defineProperty(root, "getAnimations", { value: undefined });
+    expect(() => skipEntrance(root)).not.toThrow();
   });
 });
